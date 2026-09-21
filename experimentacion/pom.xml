@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.paqrap</groupId>
+    <artifactId>paqrap-experimentacion</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <!--
+        Módulo deliberadamente separado de backend/: esta herramienta satisface el RNF-a del
+        curso (comparación numérica de los dos algoritmos metaheurísticos), pero no forma parte
+        del sistema PaqRap en sí — no aparece en ninguna de las 3 páginas del diagrama de clases
+        canónico, y no debe ser una dependencia de com.paqrap.dominio/alns/ipso/simulador/
+        exposicion. Requiere que backend/ se instale primero al repositorio local de Maven
+        (mvn install, desde backend/) para que esta dependencia resuelva.
+    -->
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.paqrap</groupId>
+            <artifactId>paqrap-planificador</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>paqrap-experimentacion</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

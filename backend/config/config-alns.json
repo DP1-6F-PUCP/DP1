@@ -1,0 +1,17 @@
+{
+  "maxIteraciones": 350,
+  "maxSinMejora": 90,
+  "intervaloActualizacion": 15,
+  "intervaloSPP": 20,
+  "factorReaccion": 0.2,
+  "minCantidadDestruccion": 1,
+  "maxCantidadDestruccion": 5,
+  "puntajeMejorGlobal": 10.0,
+  "puntajeMejorActual": 5.0,
+  "puntajeAceptado": 2.0,
+  "temperaturaAceptacionSA": 100.0,
+  "tasaEnfriamientoSA": 0.995,
+  "pesoDistanciaShaw": 1.0,
+  "pesoTiempoShaw": 2.0,
+  "epsilonMejoraRVND": 0.01
+}

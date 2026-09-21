@@ -1,0 +1,10 @@
+{
+  "tamanoPoblacionN": 40,
+  "iteracionesMaximasT": 300,
+  "c1": 1.5,
+  "c2": 1.5,
+  "tasaCruceP_c": 0.30,
+  "inercia": 0.35,
+  "umbralEstancamiento": 0.0001,
+  "semillaAleatoria": 42
+}
