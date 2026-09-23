@@ -100,6 +100,11 @@ public class PlanificadorIPSO implements Planificador {
         Nodo posicionActual = ruta.getUnidadTransporte().getPosicion();
 
         for (Pedido pedido : secuencia) {
+            LocalDateTime liberacion = pedido.getFechaIngreso();
+            if (tiempoActual.isBefore(liberacion)) {
+                tiempoActual = liberacion;
+            }
+
             double distanciaKm = CalculadorDistancia.distanciaKm(contexto.ciudad(), contexto.bloqueos(), tiempoActual,
                     posicionActual, pedido.getDestino());
             double horasViaje = distanciaKm / velocidadKmH;
