@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: postgresDB
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sysmile_db}
+      POSTGRES_USER: ${DB_USER:-sysmile_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sysmile_password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - sysmile_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sysmile_user} -d ${DB_NAME:-sysmile_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      network: host
+    container_name: backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${DB_NAME:-sysmile_db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-sysmile_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-sysmile_password}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      network: host
+    container_name: frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  sysmile_db_data:
