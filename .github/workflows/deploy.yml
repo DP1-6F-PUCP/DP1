@@ -29,8 +29,8 @@ jobs:
           push: true
           # Etiqueta la imagen con "latest" y con el número de tu Release (ej. v1.0.0)
           tags: |
-            ghcr.io/${{ github.repository_owner }}/dp1-frontend:latest
-            ghcr.io/${{ github.repository_owner }}/dp1-frontend:${{ github.event.release.tag_name }}
+            ghcr.io/dp1-6f-pucp/dp1-frontend:latest
+            ghcr.io/dp1-6f-pucp/dp1-frontend:${{ github.event.release.tag_name }}
 
       - name: Construir y Subir Imagen del Backend
         uses: docker/build-push-action@v5
@@ -38,5 +38,5 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/dp1-backend:latest
-            ghcr.io/${{ github.repository_owner }}/dp1-backend:${{ github.event.release.tag_name }}
+            ghcr.io/dp1-6f-pucp/dp1-backend:latest
+            ghcr.io/dp1-6f-pucp/dp1-backend:${{ github.event.release.tag_name }}
