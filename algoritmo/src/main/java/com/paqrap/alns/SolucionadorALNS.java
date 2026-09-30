@@ -175,6 +175,12 @@ public class SolucionadorALNS implements PlanificadorRutas {
     private Solucion construirSolucionInicial(ContextoProblema contexto) {
         Solucion sol = new Solucion();
         for (UnidadTransporte unidad : contexto.vehiculos()) {
+            // Un vehículo averiado o en mantenimiento nunca recibe ruta: al no existir su Ruta en
+            // la solución, ningún operador de destrucción/reparación puede insertarle pedidos
+            // durante la búsqueda (igual que ClusterizadorPedidos ya hace para IPSO).
+            if (!unidad.estaDisponibleParaRuta(contexto.marcaTiempoActual())) {
+                continue;
+            }
             Ruta ruta = new Ruta(unidad.getIdUnidad() + "-r1", contexto.marcaTiempoActual(), unidad);
             EvaluadorCostos.recalcularRuta(ruta, contexto.ciudad(), contexto.bloqueos(), contexto.configuracionOperacion());
             sol.getRutas().add(ruta);

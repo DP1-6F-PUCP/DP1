@@ -1,5 +1,7 @@
 package com.paqrap.simulador;
 
+import com.paqrap.dominio.Almacen;
+import com.paqrap.dominio.AlmacenCentral;
 import com.paqrap.dominio.AlmacenIntermedio;
 import com.paqrap.dominio.Averia;
 import com.paqrap.dominio.Ciudad;
@@ -14,6 +16,9 @@ import com.paqrap.dominio.Ruta;
 import com.paqrap.dominio.TipoAveria;
 import com.paqrap.dominio.TipoVehiculo;
 import com.paqrap.dominio.UnidadTransporte;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -47,6 +52,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class OrquestadorOperacion {
 
+    private static final Logger log = LoggerFactory.getLogger(OrquestadorOperacion.class);
+
     private final float sa;
     private final float ta;
     private final float k;
@@ -63,6 +70,7 @@ public class OrquestadorOperacion {
     private EjecucionEscenario ejecucionActual;
     private ScheduledExecutorService programador;
     private volatile boolean detenido = true;
+    private volatile boolean pausado = false;
     private int contadorPedidosSinteticos = 0;
 
     private volatile List<Ruta> ultimasRutas = List.of();
@@ -126,13 +134,46 @@ public class OrquestadorOperacion {
     }
 
     /**
+     * Pausa el ciclo periódico: los lotes programados siguen "disparando" cada {@code sa} minutos
+     * reales, pero {@link #ejecutarSiguienteLote()} no hace nada mientras {@code pausado} sea
+     * verdadero — a diferencia de {@link #detener()}, es reversible (no apaga el
+     * {@link ScheduledExecutorService}).
+     *
+     * @throws IllegalStateException si el ciclo no está en curso
+     */
+    public void pausar() {
+        if (detenido || ejecucionActual == null) {
+            throw new IllegalStateException("No hay una ejecución en curso para pausar");
+        }
+        pausado = true;
+        ejecucionActual.setEstado(EstadoEjecucion.PAUSADA);
+    }
+
+    /**
+     * Reanuda un ciclo previamente pausado con {@link #pausar()}.
+     *
+     * @throws IllegalStateException si el ciclo no está en curso o no está pausado
+     */
+    public void reanudar() {
+        if (detenido || ejecucionActual == null) {
+            throw new IllegalStateException("No hay una ejecución en curso para reanudar");
+        }
+        pausado = false;
+        ejecucionActual.setEstado(EstadoEjecucion.EN_CURSO);
+    }
+
+    public boolean estaPausado() {
+        return pausado;
+    }
+
+    /**
      * Ejecuta un ciclo: aplica solicitudes vencidas, invoca al planificador, simula el avance de
      * {@code sa * k} minutos de tiempo simulado y actualiza el contexto y el reporte de
      * desempeño. Se detiene automáticamente si detecta un pedido incumplido (falla dura: la
      * política de entrega a tiempo es irrenunciable).
      */
     public void ejecutarSiguienteLote() {
-        if (detenido) {
+        if (detenido || pausado) {
             return;
         }
 
@@ -142,9 +183,8 @@ public class OrquestadorOperacion {
         List<Ruta> rutas = planificador.planificarRutas(contextoProblema);
         double segundosComputo = (System.currentTimeMillis() - inicioMs) / 1000.0;
         if (segundosComputo > tiempoMaximoComputoSegundos) {
-            System.err.printf(
-                    "[OrquestadorOperacion] ALERTA: la planificación tomó %.2fs, supera el presupuesto de %.2fs%n",
-                    segundosComputo, tiempoMaximoComputoSegundos);
+            log.warn("La planificación tomó {}s, supera el presupuesto de {}s", segundosComputo,
+                    tiempoMaximoComputoSegundos);
         }
 
         double horasAvance = (sa / 60.0) * k;
@@ -303,8 +343,7 @@ public class OrquestadorOperacion {
             switch (solicitud.tipoSolicitud()) {
                 case AVERIA -> aplicarAveria(solicitud);
                 case CAMBIO_VELOCIDAD -> aplicarCambioVelocidad(solicitud);
-                default -> System.err.println(
-                        "[OrquestadorOperacion] Tipo de solicitud aún no implementado: " + solicitud.tipoSolicitud());
+                default -> log.warn("Tipo de solicitud aún no implementado: {}", solicitud.tipoSolicitud());
             }
             solicitudesPendientes.remove(solicitud);
         }
@@ -325,6 +364,16 @@ public class OrquestadorOperacion {
                     unidad.setAveriaActual(new Averia(tipo, ahora, fin, 0, ahora));
                     unidad.setEstado(EstadoUnidad.AVERIADO);
                     reporte.incrementarAverias();
+
+                    // Tipo 2/3: la unidad y los paquetes no trasvasados se llevan de "manera
+                    // instantánea" al almacén central (simplificación explícita del curso — no se
+                    // modela tiempo de remolque). Tipo 1 permanece en el lugar de la avería.
+                    if (tipo == TipoAveria.TIPO_2 || tipo == TipoAveria.TIPO_3) {
+                        contextoProblema.almacenes().stream()
+                                .filter(AlmacenCentral.class::isInstance)
+                                .findFirst()
+                                .ifPresent(central -> unidad.setPosicion(central.getPosicion()));
+                    }
                 });
     }
 

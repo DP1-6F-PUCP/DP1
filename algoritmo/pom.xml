@@ -18,6 +18,21 @@
 
     <dependencies>
         <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.16</version>
+        </dependency>
+        <!-- Solo para pruebas/ejecución standalone de este módulo: cuando algoritmo/ se usa como
+             dependencia de backend/, Spring Boot aporta su propio binding (Logback), así que traer
+             slf4j-simple en scope runtime aquí causaría un conflicto de "multiple SLF4J bindings". -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>2.0.16</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>5.10.2</version>

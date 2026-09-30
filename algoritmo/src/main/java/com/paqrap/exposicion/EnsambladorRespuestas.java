@@ -90,7 +90,54 @@ public final class EnsambladorRespuestas {
 
     public static EventoDTO aEventoDTO(EventoSimulacion evento, LocalDateTime ancla) {
         LocalDateTime instante = ancla.plusSeconds(Math.round(evento.getTiempoHoras() * 3600.0));
-        return new EventoDTO(instante, evento.getTipo().name(), evento.getVehiculoId(), evento.getX(), evento.getY());
+        return new EventoDTO(instante, evento.getTipo().name(), evento.getVehiculoId(), evento.getX(), evento.getY(),
+                evento.getPedidoId(), evento.getDescripcion());
+    }
+
+    /**
+     * Genera una alerta ({@link EventoDTO} sintético, tipo {@code PEDIDO_EN_RIESGO_SLA}) por cada
+     * pedido pendiente cuyo plazo vence dentro de {@code horasUmbral} horas desde
+     * {@code instanteActual}. No es un evento registrado por {@link com.paqrap.simulador.MotorSimulacion}
+     * (no ocurrió nada, es una condición continua) — se recalcula bajo demanda, típicamente una vez
+     * por lote de planificación, para alimentar {@code GET /api/alerts} y el campo {@code newAlerts}
+     * del WebSocket.
+     */
+    public static List<EventoDTO> alertasRiesgoSLA(List<Pedido> pedidos, LocalDateTime instanteActual,
+            double horasUmbral) {
+        return pedidos.stream()
+                .filter(p -> p.getEstado() == com.paqrap.dominio.EstadoPedido.PENDIENTE)
+                .filter(p -> {
+                    double horasRestantes = java.time.Duration.between(instanteActual, p.getFechaLimite()).toMinutes() / 60.0;
+                    return horasRestantes >= 0 && horasRestantes <= horasUmbral;
+                })
+                .map(p -> {
+                    long minutosRestantes = java.time.Duration.between(instanteActual, p.getFechaLimite()).toMinutes();
+                    String descripcion = String.format("Pedido %s a %d min de vencer su plazo", p.getIdPedido(),
+                            minutosRestantes);
+                    return new EventoDTO(instanteActual, "PEDIDO_EN_RIESGO_SLA", null, p.getDestino().x(),
+                            p.getDestino().y(), p.getIdPedido(), descripcion);
+                })
+                .toList();
+    }
+
+    /** Variante de {@link #alertasRiesgoSLA(List, LocalDateTime, double)} sobre {@link PedidoDTO},
+     * para usarse desde un controlador que solo tiene acceso a la capa de Exposición. */
+    public static List<EventoDTO> alertasRiesgoSLADesdeDTO(List<PedidoDTO> pedidos, LocalDateTime instanteActual,
+            double horasUmbral) {
+        return pedidos.stream()
+                .filter(p -> "PENDIENTE".equals(p.estado()))
+                .filter(p -> {
+                    double horasRestantes = java.time.Duration.between(instanteActual, p.fechaLimite()).toMinutes() / 60.0;
+                    return horasRestantes >= 0 && horasRestantes <= horasUmbral;
+                })
+                .map(p -> {
+                    long minutosRestantes = java.time.Duration.between(instanteActual, p.fechaLimite()).toMinutes();
+                    String descripcion = String.format("Pedido %s a %d min de vencer su plazo", p.idPedido(),
+                            minutosRestantes);
+                    return new EventoDTO(instanteActual, "PEDIDO_EN_RIESGO_SLA", null, p.posX(), p.posY(),
+                            p.idPedido(), descripcion);
+                })
+                .toList();
     }
 
     public static CiudadDTO aCiudadDTO(Ciudad ciudad) {

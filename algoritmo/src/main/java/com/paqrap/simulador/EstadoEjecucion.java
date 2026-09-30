@@ -4,6 +4,7 @@ package com.paqrap.simulador;
 public enum EstadoEjecucion {
     INICIADA,
     EN_CURSO,
+    PAUSADA,
     FINALIZADA,
     DETENIDA_POR_INCUMPLIMIENTO
 }

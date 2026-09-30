@@ -11,8 +11,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /** Acumula {@link EventoSimulacion} y los persiste en texto plano y JSON para el visualizador. */
 public class GestorLogSimulacion {
+
+    private static final Logger log = LoggerFactory.getLogger(GestorLogSimulacion.class);
 
     private final List<EventoSimulacion> eventos;
     private final File archivoLogTexto;
@@ -39,7 +44,7 @@ public class GestorLogSimulacion {
     public synchronized void registrarEvento(EventoSimulacion evento) {
         eventos.add(evento);
         if (imprimirEnConsola) {
-            System.out.println(evento.toLogLine());
+            log.info(evento.toLogLine());
         }
     }
 
@@ -66,7 +71,7 @@ public class GestorLogSimulacion {
             pw.println("                                         FIN DEL REGISTRO DE LOG                                         ");
             pw.println("=========================================================================================================");
         } catch (IOException e) {
-            System.err.println("Error al escribir el archivo de log en texto: " + e.getMessage());
+            log.error("Error al escribir el archivo de log en texto: {}", e.getMessage(), e);
         }
 
         try (PrintWriter pw = new PrintWriter(
@@ -83,7 +88,7 @@ public class GestorLogSimulacion {
             pw.println("  ]");
             pw.println("}");
         } catch (IOException e) {
-            System.err.println("Error al escribir el archivo de log en JSON: " + e.getMessage());
+            log.error("Error al escribir el archivo de log en JSON: {}", e.getMessage(), e);
         }
     }
 
