@@ -90,7 +90,10 @@ public class BusquedaLocalRVND {
                         double costoAntes = r1.getCostoEstimado() + (mismaRuta ? 0 : r2.getCostoEstimado());
                         double costoDespues = testR1.getCostoEstimado() + (mismaRuta ? 0 : testR2.getCostoEstimado());
 
-                        if (esFactible(testR1, contexto) && esFactible(testR2, contexto)
+                        boolean stockOk = mismaRuta
+                                || VerificadorRestricciones.respetaStockAlmacenes(r1, testR1, r2, testR2,
+                                        rutas, contexto.almacenes());
+                        if (esFactible(testR1, contexto) && esFactible(testR2, contexto) && stockOk
                                 && costoDespues < costoAntes - epsilonMejora) {
                             rutas.set(r1Idx, testR1);
                             if (!mismaRuta) {
@@ -134,7 +137,10 @@ public class BusquedaLocalRVND {
                         double costoAntes = r1.getCostoEstimado() + (mismaRuta ? 0 : r2.getCostoEstimado());
                         double costoDespues = testR1.getCostoEstimado() + (mismaRuta ? 0 : testR2.getCostoEstimado());
 
-                        if (esFactible(testR1, contexto) && esFactible(testR2, contexto)
+                        boolean stockOk = mismaRuta
+                                || VerificadorRestricciones.respetaStockAlmacenes(r1, testR1, r2, testR2,
+                                        rutas, contexto.almacenes());
+                        if (esFactible(testR1, contexto) && esFactible(testR2, contexto) && stockOk
                                 && costoDespues < costoAntes - epsilonMejora) {
                             rutas.set(r1Idx, testR1);
                             if (!mismaRuta) {
@@ -215,6 +221,8 @@ public class BusquedaLocalRVND {
                         double costoDespues = testR1.getCostoEstimado() + testR2.getCostoEstimado();
 
                         if (esFactible(testR1, contexto) && esFactible(testR2, contexto)
+                                && VerificadorRestricciones.respetaStockAlmacenes(r1, testR1, r2, testR2, rutas,
+                                        contexto.almacenes())
                                 && costoDespues < costoAntes - epsilonMejora) {
                             rutas.set(r1Idx, testR1);
                             rutas.set(r2Idx, testR2);
@@ -265,6 +273,8 @@ public class BusquedaLocalRVND {
                         double costoDespues = testR1.getCostoEstimado() + testR2.getCostoEstimado();
 
                         if (esFactible(testR1, contexto) && esFactible(testR2, contexto)
+                                && VerificadorRestricciones.respetaStockAlmacenes(r1, testR1, r2, testR2, rutas,
+                                        contexto.almacenes())
                                 && costoDespues < costoAntes - epsilonMejora) {
                             rutas.set(r1Idx, testR1);
                             rutas.set(r2Idx, testR2);

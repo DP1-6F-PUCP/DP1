@@ -4,10 +4,14 @@ import com.paqrap.dominio.Almacen;
 import com.paqrap.dominio.AlmacenCentral;
 import com.paqrap.dominio.AlmacenIntermedio;
 import com.paqrap.dominio.Averia;
+import com.paqrap.dominio.Bloqueo;
 import com.paqrap.dominio.Ciudad;
 import com.paqrap.dominio.ContextoProblema;
+import com.paqrap.dominio.EstadoParada;
 import com.paqrap.dominio.EstadoPedido;
+import com.paqrap.dominio.EstadoRuta;
 import com.paqrap.dominio.EstadoUnidad;
+import com.paqrap.dominio.Mantenimiento;
 import com.paqrap.dominio.Nodo;
 import com.paqrap.dominio.ParadaPlanificada;
 import com.paqrap.dominio.Pedido;
@@ -16,15 +20,20 @@ import com.paqrap.dominio.Ruta;
 import com.paqrap.dominio.TipoAveria;
 import com.paqrap.dominio.TipoVehiculo;
 import com.paqrap.dominio.UnidadTransporte;
+import com.paqrap.entrada.CargadorRecursos;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -59,7 +68,47 @@ public class OrquestadorOperacion {
     private final float k;
     private final float tiempoMaximoComputoSegundos;
     private volatile ContextoProblema contextoProblema;
+    /**
+     * Universo completo de bloqueos conocidos, guardado aparte de {@code contextoProblema} para
+     * que cada lote pueda recortarlo fresco a su propio horizonte (ver {@link #bloqueosDelLote})
+     * -- si se recortara una sola vez al construir el orquestador, un pedido que llegue después
+     * (sintético o de un archivo nuevo) con un plazo fuera de esa ventana inicial podría
+     * planificarse ignorando un bloqueo real que sí le aplica.
+     */
+    private final List<Bloqueo> todosLosBloqueos;
+    /**
+     * Universo completo de mantenimientos conocidos, con el mismo tratamiento que
+     * {@link #todosLosBloqueos}: se acumula aparte de {@code contextoProblema} porque
+     * {@link #cargarMantenimientoSiFalta} agrega bimestres nuevos a medida que el reloj avanza.
+     */
+    private final List<Mantenimiento> todosLosMantenimientos;
     private final List<SolicitudOperacion> solicitudesPendientes = new CopyOnWriteArrayList<>();
+
+    /**
+     * Carga bajo demanda los datos oficiales del curso (pedidos, bloqueos, mantenimiento) a medida
+     * que el reloj simulado los necesita, para que la operación no dependa de que alguien suba
+     * archivos por la API mes a mes -- ver {@link #asegurarDatosOficialesCargados}. {@code null}
+     * desactiva la carga automática (p. ej. en pruebas que arman su propio {@code ContextoProblema}
+     * completo a mano); en ese caso el comportamiento es el mismo que antes de introducir esto:
+     * solo se usan los datos con los que se construyó el orquestador o los subidos manualmente vía
+     * {@code ServicioPlanificacion#recibirArchivo}.
+     */
+    private final CargadorRecursos cargadorRecursos;
+    /**
+     * Instante de arranque elegido para ESTA ejecución (fijo, no se mueve con
+     * {@code contextoProblema.marcaTiempoActual()}). Pedidos históricos con {@code fechaIngreso}
+     * anterior a este instante no pertenecen a esta ejecución -- no son "backlog vencido", son de
+     * antes de que este run empezara (p. ej. un turno anterior no simulado aquí). Sin este corte,
+     * arrancar un DIA_A_DIA a media mañana incorporaría de golpe todo lo de la madrugada, incluidos
+     * pedidos cuyo plazo (fechaLimite, que nunca se toca) ya venció antes de que el reloj de esta
+     * ejecución siquiera empezara a correr -- confirmado empíricamente con datos reales del curso.
+     */
+    private final LocalDateTime instanteInicioEscenario;
+    private final Set<YearMonth> mesesPedidosCargados = new HashSet<>();
+    private final Set<YearMonth> mesesBloqueosCargados = new HashSet<>();
+    private final Set<String> bimestresMantenimientoCargados = new HashSet<>();
+    /** Pedidos recién cargados de un archivo oficial, pendientes de incorporarse al próximo lote. */
+    private final List<Pedido> pedidosPorIncorporar = new ArrayList<>();
 
     private final Planificador planificador;
     private final MotorSimulacion motorSimulacion;
@@ -78,7 +127,8 @@ public class OrquestadorOperacion {
     private volatile LocalDateTime anclaUltimoLote;
 
     public OrquestadorOperacion(Planificador planificador, GestorLogSimulacion gestorLog, float sa, float ta,
-            float k, float tiempoMaximoComputoSegundos, ContextoProblema contextoInicial) {
+            float k, float tiempoMaximoComputoSegundos, ContextoProblema contextoInicial,
+            CargadorRecursos cargadorRecursos) {
         this.planificador = planificador;
         this.motorSimulacion = new MotorSimulacion(gestorLog);
         this.sa = sa;
@@ -86,6 +136,10 @@ public class OrquestadorOperacion {
         this.k = k;
         this.tiempoMaximoComputoSegundos = tiempoMaximoComputoSegundos;
         this.contextoProblema = contextoInicial;
+        this.todosLosBloqueos = new ArrayList<>(contextoInicial.bloqueos());
+        this.todosLosMantenimientos = new ArrayList<>(contextoInicial.mantenimientos());
+        this.cargadorRecursos = cargadorRecursos;
+        this.instanteInicioEscenario = contextoInicial.marcaTiempoActual();
     }
 
     /**
@@ -167,6 +221,92 @@ public class OrquestadorOperacion {
     }
 
     /**
+     * Recorta {@link #todosLosBloqueos} al horizonte real de {@code pedidos} (desde el ingreso
+     * más temprano hasta el plazo más lejano) -- ver {@link Bloqueo#filtrarEnHorizonte}.
+     */
+    private List<Bloqueo> bloqueosDelLote(List<Pedido> pedidos, LocalDateTime instanteReferencia) {
+        LocalDateTime desde = pedidos.stream().map(Pedido::getFechaIngreso).min(LocalDateTime::compareTo)
+                .orElse(instanteReferencia);
+        LocalDateTime hasta = pedidos.stream().map(Pedido::getFechaLimite).max(LocalDateTime::compareTo)
+                .orElse(instanteReferencia.plusHours(48));
+        return Bloqueo.filtrarEnHorizonte(todosLosBloqueos, desde, hasta);
+    }
+
+    /**
+     * Asegura que los datos oficiales del curso estén cargados para el mes de {@code instante}.
+     * Bloqueos y mantenimiento se cargan también un mes por adelantado -- el margen extra evita
+     * que un lote aterrice justo en un mes aún no cargado cuando {@code sa * k} avanza varias
+     * horas de una sola vez (p. ej. escenario de colapso logístico), y no tiene costo: son datos
+     * de disponibilidad/tránsito, no candidatos a planificar. Pedidos, en cambio, SOLO se cargan
+     * del mes actual: adelantarlos inflaría el problema que ve el planificador con pedidos de un
+     * mes que ni siquiera ha empezado (confirmado empíricamente -- precargar +1 mes duplicó el
+     * tamaño de la instancia del primer lote y disparó su tiempo de cómputo varias veces). No hace
+     * nada si no hay {@link #cargadorRecursos} configurado (carga automática desactivada).
+     */
+    private void asegurarDatosOficialesCargados(LocalDateTime instante) {
+        if (cargadorRecursos == null) {
+            return;
+        }
+        cargarPedidosSiFalta(YearMonth.from(instante));
+        for (YearMonth mes : List.of(YearMonth.from(instante), YearMonth.from(instante).plusMonths(1))) {
+            cargarBloqueosSiFalta(mes);
+            int mes1Bimestre = ((mes.getMonthValue() - 1) / 2) * 2 + 1;
+            cargarMantenimientoSiFalta(mes.getYear(), mes1Bimestre);
+        }
+    }
+
+    /**
+     * Carga el archivo oficial de pedidos del mes dado, si aún no se había cargado. A diferencia
+     * de bloqueos/mantenimiento, no hay reciclaje cíclico entre años -- el profesor confirmó que
+     * ningún algoritmo agota los pedidos ya provistos por el curso (2026-2028), así que un mes sin
+     * archivo real simplemente no aporta pedidos nuevos (se registra, no se trata como error).
+     *
+     * <p>Descarta de una los pedidos con {@code fechaIngreso} anterior a
+     * {@link #instanteInicioEscenario}: no pertenecen a esta ejecución (ver el comentario del
+     * campo), así que ni siquiera entran a {@link #pedidosPorIncorporar}.
+     */
+    private void cargarPedidosSiFalta(YearMonth mes) {
+        if (!mesesPedidosCargados.add(mes)) {
+            return;
+        }
+        try {
+            cargadorRecursos.cargarPedidos(mes.getYear(), mes.getMonthValue()).getPedidos().stream()
+                    .filter(p -> !p.getFechaIngreso().isBefore(instanteInicioEscenario))
+                    .forEach(pedidosPorIncorporar::add);
+        } catch (IOException ex) {
+            log.info("Sin pedidos oficiales para {} (fuera del rango provisto por el curso): {}", mes,
+                    ex.getMessage());
+        }
+    }
+
+    /** Carga los bloqueos oficiales del mes dado (con reciclaje cíclico de año, ver {@link CargadorRecursos}). */
+    private void cargarBloqueosSiFalta(YearMonth mes) {
+        if (!mesesBloqueosCargados.add(mes)) {
+            return;
+        }
+        try {
+            todosLosBloqueos.addAll(cargadorRecursos.cargarBloqueos(mes.getYear(), mes.getMonthValue()).getBloqueos());
+        } catch (IOException ex) {
+            log.warn("No se pudieron cargar los bloqueos oficiales de {}: {}", mes, ex.getMessage());
+        }
+    }
+
+    /** Carga el mantenimiento oficial del bimestre {@code [mes1, mes1+1]} de {@code anio} (plantilla reutilizada). */
+    private void cargarMantenimientoSiFalta(int anio, int mes1) {
+        String clave = anio + "-" + mes1;
+        if (!bimestresMantenimientoCargados.add(clave)) {
+            return;
+        }
+        try {
+            todosLosMantenimientos.addAll(
+                    cargadorRecursos.cargarMantenimiento(anio, mes1, mes1 + 1, contextoProblema.vehiculos()));
+        } catch (IOException ex) {
+            log.warn("No se pudo cargar el mantenimiento oficial del bimestre {}-{} de {}: {}", mes1, mes1 + 1,
+                    anio, ex.getMessage());
+        }
+    }
+
+    /**
      * Ejecuta un ciclo: aplica solicitudes vencidas, invoca al planificador, simula el avance de
      * {@code sa * k} minutos de tiempo simulado y actualiza el contexto y el reporte de
      * desempeño. Se detiene automáticamente si detecta un pedido incumplido (falla dura: la
@@ -177,23 +317,88 @@ public class OrquestadorOperacion {
             return;
         }
 
+        asegurarDatosOficialesCargados(contextoProblema.marcaTiempoActual());
         aplicarSolicitudesVencidas();
+        aplicarMantenimientos(contextoProblema.marcaTiempoActual());
+
+        // Rutas que ya venían EN_EJECUCION de un lote anterior (sin terminar todas sus paradas):
+        // se retoman tal cual, NO se vuelven a planificar. UnidadTransporte.estaDisponibleParaRuta
+        // ya excluye estos vehículos de una nueva asignación, y MotorSimulacion.simularUnaRuta
+        // continúa cada una desde la parada pendiente -- antes de este fix, cada lote rehacía todo
+        // desde cero según la posición actual del vehículo, así que un viaje nunca alcanzaba a
+        // completarse si tomaba más de un lote (confirmado empíricamente: 0 entregas en 4+ horas
+        // simuladas con miles de pedidos pendientes).
+        List<Ruta> rutasEnCurso = contextoProblema.vehiculos().stream()
+                .map(UnidadTransporte::rutaEnEjecucion)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Set<Pedido> pedidosEnRutasEnCurso = rutasEnCurso.stream()
+                .flatMap(r -> r.getSecuenciaParadas().stream())
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                .map(ParadaPlanificada::getPedido)
+                .collect(java.util.stream.Collectors.toSet());
+
+        List<Pedido> pedidosDelLote = new ArrayList<>(contextoProblema.pedidos());
+        // pedidosPorIncorporar puede traer de golpe el archivo de un mes entero (p. ej. 5000
+        // pedidos) apenas se auto-carga -- solo se le entregan al planificador los que ya
+        // "llegaron" (fechaIngreso <= instante de este lote); el resto se queda en la cola para
+        // que lotes futuros los incorporen cuando su momento llegue. Sin este filtro, el
+        // planificador vería de una todo el mes desde el primer lote, igual que pasaba con los
+        // bloqueos antes de recortarlos por horizonte (ver bloqueosDelLote).
+        if (!pedidosPorIncorporar.isEmpty()) {
+            LocalDateTime ahora = contextoProblema.marcaTiempoActual();
+            List<Pedido> liberadosAhora = pedidosPorIncorporar.stream()
+                    .filter(p -> !p.getFechaIngreso().isAfter(ahora))
+                    .toList();
+            pedidosDelLote.addAll(liberadosAhora);
+            pedidosPorIncorporar.removeAll(liberadosAhora);
+        }
+
+        // Al planificador solo se le ofrecen los pedidos SIN compromiso todavía -- los que ya van
+        // camino a entregarse en una ruta en curso no se le vuelven a ofrecer (evita que se le
+        // asignen a otro vehículo mientras el primero ya viene en camino).
+        List<Pedido> pedidosParaPlanificar = pedidosDelLote.stream()
+                .filter(p -> !pedidosEnRutasEnCurso.contains(p))
+                .toList();
+
+        // Recorta el universo completo de bloqueos al horizonte real de ESTE lote (desde el
+        // ingreso más temprano hasta el plazo más lejano de los pedidos vigentes) -- evita que
+        // cada consulta de distancia tenga que descartar, una y otra vez, bloqueos de meses que
+        // no tienen nada que ver con lo que se está planificando ahora mismo.
+        List<Bloqueo> bloqueosDelLote = bloqueosDelLote(pedidosDelLote, contextoProblema.marcaTiempoActual());
+        ContextoProblema contextoDelLote = new ContextoProblema(contextoProblema.marcaTiempoActual(),
+                pedidosParaPlanificar, bloqueosDelLote, todosLosMantenimientos,
+                contextoProblema.almacenes(), contextoProblema.vehiculos(), contextoProblema.ciudad(),
+                contextoProblema.configuracionOperacion());
 
         long inicioMs = System.currentTimeMillis();
-        List<Ruta> rutas = planificador.planificarRutas(contextoProblema);
+        List<Ruta> rutasNuevas = planificador.planificarRutas(contextoDelLote);
+        // Ni ALNS ni IPSO registran la ruta que crean en UnidadTransporte.getRutas() -- sin esto,
+        // UnidadTransporte.rutaEnEjecucion() (de donde sale rutasEnCurso arriba) siempre
+        // encontraba una lista vacía y devolvía null, así que el fix de continuidad entre lotes
+        // nunca se activaba en la práctica (bug real, confirmado: esta línea faltaba por completo
+        // en todo el código antes de este fix).
+        for (Ruta ruta : rutasNuevas) {
+            ruta.getUnidadTransporte().getRutas().add(ruta);
+        }
         double segundosComputo = (System.currentTimeMillis() - inicioMs) / 1000.0;
         if (segundosComputo > tiempoMaximoComputoSegundos) {
             log.warn("La planificación tomó {}s, supera el presupuesto de {}s", segundosComputo,
                     tiempoMaximoComputoSegundos);
         }
 
-        double horasAvance = (sa / 60.0) * k;
-        List<Pedido> noAsignados = pedidosNoAsignados(rutas, contextoProblema.pedidos());
-        anclaUltimoLote = contextoProblema.marcaTiempoActual();
-        ultimosEventos = motorSimulacion.simularRutas(rutas, noAsignados, contextoProblema, 0.0, horasAvance);
-        ultimasRutas = rutas;
+        List<Ruta> todasLasRutas = new ArrayList<>(rutasEnCurso);
+        todasLasRutas.addAll(rutasNuevas);
 
-        for (Ruta ruta : rutas) {
+        double horasAvance = (sa / 60.0) * k;
+        List<Pedido> noAsignados = pedidosNoAsignados(todasLasRutas, pedidosDelLote);
+        anclaUltimoLote = contextoProblema.marcaTiempoActual();
+        ultimosEventos = motorSimulacion.simularRutas(todasLasRutas, noAsignados, contextoDelLote, 0.0, horasAvance);
+        ultimasRutas = todasLasRutas;
+
+        // Solo se suma el costo de las rutas NUEVAS -- el de las que ya venían EN_EJECUCION se
+        // contabilizó una única vez, en el lote donde se planificaron por primera vez.
+        for (Ruta ruta : rutasNuevas) {
             reporte.sumarCosto(ruta.getCostoEstimado());
         }
         reporte.incrementarEntregados(motorSimulacion.getPedidosCompletados().size());
@@ -203,11 +408,14 @@ public class OrquestadorOperacion {
 
         recargarAlmacenesSiCorrespondeMedianoche(instanteAnterior, nuevoInstante);
 
-        List<Pedido> pedidosVigentes = actualizarEstadosYFiltrarPendientes(contextoProblema.pedidos(), nuevoInstante);
+        List<Pedido> pedidosVigentes = actualizarEstadosYFiltrarPendientes(pedidosDelLote, nuevoInstante);
         pedidosVigentes.addAll(generarPedidosSinteticos(nuevoInstante));
 
-        contextoProblema = new ContextoProblema(nuevoInstante, pedidosVigentes, contextoProblema.bloqueos(),
-                contextoProblema.mantenimientos(), contextoProblema.almacenes(), contextoProblema.vehiculos(),
+        // Se guarda con el universo COMPLETO (todosLosBloqueos/todosLosMantenimientos), no con las
+        // versiones recortadas de este lote -- así el próximo lote vuelve a recortar fresco según
+        // sus propios pedidos vigentes.
+        contextoProblema = new ContextoProblema(nuevoInstante, pedidosVigentes, todosLosBloqueos,
+                todosLosMantenimientos, contextoProblema.almacenes(), contextoProblema.vehiculos(),
                 contextoProblema.ciudad(), contextoProblema.configuracionOperacion());
 
         boolean hayIncumplimiento = pedidosVigentes.stream().anyMatch(p -> p.getEstado() == EstadoPedido.INCUMPLIDA);
@@ -280,13 +488,27 @@ public class OrquestadorOperacion {
         return vigentes;
     }
 
+    /**
+     * Recarga los almacenes intermedios una vez por cada medianoche cruzada entre {@code desde} y
+     * {@code hasta} -- no una sola vez sin importar cuántos días saltó el lote. Con
+     * {@code AlmacenIntermedio.recargar()} siendo idempotente (reset directo a capacidadMaxima) el
+     * resultado final da igual hoy, pero esto queda semánticamente correcto ante un {@code k} lo
+     * bastante agresivo como para que un solo lote cruce varios días -- relevante sobre todo para
+     * {@code COLAPSO_LOGISTICO}, cuyo K=75 es solo el valor ilustrativo del profesor, no uno
+     * calibrado, y ese escenario en particular incentiva acelerar mucho el reloj para no esperar
+     * días reales de prueba.
+     */
     private void recargarAlmacenesSiCorrespondeMedianoche(LocalDateTime desde, LocalDateTime hasta) {
         LocalDate diaDesde = desde.toLocalDate();
         LocalDate diaHasta = hasta.toLocalDate();
-        if (diaHasta.isAfter(diaDesde)) {
-            for (var almacen : contextoProblema.almacenes()) {
-                if (almacen instanceof AlmacenIntermedio intermedio) {
-                    intermedio.recargar();
+        long diasCruzados = java.time.temporal.ChronoUnit.DAYS.between(diaDesde, diaHasta);
+        if (diasCruzados <= 0) {
+            return;
+        }
+        for (var almacen : contextoProblema.almacenes()) {
+            if (almacen instanceof AlmacenIntermedio intermedio) {
+                for (long i = 0; i < diasCruzados; i++) {
+                    intermedio.recargar(diaDesde.plusDays(i + 1).atStartOfDay());
                 }
             }
         }
@@ -321,7 +543,11 @@ public class OrquestadorOperacion {
             int cantidadProducto = 1 + randomEscenario.nextInt(3);
             int sla = slas[randomEscenario.nextInt(slas.length)];
             String id = "SINT-" + (++contadorPedidosSinteticos);
-            generados.add(new Pedido(id, "cliente-" + id, new Nodo(x, y), cantidadProducto, sla, instante));
+            Pedido pedidoSintetico = new Pedido(id, "cliente-" + id, new Nodo(x, y), cantidadProducto, sla, instante);
+            generados.add(pedidoSintetico);
+            double tiempoHoras = java.time.Duration.between(contextoProblema.marcaTiempoActual(), instante)
+                    .toSeconds() / 3600.0;
+            motorSimulacion.registrarNuevoPedido(tiempoHoras, contextoProblema, pedidoSintetico);
         }
         return generados;
     }
@@ -349,6 +575,38 @@ public class OrquestadorOperacion {
         }
     }
 
+    /**
+     * Marca {@code EN_MANTENIMIENTO} cada unidad cuyo mantenimiento programado cubre el instante
+     * dado, y la libera de vuelta a {@code DISPONIBLE} cuando la ventana termina. A diferencia de
+     * los bloqueos, no requiere recorte de horizonte por rendimiento: es un barrido O(mantenimientos)
+     * sobre una lista pequeña (archivo bimensual), no una consulta repetida por cálculo de distancia.
+     */
+    private void aplicarMantenimientos(LocalDateTime instante) {
+        for (Mantenimiento mantenimiento : contextoProblema.mantenimientos()) {
+            UnidadTransporte unidad = mantenimiento.vehiculoAfectado();
+            boolean dentroDeVentana = !instante.isBefore(mantenimiento.fechaInicio())
+                    && instante.isBefore(mantenimiento.fechaFinCalculada());
+            if (dentroDeVentana && unidad.getEstado() != EstadoUnidad.AVERIADO) {
+                // Igual que en aplicarAveria: si entra a mantenimiento con una ruta EN_EJECUCION,
+                // la abandona -- sus paradas pendientes quedan REASIGNADA para que otro vehículo
+                // las retome el próximo lote, en vez de dejarla EN_EJECUCION para siempre.
+                Ruta rutaEnCurso = unidad.rutaEnEjecucion();
+                if (rutaEnCurso != null) {
+                    rutaEnCurso.setEstado(EstadoRuta.REEMPLAZADA);
+                    long liberadas = rutaEnCurso.getSecuenciaParadas().stream()
+                            .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                            .peek(p -> p.setEstado(EstadoParada.REASIGNADA))
+                            .count();
+                    motorSimulacion.registrarReplanificacion(0.0, contextoProblema, unidad.getIdUnidad(),
+                            (int) liberadas, "mantenimiento programado");
+                }
+                unidad.setEstado(EstadoUnidad.EN_MANTENIMIENTO);
+            } else if (!dentroDeVentana && unidad.getEstado() == EstadoUnidad.EN_MANTENIMIENTO) {
+                unidad.setEstado(EstadoUnidad.DISPONIBLE);
+            }
+        }
+    }
+
     private void aplicarAveria(SolicitudOperacion solicitud) {
         contextoProblema.vehiculos().stream()
                 .filter(u -> u.getIdUnidad().equalsIgnoreCase(solicitud.entidadObjetivo()))
@@ -361,9 +619,27 @@ public class OrquestadorOperacion {
                         case TIPO_2 -> ahora.plusHours(4);
                         case TIPO_3 -> ahora.plusDays(2);
                     };
+                    // Si la unidad ya venía con una ruta EN_EJECUCION, la avería la abandona: se
+                    // marca REEMPLAZADA y sus paradas aún no cumplidas quedan REASIGNADA, para que
+                    // el pedido (que sigue PENDIENTE) vuelva a estar disponible y el próximo lote
+                    // se lo ofrezca a otro vehículo -- sin esto, la ruta quedaría EN_EJECUCION para
+                    // siempre y MotorSimulacion seguiría intentando avanzar un vehículo averiado.
+                    Ruta rutaEnCurso = unidad.rutaEnEjecucion();
+                    if (rutaEnCurso != null) {
+                        rutaEnCurso.setEstado(EstadoRuta.REEMPLAZADA);
+                        long liberadas = rutaEnCurso.getSecuenciaParadas().stream()
+                                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                                .peek(p -> p.setEstado(EstadoParada.REASIGNADA))
+                                .count();
+                        motorSimulacion.registrarReplanificacion(0.0, contextoProblema, unidad.getIdUnidad(),
+                                (int) liberadas, "avería " + tipo);
+                    }
+
                     unidad.setAveriaActual(new Averia(tipo, ahora, fin, 0, ahora));
                     unidad.setEstado(EstadoUnidad.AVERIADO);
                     reporte.incrementarAverias();
+                    motorSimulacion.registrarAveriaVehiculo(0.0, contextoProblema, unidad.getIdUnidad(),
+                            unidad.getPosicion(), tipo.name());
 
                     // Tipo 2/3: la unidad y los paquetes no trasvasados se llevan de "manera
                     // instantánea" al almacén central (simplificación explícita del curso — no se

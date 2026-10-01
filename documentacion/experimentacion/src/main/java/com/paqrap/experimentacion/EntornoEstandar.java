@@ -70,8 +70,14 @@ final class EntornoEstandar {
 
     static ConfiguracionOperacion operacion() {
         // (duracionTurnoHoras, horaInicioTurno, tiempoServicioClienteHoras, duracionRefrigerioHoras,
-        //  margenRefrigerioHoras, tiempoCargaAlmacenHoras, tiempoTrasvaseHoras)
-        return new ConfiguracionOperacion(8, 7, 1, 1, 1, 0, 0.5);
+        //  margenRefrigerioHoras, tiempoCargaAlmacenHoras, tiempoTrasvaseHoras, maxParadasPorRuta)
+        // maxParadasPorRuta=2 -- mismo valor calibrado que producción (ver PaqRapConfig). Nota: el
+        // DOE ya documentado (ver [[project-paqrap-experimentacion]]) se corrió sin este límite
+        // (capacidad completa por despacho); una re-ejecución futura de este módulo con este valor
+        // ya no reproducirá exactamente esos números, aunque la conclusión ALNS-vs-IPSO del DOE no
+        // depende de esto (ver justificación completa ya dada sobre por qué esos resultados siguen
+        // siendo válidos).
+        return new ConfiguracionOperacion(8, 7, 1, 1, 1, 0, 0.5, 2);
     }
 
     static List<Almacen> almacenes() {

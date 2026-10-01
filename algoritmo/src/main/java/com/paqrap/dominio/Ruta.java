@@ -94,6 +94,11 @@ public class Ruta {
                         "No hay una parada pendiente para el pedido " + pedido.getIdPedido() + " en la ruta " + idRuta));
         parada.setEstado(EstadoParada.CUMPLIDA);
         parada.setFechaEntregada(instante);
+        // Bug real corregido: sin esto, Pedido.entregasParciales quedaba SIEMPRE vacía (nada más
+        // en todo el código le agregaba nada), así que Pedido.cantidadEntregadaTotal() siempre
+        // devolvía 0 y actualizarEstado() nunca podía pasar a ENTREGADA -- ningún pedido se
+        // marcaba como entregado jamás, sin importar que la entrega sí ocurriera en la simulación.
+        pedido.getEntregasParciales().add(parada);
         pedido.actualizarEstado(instante);
     }
 

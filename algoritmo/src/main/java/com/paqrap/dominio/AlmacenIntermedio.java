@@ -1,5 +1,7 @@
 package com.paqrap.dominio;
 
+import java.time.LocalDateTime;
+
 /** Almacén con capacidad máxima limitada, recargado instantáneamente cada día a las 23:59:59. */
 public class AlmacenIntermedio extends Almacen {
 
@@ -32,17 +34,22 @@ public class AlmacenIntermedio extends Almacen {
     }
 
     @Override
-    public void descontarStock(int cantidad) {
+    public void descontarStock(int cantidad, LocalDateTime instante) {
         if (cantidad > stockActual) {
             throw new IllegalStateException(
                     "El almacén " + nombre + " no tiene stock suficiente: solicitado " + cantidad
                             + ", disponible " + stockActual);
         }
         stockActual -= cantidad;
+        registrarMovimiento(TipoMovimiento.SALIDA_DESPACHO, cantidad, instante);
     }
 
     @Override
-    public void recargar() {
+    public void recargar(LocalDateTime instante) {
+        int cantidadRecargada = capacidadMaxima - stockActual;
         stockActual = capacidadMaxima;
+        if (cantidadRecargada > 0) {
+            registrarMovimiento(TipoMovimiento.ENTRADA_RECARGA, cantidadRecargada, instante);
+        }
     }
 }

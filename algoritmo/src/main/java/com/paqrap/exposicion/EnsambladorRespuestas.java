@@ -14,6 +14,7 @@ import com.paqrap.dominio.TipoVehiculo;
 import com.paqrap.dominio.UnidadTransporte;
 import com.paqrap.simulador.EventoSimulacion;
 import com.paqrap.simulador.ReporteDesempeno;
+import com.paqrap.simulador.TipoEvento;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -114,8 +115,8 @@ public final class EnsambladorRespuestas {
                     long minutosRestantes = java.time.Duration.between(instanteActual, p.getFechaLimite()).toMinutes();
                     String descripcion = String.format("Pedido %s a %d min de vencer su plazo", p.getIdPedido(),
                             minutosRestantes);
-                    return new EventoDTO(instanteActual, "PEDIDO_EN_RIESGO_SLA", null, p.getDestino().x(),
-                            p.getDestino().y(), p.getIdPedido(), descripcion);
+                    return new EventoDTO(instanteActual, TipoEvento.PEDIDO_EN_RIESGO_SLA.name(), null,
+                            p.getDestino().x(), p.getDestino().y(), p.getIdPedido(), descripcion);
                 })
                 .toList();
     }
@@ -134,8 +135,8 @@ public final class EnsambladorRespuestas {
                     long minutosRestantes = java.time.Duration.between(instanteActual, p.fechaLimite()).toMinutes();
                     String descripcion = String.format("Pedido %s a %d min de vencer su plazo", p.idPedido(),
                             minutosRestantes);
-                    return new EventoDTO(instanteActual, "PEDIDO_EN_RIESGO_SLA", null, p.posX(), p.posY(),
-                            p.idPedido(), descripcion);
+                    return new EventoDTO(instanteActual, TipoEvento.PEDIDO_EN_RIESGO_SLA.name(), null, p.posX(),
+                            p.posY(), p.idPedido(), descripcion);
                 })
                 .toList();
     }
@@ -159,6 +160,7 @@ public final class EnsambladorRespuestas {
 
     public static MetricasOperacionDTO aMetricasDTO(ReporteDesempeno reporte) {
         return new MetricasOperacionDTO(reporte.getCostoTotalAcumulado(), reporte.porcentajeEntregasATiempo(),
+                reporte.getContadorEntregados(), reporte.getContadorIncumplidos(),
                 reporte.getContadorParadasReasignadas(), reporte.getContadorAverias(),
                 reporte.getContadorInterferenciasBloqueo());
     }

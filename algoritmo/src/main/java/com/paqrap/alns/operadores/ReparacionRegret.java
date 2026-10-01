@@ -38,7 +38,7 @@ public class ReparacionRegret implements OperadorReparacion {
             for (Pedido pedido : pedidosNoAsignados) {
                 List<OpcionInsercion> opciones = new ArrayList<>();
 
-                for (Ruta ruta : solucion.getRutas()) {
+                for (Ruta ruta : OperadorUtil.rutasCandidatas(solucion.getRutas(), pedido)) {
                     double costoActual = ruta.getCostoEstimado();
 
                     for (int pos = 0; pos <= ruta.getSecuenciaParadas().size(); pos++) {
@@ -47,7 +47,7 @@ public class ReparacionRegret implements OperadorReparacion {
                                 new ParadaPlanificada(pedido, pedido.getCantidadSolicitada()));
                         OperadorUtil.recalcular(rutaPrueba, contexto);
 
-                        if (esFactible(rutaPrueba, contexto)) {
+                        if (esFactible(ruta, rutaPrueba, solucion, contexto)) {
                             double delta = rutaPrueba.getCostoEstimado() - costoActual;
                             opciones.add(new OpcionInsercion(ruta, pos, delta));
                         }
@@ -68,8 +68,12 @@ public class ReparacionRegret implements OperadorReparacion {
                     regret = opciones.get(k).deltaCosto() - opciones.get(0).deltaCosto();
                 }
 
-                if (regret > valorMaxRegret) {
-                    valorMaxRegret = regret;
+                // Se suma un bono de urgencia al regret: antes, dos pedidos con el mismo regret
+                // de costo se desempataban arbitrariamente (orden de iteración), ignorando cuál
+                // está más cerca de incumplir. Ver OperadorUtil.bonoUrgencia.
+                double regretEfectivo = regret + OperadorUtil.bonoUrgencia(pedido, contexto.marcaTiempoActual());
+                if (regretEfectivo > valorMaxRegret) {
+                    valorMaxRegret = regretEfectivo;
                     pedidoMaxRegret = pedido;
                     rutaMaxRegret = opciones.get(0).ruta();
                     posMaxRegret = opciones.get(0).posicion();
@@ -87,8 +91,10 @@ public class ReparacionRegret implements OperadorReparacion {
         }
     }
 
-    private static boolean esFactible(Ruta ruta, ContextoProblema contexto) {
-        return VerificadorRestricciones.esRutaFactible(ruta, contexto.ciudad(), contexto.bloqueos(),
-                contexto.configuracionOperacion());
+    private static boolean esFactible(Ruta rutaOriginal, Ruta rutaPrueba, Solucion solucion, ContextoProblema contexto) {
+        return VerificadorRestricciones.esRutaFactible(rutaPrueba, contexto.ciudad(), contexto.bloqueos(),
+                contexto.configuracionOperacion())
+                && VerificadorRestricciones.respetaStockAlmacenes(rutaOriginal, rutaPrueba, solucion.getRutas(),
+                        contexto.almacenes());
     }
 }

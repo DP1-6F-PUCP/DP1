@@ -104,13 +104,17 @@ public class UnidadTransporte {
     }
 
     /**
-     * Determina si la unidad puede recibir una nueva asignación de ruta en el instante dado.
+     * Determina si la unidad puede recibir una NUEVA asignación de ruta en el instante dado. Una
+     * unidad {@code EN_RUTA} (con una ruta {@code EN_EJECUCION} sin terminar) NO cuenta como
+     * disponible -- debe completar esa ruta antes de recibir otra; de lo contrario el
+     * planificador podría reasignarla a mitad de camino cada lote, sin terminar nunca ninguna
+     * entrega (bug real confirmado empíricamente antes de este fix).
      *
      * @param instante momento a evaluar
      * @return {@code true} si la unidad está {@code DISPONIBLE} y no tiene una avería activa
      */
     public boolean estaDisponibleParaRuta(LocalDateTime instante) {
-        if (estado != EstadoUnidad.DISPONIBLE && estado != EstadoUnidad.EN_RUTA) {
+        if (estado != EstadoUnidad.DISPONIBLE) {
             return false;
         }
         return averiaActual == null || instante.isAfter(averiaActual.fechaFinEstimada());

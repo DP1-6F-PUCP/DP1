@@ -9,8 +9,10 @@ import com.paqrap.dominio.Nodo;
 import com.paqrap.dominio.TipoAlgoritmo;
 import com.paqrap.dominio.TipoVehiculo;
 import com.paqrap.dominio.UnidadTransporte;
+import com.paqrap.entrada.CargadorRecursos;
 import com.paqrap.exposicion.ServicioPlanificacion;
 import com.paqrap.exposicion.ServicioPlanificacionImpl;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -38,8 +40,13 @@ public class PaqRapConfig {
     @Bean
     public ConfiguracionOperacion configuracionOperacion() {
         // (duracionTurnoHoras, horaInicioTurno, tiempoServicioClienteHoras, duracionRefrigerioHoras,
-        //  margenRefrigerioHoras, tiempoCargaAlmacenHoras, tiempoTrasvaseHoras)
-        return new ConfiguracionOperacion(8, 7, 1, 1, 1, 0, 0.5);
+        //  margenRefrigerioHoras, tiempoCargaAlmacenHoras, tiempoTrasvaseHoras, maxParadasPorRuta)
+        // maxParadasPorRuta=2 -- calibrado empíricamente (ver [[project-paqrap-experimentacion]] /
+        // hallazgo de empaquetado a capacidad completa): 1 y 2 empatan como los mejores valores
+        // (34-35 entregados antes del primer incumplido vs. 25-26 sin límite, +45min de operación
+        // sostenida), se eligió 2 por rutas levemente más eficientes en costo sin sacrificar
+        // rendimiento frente a 1.
+        return new ConfiguracionOperacion(8, 7, 1, 1, 1, 0, 0.5, 2);
     }
 
     @Bean
@@ -88,11 +95,23 @@ public class PaqRapConfig {
         return flota;
     }
 
+    /**
+     * Carga bajo demanda los archivos oficiales del curso (pedidos, bloqueos, mantenimiento)
+     * empaquetados en la imagen -- ver {@code backend/Dockerfile} (copia {@code algoritmo/data}) y
+     * {@link com.paqrap.exposicion.ServicioPlanificacionImpl}. {@code paqrap.datos.carpeta} permite
+     * apuntar a otra ruta en desarrollo local sin tocar el código.
+     */
+    @Bean
+    public CargadorRecursos cargadorRecursos(@Value("${paqrap.datos.carpeta:data}") String carpetaDatos) {
+        return new CargadorRecursos(carpetaDatos, "config");
+    }
+
     @Bean
     public ServicioPlanificacion servicioPlanificacion(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
-            List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota) {
+            List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
+            CargadorRecursos cargadorRecursos) {
         return new ServicioPlanificacionImpl(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota,
-                TipoAlgoritmo.ALNS, configAlgoritmoAlns(), "logs");
+                TipoAlgoritmo.ALNS, configAlgoritmoAlns(), "logs", cargadorRecursos);
     }
 
     /**
@@ -102,6 +121,14 @@ public class PaqRapConfig {
      * estadísticamente significativo (ANOVA p=0.006): destrucción; los demás se fijaron con el
      * sentido descriptivo del análisis previo, no como hallazgo probado.
      *
+     * <p>{@code maxIteraciones}/{@code maxSinMejora}=100 (antes 300): recalibrado sobre el tamaño
+     * REAL de un lote de producción (2-800 pedidos, según la ventana de llegada del escenario de
+     * estrés), no sobre el problema completo de un mes que resuelve la experimentación numérica.
+     * Barrido 5-300 con 5 repeticiones por punto (ALNS no tiene semilla fija): la mejora de costo
+     * es real y sostenida hasta ~70-100 iteraciones; de 150 a 300 el costo promedio se mantiene
+     * plano dentro del ruido estocástico de una corrida a otra, sin ganancia neta, solo más tiempo
+     * de cómputo (hasta 5.9s/lote en el peor caso observado, contra ~2s en 100).
+     *
      * <p>Deliberadamente NO es un {@code @Bean}: Spring interpreta cualquier parámetro/retorno
      * {@code Map<String, X>} como "recolecta todos los beans de tipo X" -- con {@code X=Object}
      * eso intenta inyectar literalmente todos los beans del contexto, incluyendo el propio
@@ -109,7 +136,7 @@ public class PaqRapConfig {
      */
     private Map<String, Object> configAlgoritmoAlns() {
         return Map.ofEntries(
-                Map.entry("maxIteraciones", 300), Map.entry("maxSinMejora", 300),
+                Map.entry("maxIteraciones", 100), Map.entry("maxSinMejora", 100),
                 Map.entry("minCantidadDestruccion", 3), Map.entry("maxCantidadDestruccion", 8),
                 Map.entry("factorReaccion", 0.4), Map.entry("intervaloActualizacion", 10),
                 Map.entry("temperaturaAceptacionSA", 150.0), Map.entry("tasaEnfriamientoSA", 0.999),

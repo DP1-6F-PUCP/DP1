@@ -20,6 +20,10 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
 COPY --from=builder /app/backend/target/*.jar app.jar
+# Datos oficiales del curso (ventas/bloqueos/mantenimiento) -- PaqRapConfig.cargadorRecursos()
+# los lee de "data" (ruta relativa al WORKDIR) para la carga automática por lote de
+# OrquestadorOperacion; ver com.paqrap.exposicion.ServicioPlanificacionImpl.
+COPY algoritmo/data data
 
 EXPOSE 8080
 

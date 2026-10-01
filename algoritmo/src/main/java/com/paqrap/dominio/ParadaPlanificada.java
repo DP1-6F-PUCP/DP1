@@ -9,6 +9,15 @@ public class ParadaPlanificada {
     private final int cantidadAEntregar;
     private EstadoParada estado;
     private LocalDateTime fechaEntregada;
+    /**
+     * Instante absoluto (no relativo a un lote) en que el vehículo llegó al destino y empezó el
+     * servicio de entrega. {@code null} mientras no ha llegado. Se fija UNA sola vez -- si el
+     * servicio (p. ej. 1h) no cabe dentro de la ventana de un solo lote, lotes posteriores
+     * retoman el conteo desde este instante en vez de reiniciar el servicio completo cada vez
+     * (bug real corregido: antes de esto, un servicio más largo que la ventana de un lote nunca
+     * terminaba, en ningún lote, porque se reiniciaba desde cero cada vez).
+     */
+    private LocalDateTime horaInicioServicio;
 
     public ParadaPlanificada(Pedido pedido, int cantidadAEntregar) {
         this.pedido = pedido;
@@ -38,6 +47,14 @@ public class ParadaPlanificada {
 
     public void setFechaEntregada(LocalDateTime fechaEntregada) {
         this.fechaEntregada = fechaEntregada;
+    }
+
+    public LocalDateTime getHoraInicioServicio() {
+        return horaInicioServicio;
+    }
+
+    public void setHoraInicioServicio(LocalDateTime horaInicioServicio) {
+        this.horaInicioServicio = horaInicioServicio;
     }
 
     @Override

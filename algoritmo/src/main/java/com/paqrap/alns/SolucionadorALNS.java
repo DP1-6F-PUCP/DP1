@@ -149,7 +149,14 @@ public class SolucionadorALNS implements PlanificadorRutas {
 
             if (iteracion % configuracion.getIntervaloSPP() == 0) {
                 Solucion solucionSPP = solucionadorSPP.resolver(poolRutas, contexto);
-                if (solucionSPP.calcularCostoTotal() < mejorSolucion.calcularCostoTotal()) {
+                // SPP recombina rutas tomadas del pool en distintos momentos de la búsqueda: cada
+                // una fue factible por stock cuando se creó (dentro de la Solucion de ESE
+                // instante), pero la combinación nueva nunca se revalidó contra el stock conjunto
+                // -- a diferencia de tiempo/capacidad/turno, que son restricciones por-ruta y por
+                // eso cualquier combinación de rutas individualmente factibles sigue siéndolo, el
+                // stock es un recurso compartido entre rutas atribuidas al mismo almacén.
+                if (solucionSPP.calcularCostoTotal() < mejorSolucion.calcularCostoTotal()
+                        && VerificadorRestricciones.respetaStockAlmacenes(solucionSPP.getRutas(), contexto.almacenes())) {
                     mejorSolucion = solucionSPP.copiar();
                     solucionActual = solucionSPP.copiar();
                     ultimaIteracionMejora = iteracion;
@@ -169,7 +176,16 @@ public class SolucionadorALNS implements PlanificadorRutas {
             iteracion++;
         }
 
-        return mejorSolucion.aRutas();
+        List<Ruta> rutasFinales = mejorSolucion.aRutas();
+        // Único punto donde ALNS descuenta stock de almacén -- toda inserción/recombinación que
+        // llevó a rutasFinales ya fue validada contra stock (ver respetaStockAlmacenes en
+        // VerificadorRestricciones, usado por los operadores de reparación, RVND y la
+        // recombinación SPP), así que este descuento es la confirmación final, no una validación
+        // nueva. Antes de este fix, ALNS nunca consultaba ni descontaba stock en ningún punto de
+        // su ejecución real -- a diferencia de IPSO, que sí lo hace desde ClusterizadorPedidos.
+        VerificadorRestricciones.descontarStockComprometido(rutasFinales, contexto.almacenes(),
+                contexto.marcaTiempoActual());
+        return rutasFinales;
     }
 
     private Solucion construirSolucionInicial(ContextoProblema contexto) {

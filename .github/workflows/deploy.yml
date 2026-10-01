@@ -35,7 +35,8 @@ jobs:
       - name: Construir y Subir Imagen del Backend
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: .
+          file: ./backend/Dockerfile
           push: true
           tags: |
             ghcr.io/dp1-6f-pucp/dp1-backend:latest

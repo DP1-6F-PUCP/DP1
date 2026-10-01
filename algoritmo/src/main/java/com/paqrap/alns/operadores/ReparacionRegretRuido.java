@@ -49,7 +49,7 @@ public class ReparacionRegretRuido implements OperadorReparacion {
             for (Pedido pedido : pedidosNoAsignados) {
                 List<OpcionInsercion> opciones = new ArrayList<>();
 
-                for (Ruta ruta : solucion.getRutas()) {
+                for (Ruta ruta : OperadorUtil.rutasCandidatas(solucion.getRutas(), pedido)) {
                     double costoActual = ruta.getCostoEstimado();
 
                     for (int pos = 0; pos <= ruta.getSecuenciaParadas().size(); pos++) {
@@ -58,7 +58,7 @@ public class ReparacionRegretRuido implements OperadorReparacion {
                                 new ParadaPlanificada(pedido, pedido.getCantidadSolicitada()));
                         OperadorUtil.recalcular(rutaPrueba, contexto);
 
-                        if (esFactible(rutaPrueba, contexto)) {
+                        if (esFactible(ruta, rutaPrueba, solucion, contexto)) {
                             double delta = rutaPrueba.getCostoEstimado() - costoActual;
                             double xi = (random.nextDouble() * 2.0 - 1.0) * factorRuidoMax;
                             double deltaConRuido = Math.max(0.0, delta * (1.0 + xi));
@@ -81,8 +81,11 @@ public class ReparacionRegretRuido implements OperadorReparacion {
                     regret = opciones.get(k).deltaCostoConRuido() - opciones.get(0).deltaCostoConRuido();
                 }
 
-                if (regret > valorMaxRegret) {
-                    valorMaxRegret = regret;
+                // Igual que en ReparacionRegret: se suma un bono de urgencia para que el desempate
+                // entre pedidos con regret similar favorezca al que está más cerca de incumplir.
+                double regretEfectivo = regret + OperadorUtil.bonoUrgencia(pedido, contexto.marcaTiempoActual());
+                if (regretEfectivo > valorMaxRegret) {
+                    valorMaxRegret = regretEfectivo;
                     pedidoMaxRegret = pedido;
                     rutaMaxRegret = opciones.get(0).ruta();
                     posMaxRegret = opciones.get(0).posicion();
@@ -100,8 +103,10 @@ public class ReparacionRegretRuido implements OperadorReparacion {
         }
     }
 
-    private static boolean esFactible(Ruta ruta, ContextoProblema contexto) {
-        return VerificadorRestricciones.esRutaFactible(ruta, contexto.ciudad(), contexto.bloqueos(),
-                contexto.configuracionOperacion());
+    private static boolean esFactible(Ruta rutaOriginal, Ruta rutaPrueba, Solucion solucion, ContextoProblema contexto) {
+        return VerificadorRestricciones.esRutaFactible(rutaPrueba, contexto.ciudad(), contexto.bloqueos(),
+                contexto.configuracionOperacion())
+                && VerificadorRestricciones.respetaStockAlmacenes(rutaOriginal, rutaPrueba, solucion.getRutas(),
+                        contexto.almacenes());
     }
 }

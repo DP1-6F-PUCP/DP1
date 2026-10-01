@@ -42,8 +42,12 @@ public class SimulacionController {
     @PostMapping("/api/escenarios")
     public ResponseEntity<ApiResponseDTO<EjecucionEscenarioDTO>> iniciarEscenario(
             @Valid @RequestBody SeleccionarEscenarioRequestDTO request) {
-        EjecucionEscenario ejecucion = servicioPlanificacion.seleccionarEscenario(request.tipo(), LocalDateTime.now());
-        log.info("Escenario iniciado: id={} tipo={}", ejecucion.getIdEjecucion(), request.tipo());
+        LocalDateTime fechaInicioSimulada = request.fechaInicioSimulada() != null
+                ? LocalDateTime.ofInstant(request.fechaInicioSimulada(), ZoneOffset.UTC)
+                : LocalDateTime.now();
+        EjecucionEscenario ejecucion = servicioPlanificacion.seleccionarEscenario(request.tipo(), fechaInicioSimulada);
+        log.info("Escenario iniciado: id={} tipo={} fechaInicioSimulada={}", ejecucion.getIdEjecucion(), request.tipo(),
+                fechaInicioSimulada);
         EjecucionEscenarioDTO dto = aDTO(ejecucion);
         return ResponseEntity.created(URI.create("/api/escenarios/" + ejecucion.getIdEjecucion()))
                 .body(ApiResponseDTO.of(dto));

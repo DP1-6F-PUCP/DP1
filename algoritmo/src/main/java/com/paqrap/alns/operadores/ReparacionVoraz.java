@@ -7,7 +7,8 @@ import com.paqrap.dominio.Ruta;
 import com.paqrap.alns.Solucion;
 import com.paqrap.alns.VerificadorRestricciones;
 
-import java.util.Iterator;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 public class ReparacionVoraz implements OperadorReparacion {
@@ -19,15 +20,20 @@ public class ReparacionVoraz implements OperadorReparacion {
 
     @Override
     public void reparar(Solucion solucion, List<Pedido> pedidosNoAsignados, ContextoProblema contexto) {
-        Iterator<Pedido> iterador = pedidosNoAsignados.iterator();
+        // Se procesa por orden de plazo (más urgente primero) -- antes se procesaba en el orden
+        // en que llegaban (arbitrario), así que dos pedidos compitiendo por el mismo mejor hueco
+        // se los repartía sin importar cuál estaba más cerca de incumplir. Se itera sobre una
+        // copia ordenada y se remueve de la lista original (pedidosNoAsignados), que es la que
+        // usa el resto de ALNS para saber qué quedó sin asignar.
+        List<Pedido> ordenPorUrgencia = new ArrayList<>(pedidosNoAsignados);
+        ordenPorUrgencia.sort(Comparator.comparing(Pedido::getFechaLimite));
 
-        while (iterador.hasNext()) {
-            Pedido pedido = iterador.next();
+        for (Pedido pedido : ordenPorUrgencia) {
             Ruta mejorRuta = null;
             int mejorIndiceInsercion = -1;
             double menorIncrementoCosto = Double.MAX_VALUE;
 
-            for (Ruta ruta : solucion.getRutas()) {
+            for (Ruta ruta : OperadorUtil.rutasCandidatas(solucion.getRutas(), pedido)) {
                 double costoActual = ruta.getCostoEstimado();
 
                 for (int pos = 0; pos <= ruta.getSecuenciaParadas().size(); pos++) {
@@ -35,7 +41,7 @@ public class ReparacionVoraz implements OperadorReparacion {
                     rutaPrueba.getSecuenciaParadas().add(pos, new ParadaPlanificada(pedido, pedido.getCantidadSolicitada()));
                     OperadorUtil.recalcular(rutaPrueba, contexto);
 
-                    if (esFactible(rutaPrueba, contexto)) {
+                    if (esFactible(ruta, rutaPrueba, solucion, contexto)) {
                         double delta = rutaPrueba.getCostoEstimado() - costoActual;
                         if (delta < menorIncrementoCosto) {
                             menorIncrementoCosto = delta;
@@ -50,13 +56,15 @@ public class ReparacionVoraz implements OperadorReparacion {
                 mejorRuta.getSecuenciaParadas().add(mejorIndiceInsercion,
                         new ParadaPlanificada(pedido, pedido.getCantidadSolicitada()));
                 OperadorUtil.recalcular(mejorRuta, contexto);
-                iterador.remove();
+                pedidosNoAsignados.remove(pedido);
             }
         }
     }
 
-    private static boolean esFactible(Ruta ruta, ContextoProblema contexto) {
-        return VerificadorRestricciones.esRutaFactible(ruta, contexto.ciudad(), contexto.bloqueos(),
-                contexto.configuracionOperacion());
+    private static boolean esFactible(Ruta rutaOriginal, Ruta rutaPrueba, Solucion solucion, ContextoProblema contexto) {
+        return VerificadorRestricciones.esRutaFactible(rutaPrueba, contexto.ciudad(), contexto.bloqueos(),
+                contexto.configuracionOperacion())
+                && VerificadorRestricciones.respetaStockAlmacenes(rutaOriginal, rutaPrueba, solucion.getRutas(),
+                        contexto.almacenes());
     }
 }

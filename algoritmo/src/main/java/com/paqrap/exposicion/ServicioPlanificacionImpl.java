@@ -14,6 +14,7 @@ import com.paqrap.dominio.TipoArchivo;
 import com.paqrap.dominio.TipoVehiculo;
 import com.paqrap.dominio.UnidadTransporte;
 import com.paqrap.entrada.CargaArchivo;
+import com.paqrap.entrada.CargadorRecursos;
 import com.paqrap.simulador.EjecucionEscenario;
 import com.paqrap.simulador.GestorLogSimulacion;
 import com.paqrap.simulador.OrquestadorOperacion;
@@ -48,6 +49,14 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     private final TipoAlgoritmo algoritmoPorDefecto;
     private final Map<String, Object> configAlgoritmo;
     private final String carpetaLogs;
+    /**
+     * Carga bajo demanda pedidos/bloqueos/mantenimiento oficiales del curso a medida que el reloj
+     * simulado los necesita (ver {@link OrquestadorOperacion#asegurarDatosOficialesCargados});
+     * reemplaza la subida manual por API como flujo por defecto -- {@link #recibirArchivo} sigue
+     * disponible como override manual para casos ad-hoc (p. ej. datos de prueba distintos a los
+     * oficiales del curso), pero ya no es necesario en operación normal.
+     */
+    private final CargadorRecursos cargadorRecursos;
 
     private final List<Pedido> pedidosRecibidos = new CopyOnWriteArrayList<>();
     private final List<Bloqueo> bloqueosRecibidos = new CopyOnWriteArrayList<>();
@@ -57,7 +66,8 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
     public ServicioPlanificacionImpl(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
             List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
-            TipoAlgoritmo algoritmoPorDefecto, Map<String, Object> configAlgoritmo, String carpetaLogs) {
+            TipoAlgoritmo algoritmoPorDefecto, Map<String, Object> configAlgoritmo, String carpetaLogs,
+            CargadorRecursos cargadorRecursos) {
         this.ciudad = ciudad;
         this.configuracionOperacion = configuracionOperacion;
         this.tiposVehiculo = tiposVehiculo;
@@ -66,6 +76,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         this.algoritmoPorDefecto = algoritmoPorDefecto;
         this.configAlgoritmo = configAlgoritmo;
         this.carpetaLogs = carpetaLogs;
+        this.cargadorRecursos = cargadorRecursos;
     }
 
     @Override
@@ -144,12 +155,27 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     }
 
     @Override
-    public EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada, float sa,
-            float ta, float k, float tiempoMaximoComputoSegundos) {
+    public synchronized EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada,
+            float sa, float ta, float k, float tiempoMaximoComputoSegundos) {
+        OrquestadorOperacion orquestadorActivo = ejecucionActivaOrquestador();
+        if (orquestadorActivo != null && esEjecucionActiva(orquestadorActivo.getEjecucionActual())) {
+            // Solo puede existir una ejecución a la vez en toda la aplicación, sin importar desde
+            // qué dispositivo se llame: si ya hay una en curso (o pausada), esta llamada se "une"
+            // a ella devolviéndola tal cual, en vez de levantar una segunda instancia independiente
+            // corriendo en paralelo (que competiría por CPU y dejaría a los distintos dispositivos
+            // viendo estados distintos).
+            return orquestadorActivo.getEjecucionActual();
+        }
+
         List<Pedido> pedidosPendientes = pedidosRecibidos.stream()
                 .filter(p -> p.getEstado() == EstadoPedido.PENDIENTE)
                 .toList();
 
+        // Nótese que aquí se pasa el universo COMPLETO de bloqueos recibidos, sin recortar: el
+        // recorte al horizonte relevante lo hace OrquestadorOperacion en cada lote (ver
+        // OrquestadorOperacion.bloqueosDelLote), porque la ventana relevante se desplaza a medida
+        // que avanza el reloj simulado y llegan pedidos nuevos -- recortar aquí, una sola vez,
+        // dejaría fuera bloqueos que sí aplican a pedidos que todavía no existen en este instante.
         ContextoProblema contextoInicial = new ContextoProblema(fechaInicioSimulada, pedidosPendientes,
                 List.copyOf(bloqueosRecibidos), List.copyOf(mantenimientosRecibidos), almacenes, flota, ciudad,
                 configuracionOperacion);
@@ -157,7 +183,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         var planificador = PlanificadorFactory.crear(algoritmoPorDefecto, configAlgoritmo);
         var gestorLog = new GestorLogSimulacion(carpetaLogs, false);
         OrquestadorOperacion orquestador = new OrquestadorOperacion(planificador, gestorLog, sa, ta, k,
-                tiempoMaximoComputoSegundos, contextoInicial);
+                tiempoMaximoComputoSegundos, contextoInicial, cargadorRecursos);
 
         EjecucionEscenario ejecucion = orquestador.iniciarCicloPeriodico(tipo);
         ejecuciones.put(ejecucion.getIdEjecucion(), orquestador);
@@ -177,6 +203,17 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
     private OrquestadorOperacion ejecucionActivaOrquestador() {
         return idEjecucionActiva != null ? ejecuciones.get(idEjecucionActiva) : null;
+    }
+
+    /** {@code true} si la ejecución sigue en un estado no terminal (puede recibir lotes futuros). */
+    private boolean esEjecucionActiva(EjecucionEscenario ejecucion) {
+        if (ejecucion == null) {
+            return false;
+        }
+        return switch (ejecucion.getEstado()) {
+            case INICIADA, EN_CURSO, PAUSADA -> true;
+            case FINALIZADA, DETENIDA_POR_INCUMPLIMIENTO -> false;
+        };
     }
 
     private List<Pedido> pedidosActuales() {

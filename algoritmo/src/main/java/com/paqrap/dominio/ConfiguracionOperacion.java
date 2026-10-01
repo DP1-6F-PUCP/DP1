@@ -13,6 +13,12 @@ import java.time.LocalTime;
  * @param margenRefrigerioHoras margen mínimo antes/después de un cambio de turno para tomar el refrigerio
  * @param tiempoCargaAlmacenHoras tiempo de carga del almacén a la unidad de transporte
  * @param tiempoTrasvaseHoras tiempo de transferencia de paquetes entre unidades de transporte
+ * @param maxParadasPorRuta tope de paradas que un vehículo puede llevar en un solo despacho antes
+ *         de volver a estar disponible para uno nuevo -- desviación deliberada del diagrama
+ *         canónico (campo nuevo), agregada porque empaquetar a capacidad completa (ej. 7 paradas
+ *         en un auto) combinado con 1h de servicio obligatorio por parada puede inmovilizar un
+ *         vehículo la mayor parte de su turno en un solo viaje, saturando la flota; confirmado
+ *         empíricamente antes de este cambio (ver hallazgo de "empaquetado a capacidad completa")
  */
 public record ConfiguracionOperacion(
         double duracionTurnoHoras,
@@ -21,7 +27,8 @@ public record ConfiguracionOperacion(
         double duracionRefrigerioHoras,
         double margenRefrigerioHoras,
         double tiempoCargaAlmacenHoras,
-        double tiempoTrasvaseHoras) {
+        double tiempoTrasvaseHoras,
+        int maxParadasPorRuta) {
 
     /**
      * Calcula el inicio del turno que contiene el instante dado.

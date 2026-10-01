@@ -71,4 +71,26 @@ public class Bloqueo {
         }
         return false;
     }
+
+    /**
+     * Recorta una lista de bloqueos a los que realmente pueden ser consultados dentro de
+     * {@code [desde, hasta]}, descartando los que ya terminaron antes o empiezan después de esa
+     * ventana.
+     *
+     * <p>{@link CalculadorDistancia} ya filtra por vigencia puntual en cada consulta
+     * ({@link #estaVigente}), pero ese filtro recorre la lista completa en cada llamada — con
+     * cientos de bloqueos por mes y miles de consultas por corrida, ese recorrido repetido es un
+     * costo real. Recortar la lista una vez, al horizonte de la instancia que se va a planificar,
+     * evita que cada consulta individual tenga que descartar bloqueos irrelevantes una y otra vez.
+     *
+     * @param bloqueos universo completo de bloqueos conocidos
+     * @param desde inicio del horizonte de interés
+     * @param hasta fin del horizonte de interés
+     * @return los bloqueos cuya ventana de vigencia se solapa con {@code [desde, hasta]}
+     */
+    public static List<Bloqueo> filtrarEnHorizonte(List<Bloqueo> bloqueos, LocalDateTime desde, LocalDateTime hasta) {
+        return bloqueos.stream()
+                .filter(b -> !b.getFechaFin().isBefore(desde) && !b.getFechaInicio().isAfter(hasta))
+                .toList();
+    }
 }

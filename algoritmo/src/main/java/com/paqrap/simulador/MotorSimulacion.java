@@ -4,6 +4,9 @@ import com.paqrap.dominio.Almacen;
 import com.paqrap.dominio.Bloqueo;
 import com.paqrap.dominio.CalculadorDistancia;
 import com.paqrap.dominio.ContextoProblema;
+import com.paqrap.dominio.EstadoParada;
+import com.paqrap.dominio.EstadoRuta;
+import com.paqrap.dominio.EstadoUnidad;
 import com.paqrap.dominio.Nodo;
 import com.paqrap.dominio.ParadaPlanificada;
 import com.paqrap.dominio.Pedido;
@@ -46,6 +49,11 @@ public class MotorSimulacion {
      */
     public List<EventoSimulacion> simularRutas(List<Ruta> rutas, List<Pedido> pedidosNoAsignados,
             ContextoProblema contexto, double tiempoInicioHoras, double tiempoFinMaxHoras) {
+        // Se limpia al inicio de cada lote: OrquestadorOperacion usa getPedidosCompletados().size()
+        // para incrementar el reporte SOLO con lo entregado en ESTE lote -- si se dejara acumular
+        // para siempre (como estaba antes), cada lote sumaría también lo ya contado en lotes
+        // previos, sobre-contando las entregas totales.
+        pedidosCompletados.clear();
         List<EventoSimulacion> eventosFase = new ArrayList<>();
         double horaBase = contexto.marcaTiempoActual().getHour() + contexto.marcaTiempoActual().getMinute() / 60.0;
         double tiempoServicio = contexto.configuracionOperacion().tiempoServicioClienteHoras();
@@ -80,98 +88,135 @@ public class MotorSimulacion {
         double velocidad = tipoVehiculo.getVelocidadKmH();
         double costoKm = tipoVehiculo.getCostoPorKm();
 
-        int cargaActual = ruta.getSecuenciaParadas().stream().mapToInt(ParadaPlanificada::getCantidadAEntregar).sum();
+        // Si la ruta ya venia EN_EJECUCION de un lote anterior, esto es una continuacion, no un
+        // despacho nuevo: no se reemite DESPACHO_VEHICULO ni se recorren de nuevo las paradas ya
+        // CUMPLIDA (evita re-entregar/duplicar eventos). Ver UnidadTransporte.estaDisponibleParaRuta
+        // -- mientras la ruta no termine, el vehiculo no vuelve a ser candidato para una ruta nueva.
+        boolean esDespachoNuevo = ruta.getEstado() != EstadoRuta.EN_EJECUCION;
+        List<ParadaPlanificada> paradasPendientes = ruta.getSecuenciaParadas().stream()
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                .toList();
+        int cargaActual = paradasPendientes.stream().mapToInt(ParadaPlanificada::getCantidadAEntregar).sum();
 
         Nodo nodoActual = unidad.getPosicion();
         double tiempoActual = Math.max(tiempoInicioHoras, horasDesdeAnchor(contexto, ruta.getHoraInicioPlanificada()));
         double distanciaRecorrida = 0.0;
 
-        eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.DESPACHO_VEHICULO, unidad.getIdUnidad(),
-                null, nodoActual.x(), nodoActual.y(),
-                String.format("Vehículo despachado desde %s con %d pedidos", nodoActual, ruta.getSecuenciaParadas().size()),
-                String.format(Locale.US, "Carga: %d/%d paq. | Vel: %.0f km/h", cargaActual, tipoVehiculo.getCapacidad(), velocidad)));
+        if (esDespachoNuevo) {
+            unidad.setEstado(EstadoUnidad.EN_RUTA);
+            ruta.setEstado(EstadoRuta.EN_EJECUCION);
+            eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.DESPACHO_VEHICULO,
+                    unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
+                    String.format("Vehículo despachado desde %s con %d pedidos", nodoActual, paradasPendientes.size()),
+                    String.format(Locale.US, "Carga: %d/%d paq. | Vel: %.0f km/h", cargaActual,
+                            tipoVehiculo.getCapacidad(), velocidad)));
+        }
+
+        // El turno de la unidad se recalcula cada lote contra el turno REAL que contiene el
+        // instante actual (07:00/15:00/23:00) -- antes, unidad.getTiempoInicioTurnoActual() nunca
+        // se actualizaba desde la construcción del vehículo, así que el refrigerio solo se
+        // calculaba (y se tomaba) una vez en toda la vida del vehículo, nunca en turnos
+        // posteriores. El cambio de turno es un handoff instantáneo de conductor (regla de
+        // negocio confirmada: "el conductor alcanza al vehículo donde esté"), así que un turno
+        // nuevo simplemente resetea el refrigerio disponible, sin mover el vehículo.
+        LocalDateTime turnoActual = contexto.configuracionOperacion().inicioTurnoQueContiene(contexto.marcaTiempoActual());
+        if (!turnoActual.equals(unidad.getTiempoInicioTurnoActual())) {
+            unidad.setTiempoInicioTurnoActual(turnoActual);
+            unidad.setRefrigerioTomado(false);
+            unidad.setHoraRefrigerioProgramada(null);
+        }
 
         double duracionRefrigerio = contexto.configuracionOperacion().duracionRefrigerioHoras();
-        double tiempoInicioRefrigerio = horasDesdeAnchor(contexto, unidad.getTiempoInicioTurnoActual())
+        double tiempoInicioRefrigerio = horasDesdeAnchor(contexto, turnoActual)
                 + contexto.configuracionOperacion().duracionTurnoHoras() / 2.0;
         boolean refrigerioTomado = unidad.isRefrigerioTomado();
 
-        for (ParadaPlanificada parada : ruta.getSecuenciaParadas()) {
+        for (ParadaPlanificada parada : paradasPendientes) {
             Pedido pedido = parada.getPedido();
             if (tiempoActual >= tiempoFinMaxHoras) {
                 break;
             }
             tiempoActual = Math.max(tiempoActual, horasDesdeAnchor(contexto, pedido.getFechaIngreso()));
 
-            if (!refrigerioTomado && tiempoActual >= tiempoInicioRefrigerio && tiempoActual < tiempoFinMaxHoras) {
-                double tInicioRef = tiempoActual;
-                double tFinRef = Math.min(tInicioRef + duracionRefrigerio, tiempoFinMaxHoras);
-                eventosFase.add(new EventoSimulacion(tInicioRef, horaBase, TipoEvento.INICIO_REFRIGERIO,
-                        unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
-                        String.format(Locale.US, "Conductor de %s inicia pausa obligatoria de refrigerio (%.1fh)",
-                                unidad.getIdUnidad(), duracionRefrigerio),
-                        String.format("Pausa en %s | Turno: %02d:00", nodoActual, (int) horaBase)));
-                tiempoActual = tFinRef;
-                if (tInicioRef + duracionRefrigerio <= tiempoFinMaxHoras) {
-                    refrigerioTomado = true;
-                    eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.FIN_REFRIGERIO,
-                            unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
-                            String.format("Conductor de %s finaliza refrigerio y reanuda operaciones", unidad.getIdUnidad()),
-                            String.format(Locale.US, "Tiempo reanudación: t=%.2fh", tiempoActual)));
-                }
-            }
+            ResultadoRefrigerio resRefrigerio = manejarRefrigerio(unidad, tiempoActual, refrigerioTomado,
+                    tiempoInicioRefrigerio, duracionRefrigerio, tiempoFinMaxHoras, contexto, horaBase, nodoActual,
+                    eventosFase);
+            tiempoActual = resRefrigerio.tiempoActual();
+            refrigerioTomado = resRefrigerio.refrigerioTomado();
 
             if (tiempoActual >= tiempoFinMaxHoras) {
                 break;
             }
 
             Nodo destino = pedido.getDestino();
-            LocalDateTime instanteActual = contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0));
-            List<Nodo> camino;
-            try {
-                camino = CalculadorDistancia.caminoMasCorto(contexto.ciudad(), contexto.bloqueos(), instanteActual,
-                        nodoActual, destino);
-            } catch (IllegalStateException sinCamino) {
-                eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.MOVIMIENTO_TRAMO,
-                        unidad.getIdUnidad(), pedido.getIdPedido(), nodoActual.x(), nodoActual.y(),
-                        "No existe camino disponible hacia " + destino, "Pedido pendiente por bloqueo vial"));
-                break;
+
+            if (parada.getHoraInicioServicio() == null) {
+                // Aún no llegó a este destino -- viajar. Si el servicio (1h) no cupo en un solo
+                // lote, esta rama NO se repite en lotes siguientes (ver la rama "else"): ya viajó
+                // y llegó, solo falta que se cumpla el tiempo de servicio restante.
+                LocalDateTime instanteActual = contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0));
+                List<Nodo> camino;
+                try {
+                    camino = CalculadorDistancia.caminoMasCorto(contexto.ciudad(), contexto.bloqueos(), instanteActual,
+                            nodoActual, destino);
+                } catch (IllegalStateException sinCamino) {
+                    eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.MOVIMIENTO_TRAMO,
+                            unidad.getIdUnidad(), pedido.getIdPedido(), nodoActual.x(), nodoActual.y(),
+                            "No existe camino disponible hacia " + destino, "Pedido pendiente por bloqueo vial"));
+                    break;
+                }
+
+                ResultadoTramo resultado = recorrerCamino(camino, unidad, pedido.getIdPedido(), contexto, horaBase,
+                        velocidad, costoKm, tiempoActual, distanciaRecorrida, tiempoFinMaxHoras, eventosFase,
+                        TipoEvento.MOVIMIENTO_TRAMO, destino);
+                tiempoActual = resultado.tiempo;
+                distanciaRecorrida = resultado.distancia;
+                nodoActual = resultado.nodoFinal;
+
+                if (resultado.interrumpido || tiempoActual >= tiempoFinMaxHoras) {
+                    break;
+                }
+
+                eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.LLEGADA_A_DESTINO,
+                        unidad.getIdUnidad(), pedido.getIdPedido(), destino.x(), destino.y(),
+                        String.format("Arribo a destino de cliente %s", destino),
+                        String.format("Pedido: %s | Demanda: %d", pedido.getIdPedido(), pedido.getCantidadSolicitada())));
+
+                parada.setHoraInicioServicio(contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0)));
+                eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.INICIO_SERVICIO,
+                        unidad.getIdUnidad(), pedido.getIdPedido(), destino.x(), destino.y(),
+                        String.format("Inicia entrega y descarga de pedido %s", pedido.getIdPedido()),
+                        String.format(Locale.US, "Duración de servicio: %.2fh", tiempoServicio)));
+            } else {
+                // Ya había llegado y arrancado el servicio en un lote anterior; venía esperando a
+                // que se cumplan las horas de servicio restantes (nodoActual ya es el destino).
+                nodoActual = destino;
             }
 
-            ResultadoTramo resultado = recorrerCamino(camino, unidad, pedido.getIdPedido(), contexto, horaBase,
-                    velocidad, costoKm, tiempoActual, distanciaRecorrida, tiempoFinMaxHoras, eventosFase,
-                    TipoEvento.MOVIMIENTO_TRAMO, destino);
-            tiempoActual = resultado.tiempo;
-            distanciaRecorrida = resultado.distancia;
-            nodoActual = resultado.nodoFinal;
-
-            if (resultado.interrumpido || tiempoActual >= tiempoFinMaxHoras) {
-                break;
-            }
-
-            eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.LLEGADA_A_DESTINO,
-                    unidad.getIdUnidad(), pedido.getIdPedido(), destino.x(), destino.y(),
-                    String.format("Arribo a destino de cliente %s", destino),
-                    String.format("Pedido: %s | Demanda: %d", pedido.getIdPedido(), pedido.getCantidadSolicitada())));
-
-            eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.INICIO_SERVICIO,
-                    unidad.getIdUnidad(), pedido.getIdPedido(), destino.x(), destino.y(),
-                    String.format("Inicia entrega y descarga de pedido %s", pedido.getIdPedido()),
-                    String.format(Locale.US, "Duración de servicio: %.2fh", tiempoServicio)));
-
-            double tiempoFinServicio = tiempoActual + tiempoServicio;
+            // El fin del servicio se ancla a horaInicioServicio (fijo, absoluto) + duración total
+            // -- nunca se reinicia entre lotes, así que un servicio de 1h que no cabe en la
+            // ventana de un lote avanza lote a lote hasta completarse, en vez de reiniciar por
+            // siempre (bug real corregido: antes, cada lote recalculaba tiempoFinServicio desde el
+            // instante actual, así que un servicio más largo que una ventana nunca terminaba).
+            LocalDateTime horaFinServicioAbs = parada.getHoraInicioServicio()
+                    .plusSeconds(Math.round(tiempoServicio * 3600.0));
+            double tiempoFinServicio = horasDesdeAnchor(contexto, horaFinServicioAbs);
             double tiempoMaximoEntrega = horasDesdeAnchor(contexto, pedido.getFechaLimite());
-            boolean aTiempo = tiempoActual <= tiempoMaximoEntrega;
-            double holgura = tiempoMaximoEntrega - tiempoActual;
+            // "A tiempo" se evalúa contra la LLEGADA (horaInicioServicio), no contra el fin del
+            // servicio -- el plazo del cliente excluye la hora de acondicionamiento/entrega.
+            boolean aTiempo = !parada.getHoraInicioServicio().isAfter(pedido.getFechaLimite());
+            double holgura = java.time.Duration.between(parada.getHoraInicioServicio(), pedido.getFechaLimite())
+                    .toSeconds() / 3600.0;
 
             tiempoActual = Math.min(tiempoFinServicio, tiempoFinMaxHoras);
-            cargaActual -= pedido.getCantidadSolicitada();
 
-            if (tiempoFinServicio <= tiempoFinMaxHoras) {
-                pedidosCompletados.add(pedido.getIdPedido());
-                ruta.marcarParadaCumplida(pedido, parada.getCantidadAEntregar(),
-                        contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0)));
+            if (tiempoFinServicio > tiempoFinMaxHoras) {
+                break; // el servicio no termina en este lote -- se retoma el siguiente
             }
+
+            cargaActual -= pedido.getCantidadSolicitada();
+            pedidosCompletados.add(pedido.getIdPedido());
+            ruta.marcarParadaCumplida(pedido, parada.getCantidadAEntregar(), horaFinServicioAbs);
 
             eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.FIN_SERVICIO_ENTREGA,
                     unidad.getIdUnidad(), pedido.getIdPedido(), destino.x(), destino.y(),
@@ -192,6 +237,17 @@ public class MotorSimulacion {
 
         unidad.setPosicion(nodoActual);
         unidad.setRefrigerioTomado(refrigerioTomado);
+
+        // Si ya no queda ninguna parada pendiente, la ruta terminó de verdad (no solo se acabó el
+        // tiempo de este lote) -- libera al vehículo para que el próximo lote pueda asignarle una
+        // ruta nueva. Si quedan paradas pendientes, se deja EN_RUTA/EN_EJECUCION tal cual: el
+        // próximo lote la retoma donde quedó (ver el chequeo de esDespachoNuevo al inicio).
+        boolean quedanParadasPendientes = ruta.getSecuenciaParadas().stream()
+                .anyMatch(p -> p.getEstado() != EstadoParada.CUMPLIDA);
+        if (!quedanParadasPendientes) {
+            ruta.setEstado(EstadoRuta.FINALIZADA);
+            unidad.setEstado(EstadoUnidad.DISPONIBLE);
+        }
     }
 
     private double simularRetornoAlmacen(UnidadTransporte unidad, Nodo nodoActual, Almacen destino,
@@ -199,16 +255,8 @@ public class MotorSimulacion {
             double distanciaRecorrida, double tiempoFinMaxHoras, boolean refrigerioTomado,
             double tiempoInicioRefrigerio, double duracionRefrigerio, List<EventoSimulacion> eventosFase) {
 
-        if (!refrigerioTomado && tiempoActual >= tiempoInicioRefrigerio && tiempoActual < tiempoFinMaxHoras) {
-            double tInicioRef = tiempoActual;
-            double tFinRef = Math.min(tInicioRef + duracionRefrigerio, tiempoFinMaxHoras);
-            eventosFase.add(new EventoSimulacion(tInicioRef, horaBase, TipoEvento.INICIO_REFRIGERIO,
-                    unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
-                    String.format(Locale.US, "Conductor de %s inicia pausa obligatoria de refrigerio (%.1fh)",
-                            unidad.getIdUnidad(), duracionRefrigerio),
-                    String.format("Pausa en %s previa al retorno a almacén", nodoActual)));
-            tiempoActual = tFinRef;
-        }
+        tiempoActual = manejarRefrigerio(unidad, tiempoActual, refrigerioTomado, tiempoInicioRefrigerio,
+                duracionRefrigerio, tiempoFinMaxHoras, contexto, horaBase, nodoActual, eventosFase).tiempoActual();
 
         if (tiempoActual >= tiempoFinMaxHoras) {
             return tiempoActual;
@@ -242,6 +290,53 @@ public class MotorSimulacion {
     }
 
     private record ResultadoTramo(double tiempo, double distancia, Nodo nodoFinal, boolean interrumpido) {
+    }
+
+    private record ResultadoRefrigerio(double tiempoActual, boolean refrigerioTomado) {
+    }
+
+    /**
+     * Maneja el refrigerio obligatorio de forma persistente entre lotes, igual que
+     * {@link ParadaPlanificada#getHoraInicioServicio()} para el servicio de entrega: ancla el
+     * inicio real a un instante absoluto ({@link UnidadTransporte#getHoraRefrigerioProgramada()})
+     * en vez de recalcularlo cada lote desde el instante actual. Bug real corregido: antes, si la
+     * duración del refrigerio no cabía en una sola ventana de lote, el refrigerio se "reiniciaba"
+     * cada lote sin avanzar nunca -- consumía toda la ventana del lote en un intento fallido,
+     * dejando al vehículo (y su entrega en curso) congelado para siempre, incluso con la flota
+     * completa saturada de forma permanente (confirmado empíricamente: 0 entregas nuevas durante
+     * 3+ días simulados antes de este fix).
+     */
+    private ResultadoRefrigerio manejarRefrigerio(UnidadTransporte unidad, double tiempoActual,
+            boolean refrigerioTomado, double tiempoInicioRefrigerio, double duracionRefrigerio,
+            double tiempoFinMaxHoras, ContextoProblema contexto, double horaBase, Nodo nodoActual,
+            List<EventoSimulacion> eventosFase) {
+        if (refrigerioTomado || tiempoActual < tiempoInicioRefrigerio || tiempoActual >= tiempoFinMaxHoras) {
+            return new ResultadoRefrigerio(tiempoActual, refrigerioTomado);
+        }
+
+        LocalDateTime horaInicioReal = unidad.getHoraRefrigerioProgramada();
+        if (horaInicioReal == null) {
+            horaInicioReal = contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0));
+            unidad.setHoraRefrigerioProgramada(horaInicioReal);
+            eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.INICIO_REFRIGERIO,
+                    unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
+                    String.format(Locale.US, "Conductor de %s inicia pausa obligatoria de refrigerio (%.1fh)",
+                            unidad.getIdUnidad(), duracionRefrigerio),
+                    String.format("Pausa en %s | Turno: %02d:00", nodoActual, (int) horaBase)));
+        }
+
+        LocalDateTime horaFinAbs = horaInicioReal.plusSeconds(Math.round(duracionRefrigerio * 3600.0));
+        double tiempoFinRelativo = horasDesdeAnchor(contexto, horaFinAbs);
+        if (tiempoFinRelativo > tiempoFinMaxHoras) {
+            return new ResultadoRefrigerio(tiempoFinMaxHoras, false);
+        }
+
+        unidad.setHoraRefrigerioProgramada(null);
+        eventosFase.add(new EventoSimulacion(Math.max(tiempoActual, tiempoFinRelativo), horaBase,
+                TipoEvento.FIN_REFRIGERIO, unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
+                String.format("Conductor de %s finaliza refrigerio y reanuda operaciones", unidad.getIdUnidad()),
+                String.format(Locale.US, "Tiempo reanudación: t=%.2fh", Math.max(tiempoActual, tiempoFinRelativo))));
+        return new ResultadoRefrigerio(Math.max(tiempoActual, tiempoFinRelativo), true);
     }
 
     private ResultadoTramo recorrerCamino(List<Nodo> camino, UnidadTransporte unidad, String pedidoId,
@@ -310,6 +405,22 @@ public class MotorSimulacion {
                 String.format("EMERGENCIA DE FLOTA: Vehículo %s sufrió avería mecánica en %s. Fuera de servicio.",
                         idUnidad, posicion),
                 "Motivo: " + motivo + " | Acción: Reasignación forzosa de pedidos"));
+    }
+
+    /**
+     * Registra que una unidad abandonó una ruta en curso (avería o mantenimiento) y sus paradas
+     * pendientes quedaron liberadas para reasignación -- ver {@code OrquestadorOperacion.aplicarAveria}
+     * / {@code aplicarMantenimientos}. Antes de esto, {@code TipoEvento.REPLANIFICACION_RUTAS}
+     * estaba declarado pero nunca se emitía en ningún lugar del código.
+     */
+    public void registrarReplanificacion(double tiempoHoras, ContextoProblema contexto, String idUnidad,
+            int cantidadParadasLiberadas, String motivo) {
+        gestorLog.registrarEvento(new EventoSimulacion(tiempoHoras,
+                contexto.marcaTiempoActual().getHour() + contexto.marcaTiempoActual().getMinute() / 60.0,
+                TipoEvento.REPLANIFICACION_RUTAS, idUnidad, null, -1, -1,
+                String.format("REPLANIFICACIÓN: %d parada(s) de %s liberadas y pendientes de reasignación",
+                        cantidadParadasLiberadas, idUnidad),
+                "Motivo: " + motivo));
     }
 
     public void registrarNuevoPedido(double tiempoHoras, ContextoProblema contexto, Pedido pedido) {

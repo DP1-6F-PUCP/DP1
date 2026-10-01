@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.paqrap</groupId>
+    <artifactId>paqrap-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>PaqRap (agregador)</name>
+    <description>
+        Agrupa los módulos Maven del proyecto para que un solo build resuelva el orden correcto:
+        "algoritmo" (dominio + ALNS/IPSO, sin dependencia de Spring) se construye antes que
+        "backend" (API Spring Boot), que depende de él. No reemplaza el pom.xml propio de cada
+        módulo -- cada uno sigue siendo compilable de forma independiente.
+    </description>
+
+    <modules>
+        <module>algoritmo</module>
+        <module>backend</module>
+    </modules>
+</project>

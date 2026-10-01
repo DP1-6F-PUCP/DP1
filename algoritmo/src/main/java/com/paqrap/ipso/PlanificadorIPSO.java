@@ -62,7 +62,9 @@ public class PlanificadorIPSO implements Planificador {
 
         ClusterizadorPedidos clusterizador = new ClusterizadorPedidos();
         List<ClusterizadorPedidos.LoteVehiculo> lotes = clusterizador.clusterizar(pedidosPendientes,
-                contexto.vehiculos(), contexto.almacenes(), contexto.marcaTiempoActual());
+                contexto.vehiculos(), contexto.almacenes(), contexto.marcaTiempoActual(),
+                contexto.configuracionOperacion().maxParadasPorRuta(),
+                contexto.configuracionOperacion().tiempoServicioClienteHoras());
 
         int contadorRutas = 0;
         long sumaIteracionMejora = 0;
