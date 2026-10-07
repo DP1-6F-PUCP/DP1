@@ -18,6 +18,7 @@ services:
     restart: unless-stopped
 
   backend:
+    image: ghcr.io/dp1-6f-pucp/dp1-backend:latest
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -35,6 +36,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: ghcr.io/dp1-6f-pucp/dp1-frontend:latest
     build:
       context: ./frontend
       network: host
@@ -44,6 +46,19 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_CONFIG_PATH:-/root/.docker/config.json}:/config.json:ro
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL:-60}
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+    command: --interval ${WATCHTOWER_INTERVAL:-60} --cleanup backend frontend
 
 volumes:
   sysmile_db_data:
