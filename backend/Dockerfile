@@ -9,7 +9,6 @@ WORKDIR /app
 COPY pom.xml .
 COPY algoritmo/pom.xml algoritmo/pom.xml
 COPY backend/pom.xml backend/pom.xml
-RUN mvn -pl backend -am dependency:go-offline
 
 COPY algoritmo/src algoritmo/src
 COPY backend/src backend/src
