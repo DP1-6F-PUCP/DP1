@@ -3,15 +3,16 @@ package com.paqrap.dominio;
 /**
  * Catálogo de un tipo de vehículo de la flota (auto, moto o bicicleta).
  *
- * <p>{@code velocidadKmH} es mutable porque el sistema debe permitir cambiarla "en caliente"
- * por tipo de vehículo (parámetro configurable en tiempo de ejecución); el cambio aplica
- * a partir de la siguiente iteración de planificación.
+ * <p>{@code velocidadKmH}/{@code capacidad} son mutables porque el sistema debe permitir
+ * cambiarlas "en caliente" por tipo de vehículo (parámetros configurables en tiempo de
+ * ejecución, ver {@code TipoSolicitud.CAMBIO_VELOCIDAD}/{@code CAMBIO_CAPACIDAD}); el cambio
+ * aplica a partir de la siguiente iteración de planificación.
  */
 public class TipoVehiculo {
 
     private final String id;
     private final String nombre;
-    private final int capacidad;
+    private int capacidad;
     private double velocidadKmH;
     private final double costoPorKm;
     private final int cantidadUnidades;
@@ -38,6 +39,10 @@ public class TipoVehiculo {
 
     public int getCapacidad() {
         return capacidad;
+    }
+
+    public void setCapacidad(int capacidad) {
+        this.capacidad = capacidad;
     }
 
     public double getVelocidadKmH() {

@@ -1,6 +1,7 @@
 package com.paqrap.dominio;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,6 +13,30 @@ import java.util.List;
  * de cada algoritmo (vía {@link CalculadorDistancia}), no un dato persistido del dominio.
  */
 public class Ruta {
+
+    private static final DateTimeFormatter ID_INSTANTE = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
+    /**
+     * Id legible y único por ejecución para una ruta nueva. Bug real corregido (confirmado en
+     * vivo: dos objetos {@code Ruta} distintos -- uno ya {@code FINALIZADA}, otro recién
+     * {@code EN_EJECUCION} -- con el idRuta idéntico "TM14-vacia" en la misma respuesta de
+     * {@code GET /api/estado-operacion}): cada planificador ({@code SolucionadorALNS},
+     * {@code SolucionadorParticionConjuntos}, {@code PlanificadorIPSO}) arma el id de una ruta
+     * nueva solo con {@code idUnidad + sufijo fijo} ("-r1", "-vacia") o, en el caso de IPSO, un
+     * contador que se reinicia a 0 en CADA llamada a {@code planificarRutas} -- ninguno de los
+     * dos es único entre lotes distintos de la MISMA ejecución, así que un vehículo que recibe
+     * rutas nuevas en más de un lote termina con ids repetidos. El frontend usa {@code idRuta}
+     * como key de lista (React) y para seleccionar una ruta en la pantalla "Rutas" -- un id
+     * repetido ahí causa advertencias de key duplicada y puede hacer que se seleccione/muestre la
+     * ruta vieja en vez de la vigente. Se agrega el instante simulado (único por lote, el reloj
+     * solo avanza) para que el id sea único sin que el planificador necesite guardar estado
+     * mutable entre llamadas -- IPSO fue deliberadamente rediseñado para no conservar ningún
+     * estado entre invocaciones (ver su Javadoc), así que un contador de instancia ahí sería un
+     * paso atrás.
+     */
+    public static String generarId(String idUnidad, LocalDateTime instante, String sufijo) {
+        return idUnidad + "-" + instante.format(ID_INSTANTE) + "-" + sufijo;
+    }
 
     private final String idRuta;
     private double costoEstimado;

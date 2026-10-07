@@ -2,15 +2,21 @@ package com.paqrap.exposicion;
 
 import com.paqrap.PlanificadorFactory;
 import com.paqrap.dominio.Almacen;
+import com.paqrap.dominio.AlmacenCentral;
+import com.paqrap.dominio.AlmacenIntermedio;
+import com.paqrap.dominio.Averia;
 import com.paqrap.dominio.Bloqueo;
 import com.paqrap.dominio.Ciudad;
 import com.paqrap.dominio.ConfiguracionOperacion;
 import com.paqrap.dominio.ContextoProblema;
 import com.paqrap.dominio.EstadoPedido;
+import com.paqrap.dominio.EstadoUnidad;
 import com.paqrap.dominio.Mantenimiento;
+import com.paqrap.dominio.Nodo;
 import com.paqrap.dominio.Pedido;
 import com.paqrap.dominio.TipoAlgoritmo;
 import com.paqrap.dominio.TipoArchivo;
+import com.paqrap.dominio.TipoAveria;
 import com.paqrap.dominio.TipoVehiculo;
 import com.paqrap.dominio.UnidadTransporte;
 import com.paqrap.entrada.CargaArchivo;
@@ -41,8 +47,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
-    private final Ciudad ciudad;
-    private final ConfiguracionOperacion configuracionOperacion;
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ServicioPlanificacionImpl.class);
+
+    // No final: CAMBIO_CONFIGURACION_CIUDAD / CAMBIO_CONFIGURACION_OPERACION como ajuste inicial
+    // (ver aplicarAjustesIniciales) remplazan estos dos por una instancia nueva -- son records
+    // inmutables, así que "cambiarlos" significa reemplazar la referencia, igual que
+    // OrquestadorOperacion.contextoProblema. Nunca se tocan una vez iniciado el ciclo periódico.
+    private Ciudad ciudad;
+    private ConfiguracionOperacion configuracionOperacion;
     private final List<TipoVehiculo> tiposVehiculo;
     private final List<Almacen> almacenes;
     private final List<UnidadTransporte> flota;
@@ -112,7 +124,10 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         if (orquestador == null) {
             return List.of();
         }
-        return orquestador.getUltimasRutas().stream().map(EnsambladorRespuestas::aRutaDTO).toList();
+        ContextoProblema contexto = orquestador.getContextoProblema();
+        return orquestador.getUltimasRutas().stream()
+                .map(r -> EnsambladorRespuestas.aRutaDTO(r, contexto.ciudad(), contexto.bloqueos(), contexto.marcaTiempoActual()))
+                .toList();
     }
 
     @Override
@@ -149,23 +164,34 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
     @Override
     public EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada) {
+        return seleccionarEscenario(tipo, fechaInicioSimulada, List.of());
+    }
+
+    @Override
+    public EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada,
+            List<SolicitudOperacion> ajustesIniciales) {
         ParametrosOrquestacion defaults = defaultsPara(tipo);
         return seleccionarEscenario(tipo, fechaInicioSimulada, defaults.sa(), defaults.ta(), defaults.k(),
-                defaults.tiempoMaximoComputoSegundos());
+                defaults.tiempoMaximoComputoSegundos(), ajustesIniciales);
     }
 
     @Override
     public synchronized EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada,
-            float sa, float ta, float k, float tiempoMaximoComputoSegundos) {
+            float sa, float ta, float k, float tiempoMaximoComputoSegundos,
+            List<SolicitudOperacion> ajustesIniciales) {
         OrquestadorOperacion orquestadorActivo = ejecucionActivaOrquestador();
         if (orquestadorActivo != null && esEjecucionActiva(orquestadorActivo.getEjecucionActual())) {
             // Solo puede existir una ejecución a la vez en toda la aplicación, sin importar desde
             // qué dispositivo se llame: si ya hay una en curso (o pausada), esta llamada se "une"
             // a ella devolviéndola tal cual, en vez de levantar una segunda instancia independiente
             // corriendo en paralelo (que competiría por CPU y dejaría a los distintos dispositivos
-            // viendo estados distintos).
+            // viendo estados distintos). Los ajustesIniciales de ESTA llamada se descartan en
+            // silencio en ese caso -- solo aplican al arranque de una ejecución genuinamente nueva.
             return orquestadorActivo.getEjecucionActual();
         }
+
+        reiniciarFlotaYAlmacenes();
+        aplicarAjustesIniciales(ajustesIniciales, fechaInicioSimulada);
 
         List<Pedido> pedidosPendientes = pedidosRecibidos.stream()
                 .filter(p -> p.getEstado() == EstadoPedido.PENDIENTE)
@@ -191,9 +217,241 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         return ejecucion;
     }
 
+    /**
+     * Bug real corregido (confirmado en vivo): {@code flota}/{@code almacenes} son los MISMOS
+     * objetos mutables compartidos durante toda la vida del proceso (ver el constructor, son
+     * {@code final} inyectados una sola vez) -- sin este reset, una ejecución nueva heredaba en
+     * silencio la posición/estado de cada {@link UnidadTransporte} y el stock de cada
+     * {@link AlmacenIntermedio} justo en el punto donde una ejecución ANTERIOR (ya detenida) los
+     * había dejado, en vez de arrancar desde un estado limpio. Con pruebas cortas (iniciar/detener
+     * rápido) esto era casi invisible -- los vehículos apenas se habían alejado del Central --
+     * dando la falsa impresión de "siempre una posición por defecto", cuando en realidad arrastraba
+     * el estado real (parcial) de la corrida anterior.
+     */
+    private void reiniciarFlotaYAlmacenes() {
+        Nodo posicionCentral = almacenes.stream()
+                .filter(AlmacenCentral.class::isInstance)
+                .findFirst()
+                .map(Almacen::getPosicion)
+                .orElse(null);
+        flota.forEach(unidad -> {
+            if (posicionCentral != null) {
+                unidad.setPosicion(posicionCentral);
+            }
+            unidad.setEstado(EstadoUnidad.DISPONIBLE);
+        });
+        almacenes.stream()
+                .filter(AlmacenIntermedio.class::isInstance)
+                .map(AlmacenIntermedio.class::cast)
+                .forEach(almacen -> almacen.recargar(LocalDateTime.now()));
+    }
+
+    /**
+     * Aplica {@code ajustes} directamente sobre el estado compartido ({@code tiposVehiculo},
+     * {@code almacenes}, {@code flota}, {@code ciudad}, {@code configuracionOperacion}) ANTES de
+     * construir el {@code ContextoProblema} inicial -- mismo catálogo de {@link TipoSolicitud} que
+     * {@code OrquestadorOperacion.aplicarSolicitudesVencidas} para los cambios "en caliente", pero
+     * sin esa restricción horaria (todos se aplican ya, en {@code fechaInicioSimulada}) y sin la
+     * lógica de "abandonar ruta en curso" (no puede haber ninguna todavía: esto corre antes del
+     * primer lote). {@code CAMBIO_CONFIGURACION_CIUDAD} SÍ se permite aquí (a diferencia de
+     * {@link #programarSolicitud}): ningún vehículo/almacén/pedido depende todavía de la ciudad
+     * vigente, así que no hay riesgo de invalidar posiciones ya comprometidas.
+     *
+     * <p>Cada ajuste se aísla en su propio try/catch (mismo motivo que la versión "en caliente":
+     * uno mal formado no debe impedir que los demás se apliquen ni abortar el arranque del
+     * escenario).
+     */
+    private void aplicarAjustesIniciales(List<SolicitudOperacion> ajustes, LocalDateTime fechaInicioSimulada) {
+        for (SolicitudOperacion ajuste : ajustes) {
+            try {
+                switch (ajuste.tipoSolicitud()) {
+                    case AVERIA -> aplicarAveriaInicial(ajuste, fechaInicioSimulada);
+                    case CAMBIO_VELOCIDAD -> tiposVehiculo.stream()
+                            .filter(tv -> tv.getId().equalsIgnoreCase(ajuste.entidadObjetivo()))
+                            .forEach(tv -> tv.setVelocidadKmH(Double.parseDouble(ajuste.valorNuevo())));
+                    case CAMBIO_CAPACIDAD -> tiposVehiculo.stream()
+                            .filter(tv -> tv.getId().equalsIgnoreCase(ajuste.entidadObjetivo()))
+                            .forEach(tv -> tv.setCapacidad(Integer.parseInt(ajuste.valorNuevo())));
+                    case CAMBIO_CAPACIDAD_ALMACEN -> almacenes.stream()
+                            .filter(AlmacenIntermedio.class::isInstance)
+                            .map(AlmacenIntermedio.class::cast)
+                            .filter(a -> a.getNombre().equalsIgnoreCase(ajuste.entidadObjetivo()))
+                            .forEach(a -> a.setCapacidadMaxima(Integer.parseInt(ajuste.valorNuevo())));
+                    case CAMBIO_FRECUENCIA_RECARGA -> almacenes.stream()
+                            .filter(AlmacenIntermedio.class::isInstance)
+                            .map(AlmacenIntermedio.class::cast)
+                            .filter(a -> a.getNombre().equalsIgnoreCase(ajuste.entidadObjetivo()))
+                            .forEach(a -> a.setFrecuenciaRecargaHoras(Double.parseDouble(ajuste.valorNuevo())));
+                    case CAMBIO_POSICION_ALMACEN -> aplicarCambioPosicionAlmacenInicial(ajuste);
+                    case CAMBIO_CANTIDAD_VEHICULOS -> aplicarCambioCantidadVehiculosInicial(ajuste, fechaInicioSimulada);
+                    case CAMBIO_CONFIGURACION_CIUDAD -> aplicarCambioConfiguracionCiudadInicial(ajuste);
+                    case CAMBIO_CONFIGURACION_OPERACION -> aplicarCambioConfiguracionOperacionInicial(ajuste);
+                }
+            } catch (Exception ex) {
+                log.error("Ajuste inicial {} sobre {} descartado por error al aplicarlo: {}", ajuste.tipoSolicitud(),
+                        ajuste.entidadObjetivo(), ex.getMessage());
+            }
+        }
+    }
+
+    private void aplicarAveriaInicial(SolicitudOperacion ajuste, LocalDateTime fechaInicioSimulada) {
+        flota.stream()
+                .filter(u -> u.getIdUnidad().equalsIgnoreCase(ajuste.entidadObjetivo()))
+                .findFirst()
+                .ifPresent(unidad -> {
+                    TipoAveria tipo = TipoAveria.valueOf(ajuste.valorNuevo());
+                    LocalDateTime fin = switch (tipo) {
+                        case TIPO_1 -> fechaInicioSimulada.plusHours(2);
+                        case TIPO_2 -> fechaInicioSimulada.plusHours(4);
+                        case TIPO_3 -> fechaInicioSimulada.plusDays(2);
+                    };
+                    unidad.setAveriaActual(new Averia(tipo, fechaInicioSimulada, fin, 0, fechaInicioSimulada));
+                    unidad.setEstado(EstadoUnidad.AVERIADO);
+                    if (tipo == TipoAveria.TIPO_2 || tipo == TipoAveria.TIPO_3) {
+                        almacenes.stream()
+                                .filter(AlmacenCentral.class::isInstance)
+                                .findFirst()
+                                .ifPresent(central -> unidad.setPosicion(central.getPosicion()));
+                    }
+                });
+    }
+
+    /** Mismo criterio de validación que {@code OrquestadorOperacion.aplicarCambioPosicionAlmacen}. */
+    private void aplicarCambioPosicionAlmacenInicial(SolicitudOperacion ajuste) {
+        String[] partes = ajuste.valorNuevo().split(",");
+        Nodo nuevaPosicion = new Nodo(Integer.parseInt(partes[0].trim()), Integer.parseInt(partes[1].trim()));
+        if (!ciudad.esNodoValido(nuevaPosicion)) {
+            log.warn("Posición {} fuera de los límites de la ciudad; se descarta el ajuste inicial de posición del almacén {}",
+                    nuevaPosicion, ajuste.entidadObjetivo());
+            return;
+        }
+        almacenes.stream()
+                .filter(a -> nombreAlmacen(a).equalsIgnoreCase(ajuste.entidadObjetivo()))
+                .forEach(a -> a.setPosicion(nuevaPosicion));
+    }
+
+    /** Mismo criterio que {@code EnsambladorRespuestas.aAlmacenDTO}: el central no tiene nombre propio. */
+    private String nombreAlmacen(Almacen almacen) {
+        return almacen instanceof AlmacenIntermedio intermedio ? intermedio.getNombre() : "Central";
+    }
+
+    /**
+     * {@code entidadObjetivo}: id de {@link TipoVehiculo}. {@code valorNuevo}: cantidad TOTAL
+     * deseada de unidades de ese tipo. A diferencia de la versión "en caliente"
+     * ({@code OrquestadorOperacion.aplicarCambioCantidadVehiculos}), no hay rutas en curso que
+     * proteger todavía -- cualquier unidad del tipo puede retirarse si hay que reducir.
+     */
+    private void aplicarCambioCantidadVehiculosInicial(SolicitudOperacion ajuste, LocalDateTime fechaInicioSimulada) {
+        int cantidadDeseada = Integer.parseInt(ajuste.valorNuevo());
+        List<UnidadTransporte> delTipo = flota.stream()
+                .filter(u -> u.getTipoVehiculo().getId().equalsIgnoreCase(ajuste.entidadObjetivo()))
+                .toList();
+        if (delTipo.isEmpty()) {
+            log.warn("No existe flota del tipo {} para ajustar su cantidad inicial", ajuste.entidadObjetivo());
+            return;
+        }
+
+        TipoVehiculo tipo = delTipo.get(0).getTipoVehiculo();
+        int diferencia = cantidadDeseada - delTipo.size();
+        if (diferencia > 0) {
+            Nodo posicionInicial = delTipo.get(0).getPosicion();
+            int siguienteCorrelativo = delTipo.size() + 1;
+            for (int i = 0; i < diferencia; i++) {
+                String nuevoId = tipo.getId() + "-" + (siguienteCorrelativo + i);
+                flota.add(new UnidadTransporte(nuevoId, tipo, posicionInicial, fechaInicioSimulada));
+            }
+        } else if (diferencia < 0) {
+            flota.removeAll(delTipo.stream().limit(-diferencia).toList());
+        }
+    }
+
+    /**
+     * {@code entidadObjetivo}: {@code "ancho"}, {@code "alto"} o {@code "distanciaEntreNodos"}.
+     * {@code valorNuevo}: nuevo valor numérico. Se rechaza si deja a algún almacén ya posicionado
+     * fuera de los límites nuevos -- mismo riesgo sistémico que documenta
+     * {@code ServicioPlanificacionImpl.programarSolicitud} para el cambio en caliente, aquí
+     * evitado con una validación explícita en vez de prohibir el tipo por completo.
+     */
+    private void aplicarCambioConfiguracionCiudadInicial(SolicitudOperacion ajuste) {
+        double valor = Double.parseDouble(ajuste.valorNuevo());
+        Ciudad nueva = switch (ajuste.entidadObjetivo()) {
+            case "ancho" -> new Ciudad((int) valor, ciudad.alto(), ciudad.origen(), ciudad.distanciaEntreNodos(),
+                    ciudad.callesDobleSentido());
+            case "alto" -> new Ciudad(ciudad.ancho(), (int) valor, ciudad.origen(), ciudad.distanciaEntreNodos(),
+                    ciudad.callesDobleSentido());
+            case "distanciaEntreNodos" -> new Ciudad(ciudad.ancho(), ciudad.alto(), ciudad.origen(), (int) valor,
+                    ciudad.callesDobleSentido());
+            default -> null;
+        };
+        if (nueva == null) {
+            log.warn("Campo de configuración de ciudad desconocido: {}", ajuste.entidadObjetivo());
+            return;
+        }
+        boolean algunAlmacenFueraDeLimites = almacenes.stream().anyMatch(a -> !nueva.esNodoValido(a.getPosicion()));
+        if (algunAlmacenFueraDeLimites) {
+            log.warn("Ajuste inicial de ciudad ({}={}) descartado: deja al menos un almacén fuera de los límites nuevos",
+                    ajuste.entidadObjetivo(), ajuste.valorNuevo());
+            return;
+        }
+        ciudad = nueva;
+    }
+
+    /** Mismo catálogo de campos que {@code OrquestadorOperacion.aplicarCambioConfiguracionOperacion}. */
+    private void aplicarCambioConfiguracionOperacionInicial(SolicitudOperacion ajuste) {
+        var actual = configuracionOperacion;
+        double valor = Double.parseDouble(ajuste.valorNuevo());
+        var nueva = switch (ajuste.entidadObjetivo()) {
+            case "duracionTurnoHoras" -> new ConfiguracionOperacion(valor, actual.horaInicioTurno(),
+                    actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(),
+                    actual.maxParadasPorRuta());
+            case "horaInicioTurno" -> new ConfiguracionOperacion(actual.duracionTurnoHoras(), valor,
+                    actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(),
+                    actual.maxParadasPorRuta());
+            case "tiempoServicioClienteHoras" -> new ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), valor, actual.duracionRefrigerioHoras(), actual.margenRefrigerioHoras(),
+                    actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(), actual.maxParadasPorRuta());
+            case "duracionRefrigerioHoras" -> new ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), valor,
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(),
+                    actual.maxParadasPorRuta());
+            case "margenRefrigerioHoras" -> new ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    valor, actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(), actual.maxParadasPorRuta());
+            case "tiempoCargaAlmacenHoras" -> new ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), valor, actual.tiempoTrasvaseHoras(), actual.maxParadasPorRuta());
+            case "tiempoTrasvaseHoras" -> new ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), valor,
+                    actual.maxParadasPorRuta());
+            case "maxParadasPorRuta" -> new ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(),
+                    (int) valor);
+            default -> null;
+        };
+        if (nueva == null) {
+            log.warn("Campo de configuración de operación desconocido: {}", ajuste.entidadObjetivo());
+            return;
+        }
+        configuracionOperacion = nueva;
+    }
+
     @Override
     public void programarSolicitud(EjecucionEscenario ejecucion, LocalDateTime tiempoSimulado,
             TipoSolicitud tipoSolicitud, String entidadObjetivo, String valorNuevo) {
+        if (tipoSolicitud == TipoSolicitud.CAMBIO_CONFIGURACION_CIUDAD) {
+            // Rechazado aquí, a la entrada, en vez de encolarse y descartarse en silencio dentro de
+            // OrquestadorOperacion.aplicarSolicitudesVencidas: cambiar las dimensiones de la ciudad
+            // en caliente deja posiciones ya existentes fuera de la grilla nueva y CalculadorDistancia
+            // lanza IllegalStateException para TODA ruta que las toque -- una caída sistémica, no un
+            // error localizado. La configuración de ciudad solo puede fijarse antes de iniciar la
+            // ejecución (no existe, por diseño, un canal para cambiarla una vez en curso).
+            throw new IllegalArgumentException(
+                    "La configuración de ciudad no se puede cambiar una vez iniciada la ejecución; fíjala antes de iniciar el escenario.");
+        }
         OrquestadorOperacion orquestador = ejecuciones.get(ejecucion.getIdEjecucion());
         if (orquestador == null) {
             throw new IllegalArgumentException("No hay una ejecución activa con id " + ejecucion.getIdEjecucion());
@@ -201,8 +459,67 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         orquestador.encolarSolicitud(new SolicitudOperacion(tiempoSimulado, tipoSolicitud, entidadObjetivo, valorNuevo));
     }
 
+    @Override
+    public void pausarEjecucion(String idEjecucion) {
+        orquestadorDe(idEjecucion).pausar();
+    }
+
+    @Override
+    public void reanudarEjecucion(String idEjecucion) {
+        orquestadorDe(idEjecucion).reanudar();
+    }
+
+    @Override
+    public void detenerEjecucion(String idEjecucion) {
+        orquestadorDe(idEjecucion).detener();
+    }
+
+    @Override
+    public EjecucionEscenario consultarEjecucion(String idEjecucion) {
+        return orquestadorDe(idEjecucion).getEjecucionActual();
+    }
+
+    @Override
+    public EjecucionEscenario consultarEjecucionActiva() {
+        OrquestadorOperacion orquestador = ejecucionActivaOrquestador();
+        if (orquestador == null) {
+            return null;
+        }
+        EjecucionEscenario ejecucion = orquestador.getEjecucionActual();
+        return esEjecucionActiva(ejecucion) ? ejecucion : null;
+    }
+
+    private OrquestadorOperacion orquestadorDe(String idEjecucion) {
+        OrquestadorOperacion orquestador = ejecuciones.get(idEjecucion);
+        if (orquestador == null) {
+            throw new IllegalArgumentException("No hay una ejecución activa con id " + idEjecucion);
+        }
+        return orquestador;
+    }
+
+    /**
+     * Bug real corregido (reporte directo: el reloj del front seguia avanzando sin fin despues de
+     * detener una ejecucion, y al iniciar una nueva los vehiculos parecian "regresar" de golpe al
+     * almacen): {@code idEjecucionActiva} nunca se limpia en {@link #detenerEjecucion} -- sigue
+     * apuntando al {@link OrquestadorOperacion} YA DETENIDO hasta que arranca una ejecucion nueva.
+     * Antes, este metodo devolvia ese orquestador tal cual con solo verificar que no fuera
+     * {@code null}, asi que {@link #consultarEstadoOperacion()} seguia sirviendo para siempre el
+     * {@code ContextoProblema} CONGELADO de la ejecucion detenida (su reloj dejo de avanzar, pero
+     * el front lo extrapola localmente sin saber que ya nadie lo esta actualizando) -- en vez de la
+     * respuesta "vacia" que ya recibia correctamente {@link #consultarEjecucionActiva()} (que sí
+     * aplicaba este mismo filtro). Se centraliza aqui para que todo consultor (estado de operacion,
+     * rutas vigentes, pedidos actuales, ejecucion activa) trate una ejecucion ya terminada
+     * exactamente igual: como si no hubiera ninguna activa.
+     */
     private OrquestadorOperacion ejecucionActivaOrquestador() {
-        return idEjecucionActiva != null ? ejecuciones.get(idEjecucionActiva) : null;
+        if (idEjecucionActiva == null) {
+            return null;
+        }
+        OrquestadorOperacion orquestador = ejecuciones.get(idEjecucionActiva);
+        if (orquestador == null || !esEjecucionActiva(orquestador.getEjecucionActual())) {
+            return null;
+        }
+        return orquestador;
     }
 
     /** {@code true} si la ejecución sigue en un estado no terminal (puede recibir lotes futuros). */
@@ -262,21 +579,34 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     }
 
     /**
-     * Valores por defecto de la dinámica de planificación programada, según lo indicado
-     * directamente por el profesor: Ta=1 minuto (tiempo de ejecución de la planificación),
-     * Sa=5 minutos (salto entre lanzamientos), K=1 para día a día. Para {@code CINCO_DIAS} y
-     * {@code COLAPSO_LOGISTICO} se usan los valores ilustrativos que dio como ejemplo (K=14 y
-     * K=75 respectivamente) — el propio profesor aclaró que, salvo K=1, estos valores deben
-     * obtenerse por calibración real; por eso {@link #seleccionarEscenario(TipoEscenario,
-     * LocalDateTime, float, float, float, float)} permite sobreescribirlos explícitamente.
+     * Valores por defecto de la dinámica de planificación programada. {@code K} sigue lo indicado
+     * por el profesor (K=1 para día a día) salvo {@code CINCO_DIAS}, recalibrado a K=150: el PDF
+     * oficial del enunciado exige explícitamente que ese escenario "debe tomar en ejecutarse entre
+     * 30 y 60 minutos" (real:simulado = 7200/K minutos, independiente de Sa -- ver el comentario
+     * de abajo), y el valor ilustrativo original del profesor (K=14) daba ~514 minutos (~8.6
+     * horas), muy fuera de ese rango -- violación confirmada de un requisito duro, no un ajuste de
+     * calibración libre. K=150 da 48 minutos, a mitad del rango permitido. {@code COLAPSO_LOGISTICO}
+     * (K=75) sigue siendo el valor ilustrativo del profesor, a calibrar -- el enunciado no fija una
+     * duración objetivo para ese escenario (corre "hasta el punto de quiebre", sin ventana fija).
+     * {@code Sa}/{@code Ta}
+     * también se confirmaron como libres de ajustar: originalmente 5min/1min (sugerencia inicial
+     * del profesor, no un requisito de la consigna) -- bajados primero a 1min/0.5min, y aquí otra
+     * vez a 20s/8s tras confirmar en los logs reales que ningún lote, en toda la sesión de
+     * pruebas, llegó siquiera a acercarse al presupuesto de cómputo anterior (30s): ningún
+     * "supera el presupuesto" se disparó nunca para esta escala de datos. {@code horasAvance =
+     * (sa/60)*k} por lote no cambia con este ajuste (la razón de compresión real:simulado la fija
+     * K, no Sa), así que el tiempo total para completar un escenario es el mismo; lo único que
+     * cambia es que cada paso es más pequeño y frecuente (actualizaciones de UI más suaves, en
+     * vez de saltos grandes espaciados). Overridable vía
+     * {@link #seleccionarEscenario(TipoEscenario, LocalDateTime, float, float, float, float)}.
      */
     private ParametrosOrquestacion defaultsPara(TipoEscenario tipo) {
-        float ta = 1f;
-        float sa = 5f;
+        float ta = 8f / 60f;
+        float sa = 20f / 60f;
         float tiempoMaximoComputoSegundos = ta * 60f;
         float k = switch (tipo) {
             case DIA_A_DIA -> 1f;
-            case CINCO_DIAS -> 14f;
+            case CINCO_DIAS -> 150f;
             case COLAPSO_LOGISTICO -> 75f;
         };
         return new ParametrosOrquestacion(sa, ta, k, tiempoMaximoComputoSegundos);

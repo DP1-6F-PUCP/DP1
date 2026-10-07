@@ -51,6 +51,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiErrorDTO.of("INVALID_ARGUMENT", ex.getMessage()));
     }
 
+    /**
+     * OrquestadorOperacion.pausar()/reanudar() la lanzan cuando se pide una transición de estado
+     * que no corresponde (p. ej. reanudar algo que no está pausado) -- es un conflicto de estado,
+     * no un error del servidor ni un argumento mal formado.
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiErrorDTO> manejarEstadoInvalido(IllegalStateException ex) {
+        log.warn("Transición de estado inválida: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiErrorDTO.of("INVALID_STATE", ex.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorDTO> manejarGenerico(Exception ex) {
         log.error("Error no controlado", ex);

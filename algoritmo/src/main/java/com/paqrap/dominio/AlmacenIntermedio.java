@@ -6,8 +6,12 @@ import java.time.LocalDateTime;
 public class AlmacenIntermedio extends Almacen {
 
     private final String nombre;
-    private final int capacidadMaxima;
+    // No final: TipoSolicitud.CAMBIO_CAPACIDAD_ALMACEN permite ajustarla en caliente.
+    private int capacidadMaxima;
     private int stockActual;
+    // No final: TipoSolicitud.CAMBIO_FRECUENCIA_RECARGA permite ajustarla en caliente. Default 24h
+    // reproduce el comportamiento original (recarga diaria a medianoche).
+    private double frecuenciaRecargaHoras = 24.0;
 
     public AlmacenIntermedio(Nodo posicion, String nombre, int capacidadMaxima, int stockActual) {
         super(posicion);
@@ -16,12 +20,24 @@ public class AlmacenIntermedio extends Almacen {
         this.stockActual = stockActual;
     }
 
+    public double getFrecuenciaRecargaHoras() {
+        return frecuenciaRecargaHoras;
+    }
+
+    public void setFrecuenciaRecargaHoras(double frecuenciaRecargaHoras) {
+        this.frecuenciaRecargaHoras = frecuenciaRecargaHoras;
+    }
+
     public String getNombre() {
         return nombre;
     }
 
     public int getCapacidadMaxima() {
         return capacidadMaxima;
+    }
+
+    public void setCapacidadMaxima(int capacidadMaxima) {
+        this.capacidadMaxima = capacidadMaxima;
     }
 
     public int getStockActual() {

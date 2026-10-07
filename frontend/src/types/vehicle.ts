@@ -30,7 +30,9 @@ export interface Vehicle {
   status: VehicleStatus;
   position: Point;
   destination?: Point;
-  plannedPath: Point[]; // Waypoints Manhattan
+  /** VehiculoDTO.geometriaRetorno (camino real al almacén más cercano) cuando la unidad ya
+   * entregó todo pero aún no llega de vuelta -- vacío en cualquier otro caso. */
+  returnPath: Point[];
   historyPath: Point[];
   assignedOrderIds: string[];
   batteryFuel?: number; // 0 - 100%

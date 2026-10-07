@@ -1,15 +1,8 @@
 import React from 'react';
 import { RouteListContainer } from '../features/rutas/components/RouteListContainer';
-import { RouteMap } from '../components/map/RouteMap';
-import { MapErrorBoundary } from '../components/map/MapErrorBoundary';
-import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
-import { useOrders } from '../features/pedidos/hooks/useOrders';
-import { INITIAL_WAREHOUSES, INITIAL_BLOCKED_STREETS } from '../utils/manhattan';
+import { MapSlot } from '../components/map/MapSlot';
 
 export const RutasPage: React.FC = () => {
-  const { vehicles } = useVehicles();
-  const { orders } = useOrders();
-
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-[#0B111E] text-slate-100">
       {/* Panel Izquierdo: Lista de Rutas y Operaciones */}
@@ -25,18 +18,8 @@ export const RutasPage: React.FC = () => {
         </div>
       </aside>
 
-      {/* Panel Derecho: Mapa en Vivo */}
-      <div className="flex-1 relative h-full">
-        <MapErrorBoundary fallbackTitle="Error en el Mapa de Rutas">
-          <RouteMap
-            warehouses={INITIAL_WAREHOUSES}
-            vehicles={vehicles}
-            blockedStreets={INITIAL_BLOCKED_STREETS}
-            orders={orders}
-            isDarkTheme={true}
-          />
-        </MapErrorBoundary>
-      </div>
+      {/* Panel Derecho: Mapa en Vivo (persistente, ver router/index.tsx + MapSlot) */}
+      <MapSlot className="flex-1 relative h-full" />
     </div>
   );
 };

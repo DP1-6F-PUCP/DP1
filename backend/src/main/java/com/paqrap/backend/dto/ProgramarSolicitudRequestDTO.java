@@ -16,3 +16,4 @@ public record ProgramarSolicitudRequestDTO(
         @NotBlank(message = "La entidad objetivo es obligatoria") String entidadObjetivo,
         @NotBlank(message = "El valor nuevo es obligatorio") String valorNuevo) {
 }
+

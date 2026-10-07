@@ -1,6 +1,7 @@
 package com.paqrap.exposicion;
 
 import com.paqrap.simulador.EjecucionEscenario;
+import com.paqrap.simulador.SolicitudOperacion;
 import com.paqrap.simulador.TipoEscenario;
 import com.paqrap.simulador.TipoSolicitud;
 
@@ -56,6 +57,24 @@ public interface ServicioPlanificacion {
     EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada);
 
     /**
+     * Variante de {@link #seleccionarEscenario(TipoEscenario, LocalDateTime)} que además aplica
+     * {@code ajustesIniciales} (velocidad/capacidad de vehículo, flota, posición/capacidad/
+     * frecuencia de almacén, configuración de ciudad u operación, incluso una avería de arranque)
+     * antes del primer lote de planificación -- mismo catálogo de {@link TipoSolicitud} que
+     * {@link #programarSolicitud}, pero sin restricción sobre {@code CAMBIO_CONFIGURACION_CIUDAD}
+     * (ver su Javadoc: ese tipo solo se rechaza una vez la ejecución ya está en curso).
+     *
+     * @param tipo escenario de evaluación a ejecutar
+     * @param fechaInicioSimulada instante simulado de inicio
+     * @param ajustesIniciales cambios a aplicar antes de construir el contexto inicial; cada
+     *         {@link SolicitudOperacion#tiempoSimuladoProgramado()} se ignora (se aplican todos
+     *         en {@code fechaInicioSimulada})
+     * @return el registro de la ejecución iniciada
+     */
+    EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada,
+            List<SolicitudOperacion> ajustesIniciales);
+
+    /**
      * Inicia una nueva ejecución, calibrando explícitamente la dinámica de planificación
      * programada: {@code ta} (minutos reales que toma una planificación), {@code sa} (minutos
      * reales entre lanzamientos, debe ser {@code sa > ta}) y {@code k} (constante de
@@ -68,10 +87,11 @@ public interface ServicioPlanificacion {
      * @param ta minutos reales que toma ejecutar una planificación
      * @param k constante de proporcionalidad tiempo simulado / tiempo real
      * @param tiempoMaximoComputoSegundos presupuesto de cómputo, en segundos, antes de alertar
+     * @param ajustesIniciales ver {@link #seleccionarEscenario(TipoEscenario, LocalDateTime, List)}
      * @return el registro de la ejecución iniciada
      */
     EjecucionEscenario seleccionarEscenario(TipoEscenario tipo, LocalDateTime fechaInicioSimulada, float sa, float ta,
-            float k, float tiempoMaximoComputoSegundos);
+            float k, float tiempoMaximoComputoSegundos, List<SolicitudOperacion> ajustesIniciales);
 
     /**
      * Encola un cambio de configuración "en caliente" sobre una ejecución en curso.
@@ -84,4 +104,55 @@ public interface ServicioPlanificacion {
      */
     void programarSolicitud(EjecucionEscenario ejecucion, LocalDateTime tiempoSimulado, TipoSolicitud tipoSolicitud,
             String entidadObjetivo, String valorNuevo);
+
+    /**
+     * Pausa el ciclo periódico de la ejecución dada: los lotes programados siguen disparando
+     * cada {@code sa} minutos reales, pero no hacen nada mientras esté pausada (reversible).
+     *
+     * @param idEjecucion id de la ejecución a pausar
+     * @throws IllegalArgumentException si no hay una ejecución con ese id
+     * @throws IllegalStateException si la ejecución no está en curso
+     */
+    void pausarEjecucion(String idEjecucion);
+
+    /**
+     * Reanuda una ejecución previamente pausada con {@link #pausarEjecucion(String)}.
+     *
+     * @param idEjecucion id de la ejecución a reanudar
+     * @throws IllegalArgumentException si no hay una ejecución con ese id
+     * @throws IllegalStateException si la ejecución no está en curso o no está pausada
+     */
+    void reanudarEjecucion(String idEjecucion);
+
+    /**
+     * Detiene definitivamente una ejecución (no reversible, a diferencia de pausar). La marca
+     * {@code FINALIZADA} salvo que ya estuviera {@code DETENIDA_POR_INCUMPLIMIENTO}.
+     *
+     * @param idEjecucion id de la ejecución a detener
+     * @throws IllegalArgumentException si no hay una ejecución con ese id
+     */
+    void detenerEjecucion(String idEjecucion);
+
+    /**
+     * @param idEjecucion id de la ejecución a consultar
+     * @return el registro actual de la ejecución, reflejando su {@code EstadoEjecucion} vigente
+     *         (incluyendo si se detuvo por incumplimiento) -- a diferencia de
+     *         {@link #consultarEstadoOperacion()}, que no expone ese estado en absoluto
+     * @throws IllegalArgumentException si no hay una ejecución con ese id
+     */
+    EjecucionEscenario consultarEjecucion(String idEjecucion);
+
+    /**
+     * Bug real corregido: sin este método no había forma de que un cliente nuevo (p. ej. una
+     * pestaña recién abierta o recargada) descubriera que ya hay una ejecución activa -- solo
+     * podía consultar {@link #consultarEjecucion(String)} si YA conocía el id, y tras un refresh
+     * el frontend pierde ese id (no hay nada persistido). Sin esto, el único camino era que el
+     * usuario volviera a hacer clic en "Iniciar ejecución" (que sí se une correctamente a la
+     * activa, pero requiere acción manual cada vez) -- la promesa de "cualquier dispositivo se une
+     * a la ejecución activa" no se cumplía sola al cargar la página.
+     *
+     * @return la ejecución activa (incluye {@code PAUSADA}) si existe, o {@code null} si no hay
+     *         ninguna en curso
+     */
+    EjecucionEscenario consultarEjecucionActiva();
 }

@@ -3,15 +3,13 @@ import { useRoutes } from '../hooks/useRoutes';
 import { RouteCard } from './RouteCard';
 import { useMapStore } from '../../../store/mapStore';
 import { Route } from '../../../types';
-import { useToast } from '../../../components/ToastProvider';
 import { Search, Filter, Loader2, Route as RouteIcon } from 'lucide-react';
 
 export const RouteListContainer: React.FC = () => {
-  const { routes, isLoading, isError, recalculateRoute, isRecalculating } = useRoutes();
+  const { routes, isLoading, isError } = useRoutes();
   const selectedRouteId = useMapStore((s) => s.selectedRouteId);
   const setSelectedRouteId = useMapStore((s) => s.setSelectedRouteId);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
-  const { addToast } = useToast();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'planned' | 'in_progress' | 'completed'>('all');
@@ -19,25 +17,6 @@ export const RouteListContainer: React.FC = () => {
   const handleSelectRoute = (route: Route) => {
     setSelectedRouteId(route.id);
     setSelectedVehicleId(route.vehicleId);
-  };
-
-  const handleRecalculate = (routeId: string) => {
-    recalculateRoute(routeId, {
-      onSuccess: () => {
-        addToast({
-          type: 'success',
-          title: 'Ruta recalculada',
-          description: `Se optimizó la trayectoria Manhattan evitando bloqueos activos.`,
-        });
-      },
-      onError: (err) => {
-        addToast({
-          type: 'error',
-          title: 'Error al recalcular ruta',
-          description: (err as Error)?.message || 'No se pudo comunicar con el ruteador.',
-        });
-      },
-    });
   };
 
   const filteredRoutes = routes.filter((r) => {
@@ -119,8 +98,6 @@ export const RouteListContainer: React.FC = () => {
               route={route}
               isSelected={selectedRouteId === route.id}
               onSelectRoute={handleSelectRoute}
-              onRecalculate={handleRecalculate}
-              isRecalculating={isRecalculating}
             />
           ))
         )}

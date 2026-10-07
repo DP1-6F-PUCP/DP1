@@ -1,5 +1,4 @@
 import { BlockedStreet, Order, PreventiveMaintenanceRecord, Warehouse } from '../types';
-import { INITIAL_WAREHOUSES } from './manhattan';
 import {
   parseBlockedStreetsFile,
   parseOrdersFile,
@@ -16,32 +15,40 @@ export interface LoadedFileEntry<T> {
   items: T[];
 }
 
-let blockageFiles: LoadedFileEntry<BlockedStreet>[] = [
-  {
-    name: '202609.bloqueadas',
-    content: SAMPLE_BLOCKAGES_FILE_CONTENT,
-    count: parseBlockedStreetsFile(SAMPLE_BLOCKAGES_FILE_CONTENT, '202609.bloqueadas').blockages.length,
-    items: parseBlockedStreetsFile(SAMPLE_BLOCKAGES_FILE_CONTENT, '202609.bloqueadas').blockages,
-  },
-];
+/**
+ * Lee+parsea un lote de archivos UNA sola vez (antes esta misma logica de FileReader estaba
+ * copiada 3 veces dentro de DataFilesModal y 3 veces mas dentro del ya borrado SidebarDataFiles,
+ * sin reader.onerror -- si un archivo fallaba al leerse, su Promise nunca resolvia ni rechazaba
+ * y Promise.all se colgaba para siempre, confirmado en la revision de codigo). Aqui se corrige
+ * una sola vez.
+ */
+export function leerYParsearArchivos<T>(
+  files: File[],
+  parseFn: (contenido: string, nombreArchivo: string) => T[]
+): Promise<LoadedFileEntry<T>[]> {
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise<LoadedFileEntry<T>>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const texto = (event.target?.result as string) || '';
+            const items = parseFn(texto, file.name);
+            resolve({ name: file.name, content: texto, count: items.length, items });
+          };
+          reader.onerror = () => reject(new Error(`No se pudo leer el archivo ${file.name}`));
+          reader.readAsText(file);
+        })
+    )
+  );
+}
 
-let ordersFiles: LoadedFileEntry<Order>[] = [
-  {
-    name: 'ventas202609',
-    content: SAMPLE_ORDERS_FILE_CONTENT,
-    count: parseOrdersFile(SAMPLE_ORDERS_FILE_CONTENT, 'ventas202609', INITIAL_WAREHOUSES).orders.length,
-    items: parseOrdersFile(SAMPLE_ORDERS_FILE_CONTENT, 'ventas202609', INITIAL_WAREHOUSES).orders,
-  },
-];
-
-let maintenanceFiles: LoadedFileEntry<PreventiveMaintenanceRecord>[] = [
-  {
-    name: 'mant.preventivo.09.10',
-    content: SAMPLE_MAINTENANCE_FILE_CONTENT,
-    count: parseMaintenanceFile(SAMPLE_MAINTENANCE_FILE_CONTENT, 'mant.preventivo.09.10').records.length,
-    items: parseMaintenanceFile(SAMPLE_MAINTENANCE_FILE_CONTENT, 'mant.preventivo.09.10').records,
-  },
-];
+// Antes precargaba datos de muestra al iniciar el modulo (hardcode "para que corra" -- el
+// usuario veia un archivo ya cargado sin haber subido nada). Ahora arranca vacio; cargar la
+// muestra es una accion explicita (resetToSamples), no un estado inicial oculto.
+let blockageFiles: LoadedFileEntry<BlockedStreet>[] = [];
+let ordersFiles: LoadedFileEntry<Order>[] = [];
+let maintenanceFiles: LoadedFileEntry<PreventiveMaintenanceRecord>[] = [];
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -94,8 +101,8 @@ export const fileStore = {
     };
   },
 
-  resetToSamples(warehouses: Warehouse[] = INITIAL_WAREHOUSES) {
-    const effectiveWarehouses = warehouses && warehouses.length > 0 ? warehouses : INITIAL_WAREHOUSES;
+  resetToSamples(warehouses: Warehouse[] = []) {
+    const effectiveWarehouses = warehouses && warehouses.length > 0 ? warehouses : [];
     const parsedBlockages = parseBlockedStreetsFile(SAMPLE_BLOCKAGES_FILE_CONTENT, '202609.bloqueadas');
     const parsedOrders = parseOrdersFile(SAMPLE_ORDERS_FILE_CONTENT, 'ventas202609', effectiveWarehouses);
     const parsedMaint = parseMaintenanceFile(SAMPLE_MAINTENANCE_FILE_CONTENT, 'mant.preventivo.09.10');

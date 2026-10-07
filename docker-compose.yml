@@ -1,23 +1,10 @@
 services:
-  db:
-    image: postgres:16-alpine
-    container_name: postgresDB
-    environment:
-      POSTGRES_DB: ${DB_NAME:-sysmile_db}
-      POSTGRES_USER: ${DB_USER:-sysmile_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-sysmile_password}
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    volumes:
-      - sysmile_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sysmile_user} -d ${DB_NAME:-sysmile_db}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
+  # No hay servicio de base de datos: todo el dominio (ContextoProblema, OrquestadorOperacion,
+  # etc.) vive en memoria por ejecucion de escenario -- backend/pom.xml no tiene ni el starter de
+  # JPA ni el driver de Postgres, asi que un "db" aqui seria infraestructura muerta (y, peor,
+  # bloquearia el arranque de "backend" esperando un healthcheck de algo que nadie usa).
   backend:
+    image: ghcr.io/dp1-6f-pucp/dp1-backend:latest
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -25,16 +12,10 @@ services:
     container_name: backend
     ports:
       - "8080:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${DB_NAME:-sysmile_db}
-      SPRING_DATASOURCE_USERNAME: ${DB_USER:-sysmile_user}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-sysmile_password}
-    depends_on:
-      db:
-        condition: service_healthy
     restart: unless-stopped
 
   frontend:
+    image: ghcr.io/dp1-6f-pucp/dp1-frontend:latest
     build:
       context: ./frontend
       network: host
@@ -45,5 +26,15 @@ services:
       - backend
     restart: unless-stopped
 
-volumes:
-  sysmile_db_data:
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DOCKER_CONFIG_PATH:-/root/.docker/config.json}:/config.json:ro
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL:-60}
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+    command: --interval ${WATCHTOWER_INTERVAL:-60} --cleanup backend frontend

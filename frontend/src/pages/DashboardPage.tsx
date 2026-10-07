@@ -1,30 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { RouteMap } from '../components/map/RouteMap';
-import { MapErrorBoundary } from '../components/map/MapErrorBoundary';
-import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
-import { useOrders } from '../features/pedidos/hooks/useOrders';
-import { useRoutes } from '../features/rutas/hooks/useRoutes';
+import React from 'react';
+import { MapSlot } from '../components/map/MapSlot';
+import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
+import { useScenarioStore } from '../store/scenarioStore';
 import { useMapStore } from '../store/mapStore';
-import { INITIAL_WAREHOUSES, INITIAL_BLOCKED_STREETS } from '../utils/manhattan';
 import { getVehicleSemaforoStatus } from '../utils/vehicleStatus';
-import { Car, Package, AlertTriangle, ShieldCheck, Clock, TrendingUp } from 'lucide-react';
+import { OrderListContainer } from '../features/pedidos/components/OrderListContainer';
+import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
 import { Link } from 'react-router-dom';
 
 export const DashboardPage: React.FC = () => {
-  const { vehicles } = useVehicles();
-  const { orders } = useOrders();
-  const { routes } = useRoutes();
+  const { vehicles, orders, routes, warehouses, estadoRaw } = useEstadoOperacion();
+  const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
   const selectedVehicleId = useMapStore((s) => s.selectedVehicleId);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
 
-  const [simMinutes, setSimMinutes] = useState(45);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSimMinutes((prev) => prev + 1);
-    }, 2000);
-    return () => clearInterval(timer);
-  }, []);
+  // Minutos simulados transcurridos desde fechaInicioSimulada -- ya no es un contador local de
+  // mentira, se deriva del instante real que reporta el backend en cada tick.
+  const nowMs = estadoRaw?.marcaTiempoActual ? Date.parse(estadoRaw.marcaTiempoActual) : null;
+  const simMinutes = scenarioStartMs != null && nowMs != null ? Math.round((nowMs - scenarioStartMs) / 60000) : 0;
 
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) || null;
 
@@ -78,20 +71,15 @@ export const DashboardPage: React.FC = () => {
         </div>
       </header>
 
+      {/* Metricas globales de la operacion -- MetricasOperacionDTO completo (antes solo se leia
+          contadorIncumplidos, en otro lado) */}
+      <div className="px-3.5 py-2 border-b border-slate-800 bg-slate-900/60 shrink-0">
+        <MetricasStrip metricas={estadoRaw?.metricas} />
+      </div>
+
       {/* Cuerpo Principal: Mapa Central + Inspector Lateral */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 relative h-full">
-          <MapErrorBoundary fallbackTitle="Error en el Mapa del Dashboard">
-            <RouteMap
-              warehouses={INITIAL_WAREHOUSES}
-              vehicles={vehicles}
-              blockedStreets={INITIAL_BLOCKED_STREETS}
-              orders={orders}
-              onSelectVehicle={(veh) => setSelectedVehicleId(veh.id)}
-              isDarkTheme={true}
-            />
-          </MapErrorBoundary>
-        </div>
+        <MapSlot className="flex-1 relative h-full" />
 
         {/* Panel Lateral de Inspección Rápida */}
         <aside className="w-80 border-l border-slate-800 bg-slate-900/95 flex flex-col p-4 space-y-4 overflow-y-auto shrink-0 text-xs">
@@ -152,23 +140,45 @@ export const DashboardPage: React.FC = () => {
             </div>
           )}
 
-          {/* Resumen de Almacenes */}
+          {/* Resumen de Almacenes -- ahora desde GET /api/estado-operacion */}
           <div className="space-y-2 pt-2 border-t border-slate-800">
             <h4 className="font-semibold text-slate-200 text-xs">Capacidad en Almacenes</h4>
-            {INITIAL_WAREHOUSES.map((wh) => (
-              <div key={wh.id} className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-medium text-slate-200">{wh.name}</span>
-                  <span className="font-mono-code text-[11px] text-blue-400">
-                    {!Number.isFinite(wh.capacity) ? '∞' : `${wh.currentStock}/${wh.capacity}`}
-                  </span>
-                </div>
-                <div className="text-[10px] text-slate-400 flex justify-between">
-                  <span>En tránsito: {wh.inTransit}</span>
-                  <span>Salida: {wh.dispatchRatePerHour} paq/h</span>
-                </div>
+            {warehouses.length === 0 && (
+              <div className="p-3 rounded-lg bg-slate-950/60 border border-dashed border-slate-800 text-[11px] text-slate-500">
+                Sin datos de almacenes todavía.
               </div>
-            ))}
+            )}
+            {warehouses.map((wh) => {
+              const esCentral = !Number.isFinite(wh.capacity);
+              const pct = Math.round(wh.occupancyPct);
+              return (
+                <div key={wh.id} className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium text-slate-200">{wh.name}</span>
+                    <span className="font-mono-code text-[11px] text-blue-400">
+                      {esCentral ? '∞' : `${wh.currentStock}/${wh.capacity}`}
+                    </span>
+                  </div>
+                  {!esCentral && (
+                    <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${pct > 85 ? 'bg-rose-500' : 'bg-cyan-500'}`}
+                        style={{ width: `${Math.min(100, pct)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pedidos -- OrderListContainer existia completo pero nunca se montaba en ninguna
+              pagina (ver auditoria); va aqui en vez de una pestaña propia del nav. */}
+          <div className="pt-2 border-t border-slate-800 h-80 flex flex-col shrink-0">
+            <h4 className="font-semibold text-slate-200 text-xs mb-2">Pedidos</h4>
+            <div className="flex-1 min-h-0">
+              <OrderListContainer />
+            </div>
           </div>
         </aside>
       </div>

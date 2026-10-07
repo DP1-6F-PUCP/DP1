@@ -6,13 +6,11 @@ import com.paqrap.dominio.CalculadorDistancia;
 import com.paqrap.dominio.Ciudad;
 import com.paqrap.dominio.ConfiguracionOperacion;
 import com.paqrap.dominio.ContextoProblema;
-import com.paqrap.dominio.Nodo;
 import com.paqrap.dominio.ParadaPlanificada;
 import com.paqrap.dominio.Ruta;
 import com.paqrap.dominio.UnidadTransporte;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -146,7 +144,7 @@ public final class VerificadorRestricciones {
             if (ruta.getSecuenciaParadas().isEmpty()) {
                 continue;
             }
-            Almacen almacen = almacenMasCercano(almacenes, ruta.getUnidadTransporte().getPosicion());
+            Almacen almacen = Almacen.masCercano(almacenes, ruta.getUnidadTransporte().getPosicion());
             if (almacen != null) {
                 demandaPorAlmacen.merge(almacen, ruta.cargaTotal(), Integer::sum);
             }
@@ -210,7 +208,7 @@ public final class VerificadorRestricciones {
             if (ruta.getSecuenciaParadas().isEmpty()) {
                 continue;
             }
-            Almacen almacen = almacenMasCercano(almacenes, ruta.getUnidadTransporte().getPosicion());
+            Almacen almacen = Almacen.masCercano(almacenes, ruta.getUnidadTransporte().getPosicion());
             if (almacen != null) {
                 demandaPorAlmacen.merge(almacen, ruta.cargaTotal(), Integer::sum);
             }
@@ -218,12 +216,5 @@ public final class VerificadorRestricciones {
         for (Map.Entry<Almacen, Integer> entrada : demandaPorAlmacen.entrySet()) {
             entrada.getKey().descontarStock(entrada.getValue(), instante);
         }
-    }
-
-    private static Almacen almacenMasCercano(List<Almacen> almacenes, Nodo desde) {
-        return almacenes.stream()
-                .min(Comparator.comparingInt(
-                        a -> Math.abs(a.getPosicion().x() - desde.x()) + Math.abs(a.getPosicion().y() - desde.y())))
-                .orElse(null);
     }
 }

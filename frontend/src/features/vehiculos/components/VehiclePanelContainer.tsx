@@ -3,8 +3,9 @@ import { useVehicles } from '../hooks/useVehicles';
 import { useMapStore } from '../../../store/mapStore';
 import { Vehicle, BreakdownType } from '../../../types';
 import { StatusBadge } from '../../../components/StatusBadge';
+import { BreakdownModal } from '../../../components/BreakdownModal';
 import { useToast } from '../../../components/ToastProvider';
-import { Car, Bike, Search, AlertTriangle, BatteryCharging, Package, MapPin } from 'lucide-react';
+import { Car, Bike, Search, AlertTriangle, MapPin } from 'lucide-react';
 
 export const VehiclePanelContainer: React.FC = () => {
   const { vehicles, reportBreakdown, isReportingBreakdown } = useVehicles();
@@ -15,7 +16,6 @@ export const VehiclePanelContainer: React.FC = () => {
   const [filterType, setFilterType] = useState<'all' | 'car' | 'motorcycle' | 'bicycle'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
-  const [breakdownType, setBreakdownType] = useState<BreakdownType>(1);
 
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId) || null;
 
@@ -23,21 +23,16 @@ export const VehiclePanelContainer: React.FC = () => {
     setSelectedVehicleId(vehicle.id);
   };
 
-  const handleReportBreakdown = () => {
-    if (!selectedVehicle) return;
+  const handleConfirmBreakdown = (vehicleId: string, type: BreakdownType, reason: string) => {
     reportBreakdown(
-      {
-        vehicleId: selectedVehicle.id,
-        type: breakdownType,
-        reason: `Avería Tipo ${breakdownType} reportada manualmente`,
-      },
+      { vehicleId, type, reason },
       {
         onSuccess: () => {
           setIsBreakdownModalOpen(false);
           addToast({
             type: 'warning',
-            title: `Avería Tipo ${breakdownType} inyectada`,
-            description: `Unidad ${selectedVehicle.code} inmovilizada. Se activó plan de contingencia.`,
+            title: `Avería Tipo ${type} programada`,
+            description: `Se aplicará sobre ${vehicleId} en el próximo lote de planificación, no de inmediato -- puede tardar unos minutos reales.`,
           });
         },
         onError: (err) => {
@@ -176,82 +171,20 @@ export const VehiclePanelContainer: React.FC = () => {
         })}
       </div>
 
-      {/* Modal Inyección de Avería */}
-      {isBreakdownModalOpen && selectedVehicle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-5 shadow-2xl text-slate-100 space-y-4">
-            <div className="flex items-center gap-2 text-rose-400 border-b border-slate-800 pb-3">
-              <AlertTriangle className="h-5 w-5" />
-              <h4 className="font-bold text-sm text-white">
-                Inyectar Avería a {selectedVehicle.code}
-              </h4>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <p className="text-slate-300">
-                Seleccione el tipo normativo según lineamientos de operación:
-              </p>
-              <div className="space-y-2">
-                {[
-                  {
-                    type: 1 as BreakdownType,
-                    title: 'Tipo 1 (Menor)',
-                    desc: 'No disponible por 2 horas. Solución in situ (neumático).',
-                  },
-                  {
-                    type: 2 as BreakdownType,
-                    title: 'Tipo 2 (Intermedia)',
-                    desc: 'No disponible hasta fin del siguiente turno. Permanece máx 4h y traslado a Central.',
-                  },
-                  {
-                    type: 3 as BreakdownType,
-                    title: 'Tipo 3 (Mayor)',
-                    desc: '≥ 2 días de inmovilización. Retorna en turno 15:00-23:00.',
-                  },
-                ].map((opt) => (
-                  <label
-                    key={opt.type}
-                    className={`block p-2.5 rounded-xl border cursor-pointer transition-all ${
-                      breakdownType === opt.type
-                        ? 'border-rose-500 bg-rose-500/10 text-white'
-                        : 'border-slate-800 bg-slate-950/40 text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="breakdownType"
-                        checked={breakdownType === opt.type}
-                        onChange={() => setBreakdownType(opt.type)}
-                        className="accent-rose-500"
-                      />
-                      <span className="font-bold">{opt.title}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 pl-5 mt-0.5">{opt.desc}</p>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsBreakdownModalOpen(false)}
-                className="py-1.5 px-3 rounded-lg border border-slate-700 bg-slate-800 text-xs font-medium text-slate-300 hover:bg-slate-700"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={isReportingBreakdown}
-                onClick={handleReportBreakdown}
-                className="btn-danger py-1.5 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5"
-              >
-                Confirmar Avería
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Modal Inyección de Avería -- un solo componente reusable, ya no una copia inline (ver
+          auditoria de duplicacion: BreakdownModal.tsx estaba completo y nunca se usaba). Se le
+          pasa solo el vehiculo ya seleccionado para que su propio selector quede acotado a el. */}
+      <BreakdownModal
+        isOpen={isBreakdownModalOpen && Boolean(selectedVehicle)}
+        onClose={() => setIsBreakdownModalOpen(false)}
+        vehicles={selectedVehicle ? [selectedVehicle] : []}
+        onConfirmBreakdown={handleConfirmBreakdown}
+        isDarkTheme={true}
+      />
+      {isReportingBreakdown && (
+        <span className="sr-only" role="status">
+          Enviando solicitud de avería...
+        </span>
       )}
     </div>
   );

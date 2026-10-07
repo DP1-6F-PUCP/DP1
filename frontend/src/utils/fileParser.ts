@@ -6,7 +6,7 @@ import {
   PreventiveMaintenanceRecord,
   MaintenanceFileResult,
 } from '../types';
-import { GRID_HEIGHT_KM, GRID_WIDTH_KM, INITIAL_WAREHOUSES } from './manhattan';
+import { GRID_HEIGHT_KM, GRID_WIDTH_KM } from './manhattan';
 
 export interface BlockedFileSummary {
   fileName: string;
@@ -154,7 +154,7 @@ export function parseBlockedStreetsFile(
 export function parseOrdersFile(
   content: string,
   fileName: string = 'ventas202609',
-  warehouses: Warehouse[] = INITIAL_WAREHOUSES
+  warehouses: Warehouse[] = []
 ): { orders: Order[]; summary: OrdersFileSummary } {
   const lines = content.split(/\r?\n/);
   const orders: Order[] = [];
@@ -274,9 +274,29 @@ export function parseOrdersFile(
   };
 }
 
+// Sin lista de almacenes real (p.ej. todavia no se cargo GET /api/configuracion), no hay un
+// almacen de origen valido que inventar -- se devuelve un marcador neutro en vez de una
+// coordenada de negocio hardcodeada.
+const SIN_ALMACEN: Warehouse = {
+  id: 'desconocido',
+  name: 'Almacén desconocido',
+  shortName: '?',
+  code: 'N/A',
+  coords: { x: 0, y: 0 },
+  capacity: 0,
+  currentStock: 0,
+  inTransit: 0,
+  dispatchRatePerHour: 0,
+  occupancyPct: 0,
+  color: '#64748b',
+};
+
 function findClosestWarehouse(dest: Point, warehouses?: Warehouse[]): Warehouse {
-  const list = warehouses && warehouses.length > 0 ? warehouses : INITIAL_WAREHOUSES;
-  let closest = list[0] || INITIAL_WAREHOUSES[0];
+  const list = warehouses && warehouses.length > 0 ? warehouses : [];
+  if (list.length === 0) {
+    return SIN_ALMACEN;
+  }
+  let closest = list[0];
   let minDist = Infinity;
   for (const wh of list) {
     if (!wh || !wh.coords) continue;
@@ -286,7 +306,7 @@ function findClosestWarehouse(dest: Point, warehouses?: Warehouse[]): Warehouse 
       closest = wh;
     }
   }
-  return closest || INITIAL_WAREHOUSES[0];
+  return closest;
 }
 
 /**

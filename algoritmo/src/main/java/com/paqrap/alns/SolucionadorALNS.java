@@ -197,7 +197,8 @@ public class SolucionadorALNS implements PlanificadorRutas {
             if (!unidad.estaDisponibleParaRuta(contexto.marcaTiempoActual())) {
                 continue;
             }
-            Ruta ruta = new Ruta(unidad.getIdUnidad() + "-r1", contexto.marcaTiempoActual(), unidad);
+            Ruta ruta = new Ruta(Ruta.generarId(unidad.getIdUnidad(), contexto.marcaTiempoActual(), "r1"),
+                    contexto.marcaTiempoActual(), unidad);
             EvaluadorCostos.recalcularRuta(ruta, contexto.ciudad(), contexto.bloqueos(), contexto.configuracionOperacion());
             sol.getRutas().add(ruta);
         }

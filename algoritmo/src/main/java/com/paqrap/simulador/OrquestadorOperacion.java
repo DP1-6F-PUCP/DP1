@@ -62,6 +62,8 @@ import java.util.concurrent.TimeUnit;
 public class OrquestadorOperacion {
 
     private static final Logger log = LoggerFactory.getLogger(OrquestadorOperacion.class);
+    /** Referencia fija (medianoche) para medir ciclos de recarga; ver {@link #recargarAlmacenesSiCorrespondeMedianoche}. */
+    private static final LocalDateTime EPOCA_RECARGA = LocalDateTime.of(2000, 1, 1, 0, 0);
 
     private final float sa;
     private final float ta;
@@ -177,14 +179,33 @@ public class OrquestadorOperacion {
         }
         this.tipoEscenario = tipoEscenario;
         this.ejecucionActual = new EjecucionEscenario(UUID.randomUUID().toString(), tipoEscenario,
-                contextoProblema.marcaTiempoActual());
+                contextoProblema.marcaTiempoActual(), sa, k);
         this.ejecucionActual.iniciar();
         this.detenido = false;
 
         this.programador = Executors.newSingleThreadScheduledExecutor();
         long periodoMs = Math.round(sa * 60_000.0);
-        programador.scheduleAtFixedRate(this::ejecutarSiguienteLote, 0, periodoMs, TimeUnit.MILLISECONDS);
+        programador.scheduleAtFixedRate(this::ejecutarLoteProtegido, 0, periodoMs, TimeUnit.MILLISECONDS);
         return ejecucionActual;
+    }
+
+    /**
+     * Bug real corregido (confirmado en vivo: el reloj simulado se congelaba sin ningún rastro en
+     * los logs). {@code ScheduledExecutorService.scheduleAtFixedRate} cancela TODAS las
+     * ejecuciones futuras de una tarea periódica si esta lanza una excepción no capturada -- en
+     * silencio, sin loguear nada, el {@code Future} simplemente queda cancelado y nadie lo
+     * observa. Un solo lote con un dato borde (p. ej. un pedido con coordenadas fuera de la
+     * ciudad) mataba la ejecución completa para siempre, indistinguible desde fuera de una
+     * ejecución sana pero sin pedidos que repartir. Envolver aquí evita que un lote fallido tumbe
+     * el ciclo: se loguea el error y el siguiente lote programado sigue intentando con normalidad.
+     */
+    private void ejecutarLoteProtegido() {
+        try {
+            ejecutarSiguienteLote();
+        } catch (Exception ex) {
+            log.error("Lote de planificación falló en la ejecución {}; el ciclo periódico continúa en el próximo lote",
+                    ejecucionActual != null ? ejecucionActual.getIdEjecucion() : "?", ex);
+        }
     }
 
     /**
@@ -379,7 +400,7 @@ public class OrquestadorOperacion {
         // nunca se activaba en la práctica (bug real, confirmado: esta línea faltaba por completo
         // en todo el código antes de este fix).
         for (Ruta ruta : rutasNuevas) {
-            ruta.getUnidadTransporte().getRutas().add(ruta);
+            ruta.getUnidadTransporte().agregarRuta(ruta);
         }
         double segundosComputo = (System.currentTimeMillis() - inicioMs) / 1000.0;
         if (segundosComputo > tiempoMaximoComputoSegundos) {
@@ -489,26 +510,29 @@ public class OrquestadorOperacion {
     }
 
     /**
-     * Recarga los almacenes intermedios una vez por cada medianoche cruzada entre {@code desde} y
-     * {@code hasta} -- no una sola vez sin importar cuántos días saltó el lote. Con
-     * {@code AlmacenIntermedio.recargar()} siendo idempotente (reset directo a capacidadMaxima) el
-     * resultado final da igual hoy, pero esto queda semánticamente correcto ante un {@code k} lo
-     * bastante agresivo como para que un solo lote cruce varios días -- relevante sobre todo para
+     * Recarga cada almacén intermedio una vez por cada límite de su propia
+     * {@code frecuenciaRecargaHoras} cruzado entre {@code desde} y {@code hasta} -- no una sola vez
+     * sin importar cuántos límites saltó el lote. Con {@code AlmacenIntermedio.recargar()} siendo
+     * idempotente (reset directo a capacidadMaxima) el resultado final da igual para un lote que
+     * cruza un solo límite, pero esto queda semánticamente correcto ante un {@code k} lo bastante
+     * agresivo como para que un solo lote cruce varios -- relevante sobre todo para
      * {@code COLAPSO_LOGISTICO}, cuyo K=75 es solo el valor ilustrativo del profesor, no uno
      * calibrado, y ese escenario en particular incentiva acelerar mucho el reloj para no esperar
      * días reales de prueba.
+     *
+     * <p>Los límites se miden desde una referencia fija ({@link #EPOCA_RECARGA}, medianoche) en vez
+     * de llevar un campo de "última recarga" por almacén: con la frecuencia default de 24h esto
+     * reproduce exactamente el cruce de medianoche de antes, y generaliza a cualquier frecuencia
+     * sin estado mutable adicional.
      */
     private void recargarAlmacenesSiCorrespondeMedianoche(LocalDateTime desde, LocalDateTime hasta) {
-        LocalDate diaDesde = desde.toLocalDate();
-        LocalDate diaHasta = hasta.toLocalDate();
-        long diasCruzados = java.time.temporal.ChronoUnit.DAYS.between(diaDesde, diaHasta);
-        if (diasCruzados <= 0) {
-            return;
-        }
         for (var almacen : contextoProblema.almacenes()) {
             if (almacen instanceof AlmacenIntermedio intermedio) {
-                for (long i = 0; i < diasCruzados; i++) {
-                    intermedio.recargar(diaDesde.plusDays(i + 1).atStartOfDay());
+                long minutosPorCiclo = (long) (intermedio.getFrecuenciaRecargaHoras() * 60);
+                long cicloDesde = Math.floorDiv(java.time.Duration.between(EPOCA_RECARGA, desde).toMinutes(), minutosPorCiclo);
+                long cicloHasta = Math.floorDiv(java.time.Duration.between(EPOCA_RECARGA, hasta).toMinutes(), minutosPorCiclo);
+                for (long ciclo = cicloDesde + 1; ciclo <= cicloHasta; ciclo++) {
+                    intermedio.recargar(EPOCA_RECARGA.plusMinutes(ciclo * minutosPorCiclo));
                 }
             }
         }
@@ -554,10 +578,15 @@ public class OrquestadorOperacion {
 
     /**
      * Aplica las solicitudes cuyo {@code tiempoSimuladoProgramado} ya se alcanzó. Implementados:
-     * {@code AVERIA} y {@code CAMBIO_VELOCIDAD} (los dos casos con regla de negocio confirmada —
-     * averías registradas en caliente, cambio de velocidad por tipo de vehículo). El resto de
-     * {@link TipoSolicitud} quedan como extensión pendiente, documentada explícitamente en vez de
-     * ignorada en silencio.
+     * {@code AVERIA}, {@code CAMBIO_VELOCIDAD}, {@code CAMBIO_CAPACIDAD},
+     * {@code CAMBIO_CAPACIDAD_ALMACEN}, {@code CAMBIO_POSICION_ALMACEN},
+     * {@code CAMBIO_CANTIDAD_VEHICULOS}, {@code CAMBIO_FRECUENCIA_RECARGA} y
+     * {@code CAMBIO_CONFIGURACION_OPERACION}. {@code CAMBIO_CONFIGURACION_CIUDAD} se rechaza antes
+     * de llegar aquí (ver {@code ServicioPlanificacionImpl.programarSolicitud}): cambiar las
+     * dimensiones de la ciudad en caliente deja posiciones ya existentes (vehículos, almacenes,
+     * pedidos) fuera de la grilla nueva, y {@code CalculadorDistancia} lanza
+     * {@code IllegalStateException} para TODO cálculo de ruta que las toque -- una caída sistémica,
+     * no un error localizado. Esta configuración solo puede fijarse antes de iniciar la ejecución.
      */
     private void aplicarSolicitudesVencidas() {
         LocalDateTime ahora = contextoProblema.marcaTiempoActual();
@@ -566,10 +595,30 @@ public class OrquestadorOperacion {
                 .toList();
 
         for (SolicitudOperacion solicitud : vencidas) {
-            switch (solicitud.tipoSolicitud()) {
-                case AVERIA -> aplicarAveria(solicitud);
-                case CAMBIO_VELOCIDAD -> aplicarCambioVelocidad(solicitud);
-                default -> log.warn("Tipo de solicitud aún no implementado: {}", solicitud.tipoSolicitud());
+            // Bug real corregido (confirmado en vivo): una solicitud mal formada (p. ej.
+            // valorNuevo que no matchea el enum esperado) lanzaba una excepcion que: (a) nunca
+            // llegaba a la linea de abajo que la retira de solicitudesPendientes, asi que se
+            // reintentaba en CADA lote futuro para siempre, y (b) escapaba de este metodo y de
+            // ejecutarSiguienteLote() entera, abortando el lote ANTES de llegar al codigo que
+            // avanza el reloj simulado -- una sola solicitud rota dejaba el reloj congelado para
+            // siempre, no solo descartaba esa solicitud. Aislar el fallo por solicitud (no por
+            // lote entero, ver ejecutarLoteProtegido) y retirarla de la cola SIEMPRE, se aplicara
+            // o no, es lo que evita ambos efectos.
+            try {
+                switch (solicitud.tipoSolicitud()) {
+                    case AVERIA -> aplicarAveria(solicitud);
+                    case CAMBIO_VELOCIDAD -> aplicarCambioVelocidad(solicitud);
+                    case CAMBIO_CAPACIDAD -> aplicarCambioCapacidad(solicitud);
+                    case CAMBIO_CAPACIDAD_ALMACEN -> aplicarCambioCapacidadAlmacen(solicitud);
+                    case CAMBIO_POSICION_ALMACEN -> aplicarCambioPosicionAlmacen(solicitud);
+                    case CAMBIO_CANTIDAD_VEHICULOS -> aplicarCambioCantidadVehiculos(solicitud);
+                    case CAMBIO_FRECUENCIA_RECARGA -> aplicarCambioFrecuenciaRecarga(solicitud);
+                    case CAMBIO_CONFIGURACION_OPERACION -> aplicarCambioConfiguracionOperacion(solicitud);
+                    default -> log.warn("Tipo de solicitud aún no implementado: {}", solicitud.tipoSolicitud());
+                }
+            } catch (Exception ex) {
+                log.error("Solicitud {} sobre {} descartada por error al aplicarla: {}", solicitud.tipoSolicitud(),
+                        solicitud.entidadObjetivo(), ex.getMessage());
             }
             solicitudesPendientes.remove(solicitud);
         }
@@ -659,5 +708,163 @@ public class OrquestadorOperacion {
                 .map(UnidadTransporte::getTipoVehiculo)
                 .filter(tv -> tv.getId().equalsIgnoreCase(solicitud.entidadObjetivo()))
                 .forEach(tv -> tv.setVelocidadKmH(nuevaVelocidad));
+    }
+
+    /** {@code entidadObjetivo}: id de {@link TipoVehiculo} (p. ej. "AUTO"). {@code valorNuevo}: nueva capacidad entera. */
+    private void aplicarCambioCapacidad(SolicitudOperacion solicitud) {
+        int nuevaCapacidad = Integer.parseInt(solicitud.valorNuevo());
+        contextoProblema.vehiculos().stream()
+                .map(UnidadTransporte::getTipoVehiculo)
+                .filter(tv -> tv.getId().equalsIgnoreCase(solicitud.entidadObjetivo()))
+                .forEach(tv -> tv.setCapacidad(nuevaCapacidad));
+    }
+
+    /**
+     * {@code entidadObjetivo}: nombre del almacén (p. ej. "Nor-Oeste"; no aplica a "Central", que
+     * tiene stock infinito y no tiene capacidad máxima que ajustar). {@code valorNuevo}: nueva
+     * capacidad máxima entera.
+     */
+    private void aplicarCambioCapacidadAlmacen(SolicitudOperacion solicitud) {
+        int nuevaCapacidad = Integer.parseInt(solicitud.valorNuevo());
+        contextoProblema.almacenes().stream()
+                .filter(AlmacenIntermedio.class::isInstance)
+                .map(AlmacenIntermedio.class::cast)
+                .filter(a -> a.getNombre().equalsIgnoreCase(solicitud.entidadObjetivo()))
+                .forEach(a -> a.setCapacidadMaxima(nuevaCapacidad));
+    }
+
+    /**
+     * {@code entidadObjetivo}: nombre del almacén ("Central" o el nombre de un intermedio).
+     * {@code valorNuevo}: nueva posición en formato {@code "x,y"}. Se descarta si la posición cae
+     * fuera de la grilla de {@code Ciudad}: lo contrario deja un almacén en un nodo inválido y
+     * {@code CalculadorDistancia} lanza {@code IllegalStateException} para toda ruta que lo toque
+     * en el siguiente lote -- mismo riesgo sistémico que {@code CAMBIO_CONFIGURACION_CIUDAD}, solo
+     * que localizado a un almacén en vez de a toda la ciudad.
+     */
+    private void aplicarCambioPosicionAlmacen(SolicitudOperacion solicitud) {
+        String[] partes = solicitud.valorNuevo().split(",");
+        Nodo nuevaPosicion = new Nodo(Integer.parseInt(partes[0].trim()), Integer.parseInt(partes[1].trim()));
+        if (!contextoProblema.ciudad().esNodoValido(nuevaPosicion)) {
+            log.warn("Posición {} fuera de los límites de la ciudad; se descarta el cambio de posición del almacén {}",
+                    nuevaPosicion, solicitud.entidadObjetivo());
+            return;
+        }
+        contextoProblema.almacenes().stream()
+                .filter(a -> nombreAlmacen(a).equalsIgnoreCase(solicitud.entidadObjetivo()))
+                .forEach(a -> a.setPosicion(nuevaPosicion));
+    }
+
+    /** Mismo criterio que {@code EnsambladorRespuestas.aAlmacenDTO}: el central no tiene nombre propio. */
+    private String nombreAlmacen(Almacen almacen) {
+        return almacen instanceof AlmacenIntermedio intermedio ? intermedio.getNombre() : "Central";
+    }
+
+    /**
+     * {@code entidadObjetivo}: id de {@link TipoVehiculo} (p. ej. "MOTO"). {@code valorNuevo}:
+     * cantidad TOTAL deseada de unidades de ese tipo (no un delta). Si aumenta, las unidades
+     * nuevas arrancan en la posición de la primera unidad existente de ese tipo, disponibles
+     * desde ya; si disminuye, se retiran primero las unidades ya disponibles (nunca una que esté
+     * {@code EN_RUTA}, para no abandonar una entrega a mitad de camino) -- si no hay suficientes
+     * disponibles para retirar, se retira lo que se pueda y se deja un warning.
+     */
+    private void aplicarCambioCantidadVehiculos(SolicitudOperacion solicitud) {
+        int cantidadDeseada = Integer.parseInt(solicitud.valorNuevo());
+        List<UnidadTransporte> actuales = contextoProblema.vehiculos();
+        List<UnidadTransporte> delTipo = actuales.stream()
+                .filter(u -> u.getTipoVehiculo().getId().equalsIgnoreCase(solicitud.entidadObjetivo()))
+                .toList();
+        if (delTipo.isEmpty()) {
+            log.warn("No existe flota del tipo {} para ajustar su cantidad", solicitud.entidadObjetivo());
+            return;
+        }
+
+        TipoVehiculo tipo = delTipo.get(0).getTipoVehiculo();
+        List<UnidadTransporte> nuevaLista = new ArrayList<>(actuales);
+        int diferencia = cantidadDeseada - delTipo.size();
+
+        if (diferencia > 0) {
+            Nodo posicionInicial = delTipo.get(0).getPosicion();
+            int siguienteCorrelativo = delTipo.size() + 1;
+            for (int i = 0; i < diferencia; i++) {
+                String nuevoId = tipo.getId() + "-" + (siguienteCorrelativo + i);
+                nuevaLista.add(new UnidadTransporte(nuevoId, tipo, posicionInicial, contextoProblema.marcaTiempoActual()));
+            }
+        } else if (diferencia < 0) {
+            List<UnidadTransporte> aRetirar = delTipo.stream()
+                    .filter(u -> u.estaDisponibleParaRuta(contextoProblema.marcaTiempoActual()))
+                    .limit(-diferencia)
+                    .toList();
+            if (aRetirar.size() < -diferencia) {
+                log.warn("Se pidieron retirar {} unidades de tipo {}, pero solo {} están disponibles sin abandonar una entrega",
+                        -diferencia, solicitud.entidadObjetivo(), aRetirar.size());
+            }
+            nuevaLista.removeAll(aRetirar);
+        }
+
+        contextoProblema = new ContextoProblema(contextoProblema.marcaTiempoActual(), contextoProblema.pedidos(),
+                contextoProblema.bloqueos(), contextoProblema.mantenimientos(), contextoProblema.almacenes(),
+                nuevaLista, contextoProblema.ciudad(), contextoProblema.configuracionOperacion());
+    }
+
+    /**
+     * {@code entidadObjetivo}: nombre de almacén intermedio (no aplica al Central, que no tiene
+     * recarga). {@code valorNuevo}: nueva frecuencia de recarga en horas.
+     */
+    private void aplicarCambioFrecuenciaRecarga(SolicitudOperacion solicitud) {
+        double nuevaFrecuencia = Double.parseDouble(solicitud.valorNuevo());
+        contextoProblema.almacenes().stream()
+                .filter(AlmacenIntermedio.class::isInstance)
+                .map(AlmacenIntermedio.class::cast)
+                .filter(a -> a.getNombre().equalsIgnoreCase(solicitud.entidadObjetivo()))
+                .forEach(a -> a.setFrecuenciaRecargaHoras(nuevaFrecuencia));
+    }
+
+    /**
+     * {@code entidadObjetivo}: nombre de un campo de {@link com.paqrap.dominio.ConfiguracionOperacion}
+     * (p. ej. "duracionTurnoHoras"). {@code valorNuevo}: nuevo valor numérico. Afecta solo
+     * restricciones evaluadas por {@code VerificadorRestricciones} al planificar -- a diferencia de
+     * {@code CAMBIO_CONFIGURACION_CIUDAD}, no invalida posiciones ya existentes ni rompe
+     * {@code CalculadorDistancia}, por eso sí se permite en caliente.
+     */
+    private void aplicarCambioConfiguracionOperacion(SolicitudOperacion solicitud) {
+        var actual = contextoProblema.configuracionOperacion();
+        double valor = Double.parseDouble(solicitud.valorNuevo());
+        var nueva = switch (solicitud.entidadObjetivo()) {
+            case "duracionTurnoHoras" -> new com.paqrap.dominio.ConfiguracionOperacion(valor,
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(),
+                    actual.maxParadasPorRuta());
+            case "horaInicioTurno" -> new com.paqrap.dominio.ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    valor, actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(),
+                    actual.maxParadasPorRuta());
+            case "tiempoServicioClienteHoras" -> new com.paqrap.dominio.ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), valor, actual.duracionRefrigerioHoras(), actual.margenRefrigerioHoras(),
+                    actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(), actual.maxParadasPorRuta());
+            case "duracionRefrigerioHoras" -> new com.paqrap.dominio.ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), valor, actual.margenRefrigerioHoras(),
+                    actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(), actual.maxParadasPorRuta());
+            case "margenRefrigerioHoras" -> new com.paqrap.dominio.ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    valor, actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(), actual.maxParadasPorRuta());
+            case "tiempoCargaAlmacenHoras" -> new com.paqrap.dominio.ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), valor, actual.tiempoTrasvaseHoras(), actual.maxParadasPorRuta());
+            case "tiempoTrasvaseHoras" -> new com.paqrap.dominio.ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), valor, actual.maxParadasPorRuta());
+            case "maxParadasPorRuta" -> new com.paqrap.dominio.ConfiguracionOperacion(actual.duracionTurnoHoras(),
+                    actual.horaInicioTurno(), actual.tiempoServicioClienteHoras(), actual.duracionRefrigerioHoras(),
+                    actual.margenRefrigerioHoras(), actual.tiempoCargaAlmacenHoras(), actual.tiempoTrasvaseHoras(),
+                    (int) valor);
+            default -> null;
+        };
+        if (nueva == null) {
+            log.warn("Campo de configuración de operación desconocido: {}", solicitud.entidadObjetivo());
+            return;
+        }
+        contextoProblema = new ContextoProblema(contextoProblema.marcaTiempoActual(), contextoProblema.pedidos(),
+                contextoProblema.bloqueos(), contextoProblema.mantenimientos(), contextoProblema.almacenes(),
+                contextoProblema.vehiculos(), contextoProblema.ciudad(), nueva);
     }
 }

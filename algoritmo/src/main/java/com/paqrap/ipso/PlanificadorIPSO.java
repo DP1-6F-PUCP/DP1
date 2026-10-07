@@ -74,7 +74,7 @@ public class PlanificadorIPSO implements Planificador {
             ResultadoIPSO resultado = ipso.ejecutar();
             sumaIteracionMejora += ipso.getUltimaIteracionMejora();
 
-            Ruta ruta = new Ruta(lote.unidad.getIdUnidad() + "-R" + (++contadorRutas),
+            Ruta ruta = new Ruta(Ruta.generarId(lote.unidad.getIdUnidad(), contexto.marcaTiempoActual(), "R" + (++contadorRutas)),
                     contexto.marcaTiempoActual(), lote.unidad);
             ruta.setCostoEstimado(resultado.costoTotal());
             ruta.setDuracionEstimada(resultado.duracionTotalHoras());

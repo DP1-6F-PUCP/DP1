@@ -12,6 +12,15 @@ public class UnidadTransporte {
     private Nodo posicion;
     private final TipoVehiculo tipoVehiculo;
     private Averia averiaActual;
+    // rutas nunca se recorta -- acumula TODO el historial de despachos de la unidad durante la
+    // vida del escenario (confirmado: no hay ningun remove()/clear() sobre ella en todo el
+    // codigo). Por eso NO puede ser CopyOnWriteArrayList (cada add() copiaria el arreglo entero,
+    // O(n) por lote y O(n^2) acumulado a lo largo de un escenario largo -- probado: causo un
+    // colapso real de rendimiento, de milisegundos a minutos por lote, tras ~1700 lotes en una
+    // corrida de 17 dias simulados). En su lugar, acceso encapsulado y sincronizado: mutacion
+    // O(1) vía agregarRuta(), lectura vía getRutas()/rutaEnEjecucion() sincronizada sobre copia
+    // defensiva -- evita el ConcurrentModificationException original sin pagar el costo de
+    // CopyOnWriteArrayList.
     private final List<Ruta> rutas = new ArrayList<>();
     private LocalDateTime tiempoInicioTurnoActual;
     private LocalDateTime horaRefrigerioProgramada;
@@ -58,8 +67,14 @@ public class UnidadTransporte {
         this.averiaActual = averiaActual;
     }
 
-    public List<Ruta> getRutas() {
-        return rutas;
+    /** Copia defensiva del historial de rutas -- ver nota sobre {@code rutas} en los campos. */
+    public synchronized List<Ruta> getRutas() {
+        return new ArrayList<>(rutas);
+    }
+
+    /** Único punto de escritura de {@code rutas}; reemplaza el antiguo {@code getRutas().add(...)}. */
+    public synchronized void agregarRuta(Ruta ruta) {
+        rutas.add(ruta);
     }
 
     public LocalDateTime getTiempoInicioTurnoActual() {
@@ -125,11 +140,22 @@ public class UnidadTransporte {
      *
      * @return la {@link Ruta} con estado {@code EN_EJECUCION}, o {@code null} si no hay ninguna
      */
-    public Ruta rutaEnEjecucion() {
-        return rutas.stream()
-                .filter(ruta -> ruta.getEstado() == EstadoRuta.EN_EJECUCION)
-                .findFirst()
-                .orElse(null);
+    /**
+     * O(1), no O(n) sobre todo el historial: una ruta nueva solo se agrega cuando la unidad está
+     * {@link #estaDisponibleParaRuta}, es decir, cuando la anterior (si existía) ya quedó en
+     * estado terminal -- así que la única ruta que puede seguir {@code EN_EJECUCION} es siempre la
+     * última agregada. Antes de este fix, esta función escaneaba TODO el historial acumulado de
+     * la unidad en cada llamada (una vez por vehículo por lote) -- confirmado como la causa real
+     * de un colapso de rendimiento (de milisegundos a minutos por lote) en una corrida larga,
+     * donde el historial de rutas de un vehículo activo crece sin límite durante la vida del
+     * escenario.
+     */
+    public synchronized Ruta rutaEnEjecucion() {
+        if (rutas.isEmpty()) {
+            return null;
+        }
+        Ruta ultima = rutas.get(rutas.size() - 1);
+        return ultima.getEstado() == EstadoRuta.EN_EJECUCION ? ultima : null;
     }
 
     @Override

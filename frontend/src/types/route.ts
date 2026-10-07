@@ -28,6 +28,8 @@ export interface Warehouse {
   currentStock: number;
   inTransit: number;
   dispatchRatePerHour: number;
+  /** AlmacenDTO.nivelOcupacion tal cual la calcula el backend (0 para el Central, sin capacidad máxima). */
+  occupancyPct: number;
   color: string;
 }
 

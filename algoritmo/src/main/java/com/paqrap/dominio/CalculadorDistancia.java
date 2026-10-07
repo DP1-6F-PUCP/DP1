@@ -66,22 +66,42 @@ public final class CalculadorDistancia {
         if (vigentes.isEmpty()) {
             return caminoManhattan(ciudad, origen, destino);
         }
+        // Regla dura del curso (confirmada en el CSV oficial de preguntas y respuestas, pregunta
+        // 7): "Un nodo bloqueado no se puede atravesar y no se permite girar a los lados. Por
+        // ello, si una unidad de transporte llega a un nodo bloqueado, debe regresar por el mismo
+        // lugar por el que llegó (vuelta en U)." Antes, interfiereCon() solo bloqueaba TRAMOS
+        // (aristas) especificos -- un vehiculo podia llegar a la esquina de un bloqueo en L por un
+        // tramo libre y girar hacia OTRO tramo libre que comparte ese mismo nodo, algo que la
+        // regla prohibe explicitamente. nodosBloqueados excluye TODO nodo de la poligonal del
+        // bloqueo como punto de paso (salvo que sea el propio origen o destino de esta consulta,
+        // p. ej. un almacen reubicado justo ahi) -- asi ningun camino puede usarlo para girar.
+        Set<Nodo> nodosBloqueados = vigentes.stream()
+                .flatMap(b -> b.getSecuenciaNodos().stream())
+                .filter(n -> !n.equals(origen) && !n.equals(destino))
+                .collect(java.util.stream.Collectors.toSet());
+
         List<Nodo> candidato = caminoManhattan(ciudad, origen, destino);
-        if (caminoLibre(candidato, vigentes)) {
+        if (caminoLibre(candidato, vigentes, nodosBloqueados)) {
             return candidato;
         }
-        List<Nodo> caminoAEstrella = caminoPorAEstrella(ciudad, vigentes, origen, destino);
+        List<Nodo> caminoAEstrella = caminoPorAEstrella(ciudad, vigentes, nodosBloqueados, origen, destino);
         if (caminoAEstrella == null) {
             throw new IllegalStateException("No existe camino transitable entre " + origen + " y " + destino);
         }
         return caminoAEstrella;
     }
 
-    private static boolean caminoLibre(List<Nodo> camino, List<Bloqueo> vigentes) {
+    private static boolean caminoLibre(List<Nodo> camino, List<Bloqueo> vigentes, Set<Nodo> nodosBloqueados) {
         for (int i = 0; i < camino.size() - 1; i++) {
             Nodo actual = camino.get(i);
             Nodo siguiente = camino.get(i + 1);
             if (vigentes.stream().anyMatch(bloqueo -> bloqueo.interfiereCon(actual, siguiente))) {
+                return false;
+            }
+            // Nodo intermedio de la poligonal de un bloqueo: aunque este tramo puntual no coincida
+            // con interfiereCon, pasar POR ese nodo (para seguir derecho o girar) tampoco esta
+            // permitido -- solo esta permitido si es el origen/destino (ya excluidos del set).
+            if (nodosBloqueados.contains(siguiente)) {
                 return false;
             }
         }
@@ -110,7 +130,8 @@ public final class CalculadorDistancia {
     private record NodoConPrioridad(Nodo nodo, int f) {
     }
 
-    private static List<Nodo> caminoPorAEstrella(Ciudad ciudad, List<Bloqueo> vigentes, Nodo origen, Nodo destino) {
+    private static List<Nodo> caminoPorAEstrella(Ciudad ciudad, List<Bloqueo> vigentes, Set<Nodo> nodosBloqueados,
+            Nodo origen, Nodo destino) {
         int paso = ciudad.distanciaEntreNodos();
         int[][] direcciones = {{paso, 0}, {-paso, 0}, {0, paso}, {0, -paso}};
 
@@ -137,6 +158,11 @@ public final class CalculadorDistancia {
                 }
                 boolean tramoBloqueado = vigentes.stream().anyMatch(bloqueo -> bloqueo.interfiereCon(actual, vecino));
                 if (tramoBloqueado) {
+                    continue;
+                }
+                // Nodo de un bloqueo: no se permite pasar por el ni girar ahi (regla dura del
+                // curso, ver el comentario de caminoMasCorto) -- salvo que sea el destino mismo.
+                if (nodosBloqueados.contains(vecino) && !vecino.equals(destino)) {
                     continue;
                 }
                 int nuevoCosto = costoG.get(actual) + 1;

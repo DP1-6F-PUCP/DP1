@@ -1,17 +1,35 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, Link, useLocation } from 'react-router-dom';
-import { ProtectedRoute } from './ProtectedRoute';
-import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { RutasPage } from '../pages/RutasPage';
 import { SeguimientoPage } from '../pages/SeguimientoPage';
-import { useAuthStore } from '../store/authStore';
-import { LayoutDashboard, Route as RouteIcon, Navigation, LogOut, Truck } from 'lucide-react';
+import { LayoutDashboard, Route as RouteIcon, Navigation, Truck } from 'lucide-react';
+import { ToastProvider } from '../components/ToastProvider';
+import { LiveAnnouncer } from '../components/LiveAnnouncer';
+import { MapErrorBoundary } from '../components/map/MapErrorBoundary';
+import { RouteMap } from '../components/map/RouteMap';
+import { MapSlotContext } from '../contexts/MapSlotContext';
+import { SeleccionarEscenarioGate } from '../features/escenario/components/SeleccionarEscenarioGate';
+import { EjecucionDetenidaBanner } from '../features/escenario/components/EjecucionDetenidaBanner';
+import { EjecucionControls } from '../features/escenario/components/EjecucionControls';
+import { SimClock } from '../features/escenario/components/SimClock';
+import { NuevaSolicitudButton } from '../features/escenario/components/NuevaSolicitudButton';
+import { AlertasBell } from '../features/alertas/components/AlertasBell';
+import { ArchivosButton } from '../features/archivos/components/ArchivosButton';
+import { EventLogButton } from '../features/eventos/components/EventLogButton';
+import { useSimulationSocket } from '../hooks/useSimulationSocket';
+import { useSincronizarEjecucion } from '../hooks/useSincronizarEjecucion';
+import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
 
 const RootLayout: React.FC = () => {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
   const location = useLocation();
+  useSimulationSocket();
+  useSincronizarEjecucion();
+
+  // El mapa se monta UNA sola vez aqui (no en cada pagina); cada MapSlot lo reparenta (appendChild
+  // nativo, ver contexts/MapSlotContext.tsx) hacia donde la pagina activa lo necesite.
+  const mapHostRef = useRef<HTMLDivElement>(null);
+  const { warehouses, vehicles, blockedStreets, orders, routes } = useEstadoOperacion();
 
   const navLinks = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -20,6 +38,8 @@ const RootLayout: React.FC = () => {
   ];
 
   return (
+    <LiveAnnouncer>
+    <ToastProvider>
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0B111E] text-slate-100 font-sans">
       {/* Barra de Navegación Superior Centralizada */}
       <nav
@@ -62,46 +82,54 @@ const RootLayout: React.FC = () => {
           </div>
         </div>
 
-        {/* Info Usuario & Logout */}
-        <div className="flex items-center gap-3 text-xs">
-          {user && (
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-slate-200 font-medium leading-tight">{user.name}</span>
-              <span className="text-[10px] text-slate-400 leading-tight">{user.email}</span>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={logout}
-            aria-label="Cerrar sesión"
-            title="Cerrar sesión"
-            className="p-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+        <div className="flex items-center gap-3">
+          <SimClock />
+          <AlertasBell />
+          <EventLogButton />
+          <ArchivosButton />
+          <NuevaSolicitudButton />
+          <EjecucionControls />
         </div>
       </nav>
 
+      <EjecucionDetenidaBanner />
+
       {/* Contenido de la Ruta */}
       <main className="flex-1 flex overflow-hidden">
-        <Outlet />
+        <SeleccionarEscenarioGate>
+          <MapSlotContext.Provider value={mapHostRef}>
+            <Outlet />
+          </MapSlotContext.Provider>
+        </SeleccionarEscenarioGate>
       </main>
+
+      {/* Mapa persistente: una sola instancia de React/Leaflet para toda la sesión, SIEMPRE
+          montada aqui -- cada <MapSlot/> de la página activa la reparenta (appendChild nativo)
+          hacia donde la necesite. Navegar entre Dashboard/Rutas/Seguimiento ya no destruye y
+          reconstruye el mapa (ni pierde la animación en tiempo real): el nodo real nunca se
+          desmonta, solo cambia de padre en el DOM. */}
+      <div ref={mapHostRef} className="hidden w-full h-full">
+        <MapErrorBoundary fallbackTitle="Error en el Mapa">
+          <RouteMap
+            warehouses={warehouses}
+            vehicles={vehicles}
+            blockedStreets={blockedStreets}
+            orders={orders}
+            routes={routes}
+            isDarkTheme={true}
+          />
+        </MapErrorBoundary>
+      </div>
     </div>
+    </ToastProvider>
+    </LiveAnnouncer>
   );
 };
 
 export const router = createBrowserRouter([
   {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
     path: '/',
-    element: (
-      <ProtectedRoute>
-        <RootLayout />
-      </ProtectedRoute>
-    ),
+    element: <RootLayout />,
     children: [
       {
         index: true,

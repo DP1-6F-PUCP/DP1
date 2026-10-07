@@ -1,8 +1,8 @@
 package com.paqrap.dominio;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Orden de entrega de producto P hecha por un cliente, con su plazo comprometido. */
 public class Pedido {
@@ -15,7 +15,11 @@ public class Pedido {
     private final LocalDateTime fechaIngreso;
     private final LocalDateTime fechaLimite;
     private EstadoPedido estado;
-    private final List<ParadaPlanificada> entregasParciales = new ArrayList<>();
+    // CopyOnWriteArrayList: Ruta.marcarParadaCumplida la escribe desde el hilo del scheduler de
+    // OrquestadorOperacion mientras una consulta de estado concurrente puede leerla (vía
+    // cantidadEntregadaTotal/actualizarEstado o al armar PedidoDTO) -- mismo patrón de riesgo que
+    // causó el ConcurrentModificationException real en UnidadTransporte.rutas.
+    private final List<ParadaPlanificada> entregasParciales = new CopyOnWriteArrayList<>();
 
     public Pedido(String idPedido, String idCliente, Nodo destino, int cantidadSolicitada, int horasLimite,
             LocalDateTime fechaIngreso) {

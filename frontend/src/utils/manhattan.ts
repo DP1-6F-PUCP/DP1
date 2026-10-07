@@ -1,99 +1,14 @@
-import { Point, Warehouse, BlockedStreet } from '../types';
+import { Point, BlockedStreet } from '../types';
 
+// GRID_WIDTH_KM/GRID_HEIGHT_KM calzan con CiudadDTO.ancho/alto de produccion (70x50, ver
+// PaqRapConfig) pero NO se leen reactivamente de GET /api/configuracion -- son constantes de
+// modulo usadas directamente dentro de LeafletManhattanMap.tsx (bounds, lineas de grilla), no
+// props, asi que mutarlas en caliente no dispararia un re-render de esos efectos. Conectarlas de
+// verdad requeriria pasarlas como prop hasta el mapa, no solo leer el DTO -- deuda conocida, sin
+// impacto real hoy porque production usa exactamente estos valores. Los almacenes y calles
+// bloqueadas YA NO se hardcodean: vienen de GET /api/configuracion y del estado de operacion.
 export const GRID_WIDTH_KM = 70;
 export const GRID_HEIGHT_KM = 50;
-
-export const INITIAL_WAREHOUSES: Warehouse[] = [
-  {
-    id: 'central',
-    name: 'Almacén Central',
-    shortName: 'Central',
-    code: 'HUB-2714',
-    coords: { x: 27, y: 14 },
-    capacity: Infinity,
-    currentStock: 1000,
-    inTransit: 85,
-    dispatchRatePerHour: 140,
-    color: '#3b82f6', // blue
-  },
-  {
-    id: 'northwest',
-    name: 'Intermedio Nor-Oeste',
-    shortName: 'Nor-Oeste',
-    code: 'SUB-1238',
-    coords: { x: 12, y: 38 },
-    capacity: 1000,
-    currentStock: 1000, // Lleno al iniciar el turno (100%)
-    inTransit: 42,
-    dispatchRatePerHour: 80,
-    color: '#06b6d4', // cyan
-  },
-  {
-    id: 'east',
-    name: 'Intermedio Este',
-    shortName: 'Este',
-    code: 'SUB-5727',
-    coords: { x: 57, y: 27 },
-    capacity: 1000,
-    currentStock: 1000, // Lleno al iniciar el turno (100%)
-    inTransit: 58,
-    dispatchRatePerHour: 95,
-    color: '#8b5cf6', // purple/indigo
-  },
-];
-
-export const INITIAL_BLOCKED_STREETS: BlockedStreet[] = [
-  {
-    id: 'block-1',
-    name: 'Av. Circunvalación Este (x=45, y=16..24)',
-    start: { x: 45, y: 16 },
-    end: { x: 45, y: 24 },
-    orientation: 'vertical',
-    severity: 'critical',
-    reason: 'Repavimentación troncal y obras de colector',
-    reportedTime: '06:30',
-  },
-  {
-    id: 'block-2',
-    name: 'Calle 20 Corredor Central (y=20, x=22..28)',
-    start: { x: 22, y: 20 },
-    end: { x: 28, y: 20 },
-    orientation: 'horizontal',
-    severity: 'high',
-    reason: 'Accidente múltiple y peritaje policial',
-    reportedTime: '07:15',
-  },
-  {
-    id: 'block-3',
-    name: 'Eje 38 Conexión NW (y=38, x=25..31)',
-    start: { x: 25, y: 38 },
-    end: { x: 31, y: 38 },
-    orientation: 'horizontal',
-    severity: 'medium',
-    reason: 'Falla en semaforización masiva y corte de cableado',
-    reportedTime: '08:00',
-  },
-  {
-    id: 'block-4',
-    name: 'Bulevar Perimetral Norte (y=46, x=14..20)',
-    start: { x: 14, y: 46 },
-    end: { x: 20, y: 46 },
-    orientation: 'horizontal',
-    severity: 'medium',
-    reason: 'Manifestación cívica y desvío de tránsito',
-    reportedTime: '08:45',
-  },
-  {
-    id: 'block-5',
-    name: 'Troncal Portuaria Sur (y=6, x=46..52)',
-    start: { x: 46, y: 6 },
-    end: { x: 52, y: 6 },
-    orientation: 'horizontal',
-    severity: 'high',
-    reason: 'Rotura de tubería matriz de agua potable',
-    reportedTime: '09:10',
-  },
-];
 
 /**
  * Calculates Manhattan distance (L1 norm) between two points

@@ -12,7 +12,9 @@ interface DelayAlertModalProps {
   simMinute: number;
   warehouses: Warehouse[];
   vehicles: Vehicle[];
-  onResetAlertsAndFailures: () => void;
+  /** Sin equivalente real en el backend (no hay "reset" de alertas, GET /api/alerts se recalcula
+   * solo); opcional para que un caller como AlertasBell no tenga que inventar un no-op. */
+  onResetAlertsAndFailures?: () => void;
   isDarkTheme?: boolean;
 }
 
@@ -376,7 +378,7 @@ export const DelayAlertModal: React.FC<DelayAlertModalProps> = ({
             id="btn-confirm-reset-alerts-and-close"
             variant="primary"
             onClick={() => {
-              onResetAlertsAndFailures();
+              onResetAlertsAndFailures?.();
               onClose();
             }}
             className="w-full sm:w-auto flex-1 justify-center"

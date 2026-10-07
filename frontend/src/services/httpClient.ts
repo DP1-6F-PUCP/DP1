@@ -1,15 +1,32 @@
-const BASE_URL =
-  (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL || '/api/v1';
+import type { ApiErrorDTO, ApiResponseDTO } from '../types/backend';
+
+// El backend real expone todo bajo /api (ConsultaController, SimulacionController, etc.), nunca
+// /api/v1 -- ver AlertasController/ConsultaController/IngestaController/SimulacionController.
+const BASE_URL = (import.meta as { env?: Record<string, string> }).env?.VITE_API_URL || '/api';
 
 export interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
 }
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string, public data?: unknown) {
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public details?: { field: string; issue: string }[] | null
+  ) {
     super(message);
     this.name = 'HttpError';
   }
+}
+
+function isApiErrorDTO(value: unknown): value is ApiErrorDTO {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'error' in value &&
+    typeof (value as ApiErrorDTO).error?.message === 'string'
+  );
 }
 
 export const httpClient = {
@@ -31,41 +48,43 @@ export const httpClient = {
       }
     }
 
-    // Inyectar JWT almacenado en sessionStorage o localStorage si existe
-    const token = typeof window !== 'undefined' ? localStorage.getItem('sysmile_token') : null;
-
     const defaultHeaders: HeadersInit = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     };
 
+    let response: Response;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         headers: defaultHeaders,
         ...customConfig,
       });
-
-      if (!response.ok) {
-        let errorData: unknown;
-        try {
-          errorData = await response.json();
-        } catch {
-          errorData = await response.text();
-        }
-        throw new HttpError(response.status, `Error HTTP ${response.status}`, errorData);
-      }
-
-      if (response.status === 204) {
-        return {} as T;
-      }
-
-      return (await response.json()) as T;
     } catch (err: unknown) {
-      if (err instanceof HttpError) throw err;
-      throw new HttpError(500, (err as Error)?.message || 'Error de conexión de red');
+      throw new HttpError(0, (err as Error)?.message || 'Error de conexión de red');
     }
+
+    if (!response.ok) {
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        body = null;
+      }
+      if (isApiErrorDTO(body)) {
+        throw new HttpError(response.status, body.error.message, body.error.code, body.error.details);
+      }
+      throw new HttpError(response.status, `Error HTTP ${response.status}`);
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    // Todo endpoint real envuelve su payload en ApiResponseDTO<T>{data, meta} -- se desenvuelve
+    // aqui, una sola vez, para que el resto del front trabaje directamente con T.
+    const envelope = (await response.json()) as ApiResponseDTO<T>;
+    return envelope.data;
   },
 
   get<T>(endpoint: string, options?: RequestOptions): Promise<T> {
@@ -90,5 +109,35 @@ export const httpClient = {
 
   delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  },
+
+  /** Para los 3 endpoints de carga de archivo, que esperan multipart/form-data, no JSON. */
+  async postFile<T>(endpoint: string, file: File): Promise<T> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const url = `${BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+    let response: Response;
+    try {
+      response = await fetch(url, { method: 'POST', body: formData });
+    } catch (err: unknown) {
+      throw new HttpError(0, (err as Error)?.message || 'Error de conexión de red');
+    }
+
+    if (!response.ok) {
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        body = null;
+      }
+      if (isApiErrorDTO(body)) {
+        throw new HttpError(response.status, body.error.message, body.error.code, body.error.details);
+      }
+      throw new HttpError(response.status, `Error HTTP ${response.status}`);
+    }
+
+    const envelope = (await response.json()) as ApiResponseDTO<T>;
+    return envelope.data;
   },
 };

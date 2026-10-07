@@ -226,7 +226,7 @@ public class MotorSimulacion {
         }
 
         if (cargaActual == 0 && tiempoActual < tiempoFinMaxHoras) {
-            Almacen destino = almacenMasCercano(contexto.almacenes(), nodoActual);
+            Almacen destino = Almacen.masCercanoConStock(contexto.almacenes(), nodoActual);
             if (destino != null && !nodoActual.equals(destino.getPosicion())) {
                 tiempoActual = simularRetornoAlmacen(unidad, nodoActual, destino, contexto, horaBase, velocidad,
                         costoKm, tiempoActual, distanciaRecorrida, tiempoFinMaxHoras, refrigerioTomado,
@@ -375,13 +375,6 @@ public class MotorSimulacion {
         }
 
         return new ResultadoTramo(tiempoActual, distanciaRecorrida, nodoActual, false);
-    }
-
-    private Almacen almacenMasCercano(List<Almacen> almacenes, Nodo desde) {
-        return almacenes.stream()
-                .min(Comparator.comparingInt(a -> Math.abs(a.getPosicion().x() - desde.x())
-                        + Math.abs(a.getPosicion().y() - desde.y())))
-                .orElse(null);
     }
 
     private double horasDesdeAnchor(ContextoProblema contexto, LocalDateTime instante) {

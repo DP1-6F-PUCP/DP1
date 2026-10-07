@@ -19,6 +19,16 @@ public class GestorLogSimulacion {
 
     private static final Logger log = LoggerFactory.getLogger(GestorLogSimulacion.class);
 
+    // Tope del buffer en memoria -- antes esta lista crecia sin limite durante toda la vida del
+    // escenario (confirmado: registrarFinSimulacion/guardarLogs, el unico punto que la vacia hacia
+    // disco, es codigo muerto, nunca invocado desde OrquestadorOperacion). El frontend recibe sus
+    // eventos por un camino totalmente distinto (OrquestadorOperacion.ultimosEventos, que se
+    // reemplaza cada lote, no se acumula), asi que esta lista no cumplia ningun proposito activo
+    // en produccion mas alla de consumir memoria indefinidamente en una corrida larga. Se acota a
+    // los ultimos N eventos para que, si guardarLogs() se conecta en el futuro, siga produciendo
+    // un historial reciente util sin volver a crecer sin limite.
+    private static final int MAX_EVENTOS_EN_MEMORIA = 5000;
+
     private final List<EventoSimulacion> eventos;
     private final File archivoLogTexto;
     private final File archivoLogJson;
@@ -43,6 +53,9 @@ public class GestorLogSimulacion {
 
     public synchronized void registrarEvento(EventoSimulacion evento) {
         eventos.add(evento);
+        if (eventos.size() > MAX_EVENTOS_EN_MEMORIA) {
+            eventos.subList(0, eventos.size() - MAX_EVENTOS_EN_MEMORIA).clear();
+        }
         if (imprimirEnConsola) {
             log.info(evento.toLogLine());
         }

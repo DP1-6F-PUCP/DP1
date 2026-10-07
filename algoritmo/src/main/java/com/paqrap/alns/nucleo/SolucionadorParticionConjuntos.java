@@ -58,7 +58,8 @@ public class SolucionadorParticionConjuntos {
 
         for (UnidadTransporte unidad : contexto.vehiculos()) {
             if (!unidadesUsadas.contains(unidad.getIdUnidad())) {
-                Ruta rutaVacia = new Ruta(unidad.getIdUnidad() + "-vacia", contexto.marcaTiempoActual(), unidad);
+                Ruta rutaVacia = new Ruta(Ruta.generarId(unidad.getIdUnidad(), contexto.marcaTiempoActual(), "vacia"),
+                        contexto.marcaTiempoActual(), unidad);
                 EvaluadorCostos.recalcularRuta(rutaVacia, contexto.ciudad(), contexto.bloqueos(), contexto.configuracionOperacion());
                 rutasSeleccionadas.add(rutaVacia);
             }

@@ -2,12 +2,10 @@ import React, { useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { OrderCard } from './OrderCard';
 import { Order } from '../../../types';
-import { useToast } from '../../../components/ToastProvider';
 import { Search, Filter, Loader2, Package } from 'lucide-react';
 
 export const OrderListContainer: React.FC = () => {
-  const { orders, isLoading, isError, assignVehicle } = useOrders();
-  const { addToast } = useToast();
+  const { orders, isLoading, isError } = useOrders();
 
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,21 +13,6 @@ export const OrderListContainer: React.FC = () => {
 
   const handleSelectOrder = (order: Order) => {
     setSelectedOrderId(order.id);
-  };
-
-  const handleAssignToVehicle = (orderId: string) => {
-    assignVehicle(
-      { orderId, vehicleId: 'veh-ta01' },
-      {
-        onSuccess: () => {
-          addToast({
-            type: 'success',
-            title: 'Pedido asignado',
-            description: `Se asignó la unidad vehicular al pedido ${orderId}`,
-          });
-        },
-      }
-    );
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -114,7 +97,6 @@ export const OrderListContainer: React.FC = () => {
               order={order}
               isSelected={selectedOrderId === order.id}
               onSelectOrder={handleSelectOrder}
-              onAssignToVehicle={handleAssignToVehicle}
             />
           ))
         )}
