@@ -125,7 +125,7 @@ export const VehiclePanelContainer: React.FC = () => {
                     </span>
                   </div>
                 </div>
-                <StatusBadge status={v.status} type="vehicle" size="sm" />
+                <StatusBadge status={v.status} type="vehicle" size="sm" remainingMinutes={v.activityRemainingMinutes} />
               </div>
 
               <div className="grid grid-cols-3 gap-1.5 text-[11px] my-2">

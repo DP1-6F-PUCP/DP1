@@ -37,13 +37,23 @@ public record ConfiguracionOperacion(
      * @return fecha-hora de inicio del turno vigente en {@code instante}
      */
     public LocalDateTime inicioTurnoQueContiene(LocalDateTime instante) {
+        // Bug real corregido (reporte directo, con captura: los 37 vehiculos de una flota entera
+        // aparecian apilados en el almacen central, todos EN_REFRIGERIO desde el primer lote --
+        // nunca llegaban a despachar). Causa: para cualquier instante ANTES de horaInicioTurno
+        // (p. ej. medianoche, con horaInicioTurno=7), la correccion manual de abajo ("si es
+        // negativo, restar otro duracionTurnoHoras ANTES de floorDiv") se restaba DOS VECES -- una
+        // vez a mano, otra implicita dentro del propio floorDiv (que YA maneja negativos
+        // correctamente por su cuenta, sin ayuda) -- empujando el turno calculado 2 turnos
+        // completos (16h con duracionTurnoHoras=8) antes de lo real. Eso dejaba
+        // tiempoInicioRefrigerio (en MotorSimulacion, turnoActual + duracionTurnoHoras/2) ya en el
+        // PASADO desde el primer instante de cualquier lote, asi que el refrigerio obligatorio se
+        // disparaba de inmediato, antes de que el vehiculo alcanzara a moverse. floorDiv sobre
+        // MINUTOS (en vez de horas pre-ajustadas a mano) basta solo, sin el ajuste manual.
         LocalDateTime referencia = instante.toLocalDate()
                 .atTime(LocalTime.of((int) horaInicioTurno, 0));
-        long horasDesdeReferencia = java.time.Duration.between(referencia, instante).toMinutes() / 60;
-        if (horasDesdeReferencia < 0) {
-            horasDesdeReferencia -= (long) duracionTurnoHoras;
-        }
-        long turnosCompletos = Math.floorDiv(horasDesdeReferencia, (long) duracionTurnoHoras);
-        return referencia.plusHours(turnosCompletos * (long) duracionTurnoHoras);
+        long minutosDesdeReferencia = java.time.Duration.between(referencia, instante).toMinutes();
+        long minutosPorTurno = Math.round(duracionTurnoHoras * 60);
+        long turnosCompletos = Math.floorDiv(minutosDesdeReferencia, minutosPorTurno);
+        return referencia.plusMinutes(turnosCompletos * minutosPorTurno);
     }
 }

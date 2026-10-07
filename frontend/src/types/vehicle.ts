@@ -2,7 +2,7 @@ import { Point } from './route';
 
 export type VehicleType = 'car' | 'motorcycle' | 'bicycle';
 
-export type VehicleStatus = 'en_route' | 'delivering' | 'broken' | 'idle' | 'maintenance';
+export type VehicleStatus = 'en_route' | 'delivering' | 'on_break' | 'broken' | 'idle' | 'maintenance';
 
 export type BreakdownType = 1 | 2 | 3;
 
@@ -33,6 +33,15 @@ export interface Vehicle {
   /** VehiculoDTO.geometriaRetorno (camino real al almacén más cercano) cuando la unidad ya
    * entregó todo pero aún no llega de vuelta -- vacío en cualquier otro caso. */
   returnPath: Point[];
+  /** Minutos simulados que faltan para que termine la fase actual (entrega/refrigerio) --
+   * derivado de VehiculoDTO.actividadDesde + la duración configurada (tiempoServicioClienteHoras /
+   * duracionRefrigerioHoras). undefined cuando status no es 'delivering'/'on_break'. */
+  activityRemainingMinutes?: number;
+  /** VehiculoDTO.actividadDesde tal cual (instante simulado ISO) -- se usa para pautar la
+   * animacion del tramo de llegada (ver LeafletManhattanMap): si el vehiculo viajo Y empezo a
+   * entregar dentro del MISMO lote, esto permite saber que fraccion de ese lote fue viaje real
+   * vs. espera ya detenido, en vez de estirar la animacion de viaje a lo largo de todo el lote. */
+  activitySince?: string;
   historyPath: Point[];
   assignedOrderIds: string[];
   batteryFuel?: number; // 0 - 100%

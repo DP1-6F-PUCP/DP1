@@ -3,6 +3,8 @@ import { useMapStore } from '../../store/mapStore';
 import { useScenarioStore } from '../../store/scenarioStore';
 import { Vehicle, Warehouse, BlockedStreet, Order, Route } from '../../types';
 import { LeafletManhattanMap } from './LeafletManhattanMap';
+import { MapLegend } from './MapLegend';
+import { MapLayersControl } from './MapLayersControl';
 import { useEstadoOperacion } from '../../hooks/useEstadoOperacion';
 
 export interface RouteMapProps {
@@ -57,25 +59,29 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   };
 
   return (
-    <LeafletManhattanMap
-      warehouses={warehouses}
-      vehicles={vehicles}
-      blockedStreets={blockedStreets}
-      orders={orders}
-      routes={routes}
-      selectedVehicleId={selectedVehicleId}
-      selectedWarehouseId={selectedWarehouseId}
-      onSelectVehicle={handleVehicleClick}
-      onSelectWarehouse={handleWarehouseClick}
-      showBlockedStreets={activeLayers.blockedStreets}
-      showProjectedRoutes={activeLayers.projectedRoutes}
-      showOrders={activeLayers.orderPins}
-      cityWidth={configuracion?.ciudad.ancho}
-      cityHeight={configuracion?.ciudad.alto}
-      idEjecucion={idEjecucion}
-      sa={sa}
-      isDarkTheme={isDarkTheme}
-      className="w-full h-full"
-    />
+    <div className="relative w-full h-full">
+      <LeafletManhattanMap
+        warehouses={warehouses}
+        vehicles={vehicles}
+        blockedStreets={blockedStreets}
+        orders={orders}
+        routes={routes}
+        selectedVehicleId={selectedVehicleId}
+        selectedWarehouseId={selectedWarehouseId}
+        onSelectVehicle={handleVehicleClick}
+        onSelectWarehouse={handleWarehouseClick}
+        showBlockedStreets={activeLayers.blockedStreets}
+        showProjectedRoutes={activeLayers.projectedRoutes}
+        showOrders={activeLayers.orderPins}
+        cityWidth={configuracion?.ciudad.ancho}
+        cityHeight={configuracion?.ciudad.alto}
+        idEjecucion={idEjecucion}
+        sa={sa}
+        isDarkTheme={isDarkTheme}
+        className="w-full h-full"
+      />
+      <MapLayersControl />
+      <MapLegend />
+    </div>
   );
 };

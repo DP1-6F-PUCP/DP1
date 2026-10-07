@@ -1,5 +1,6 @@
 package com.paqrap.exposicion;
 
+import com.paqrap.dominio.ActividadVehiculo;
 import com.paqrap.dominio.Almacen;
 import com.paqrap.dominio.AlmacenCentral;
 import com.paqrap.dominio.AlmacenIntermedio;
@@ -129,7 +130,34 @@ public final class EnsambladorRespuestas {
         int cargaActual = unidad.cargaActual();
         List<String> geometriaRetorno = calcularGeometriaRetorno(unidad, ciudad, bloqueos, almacenes, instante);
         return new VehiculoDTO(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), unidad.getEstado().name(),
-                unidad.getPosicion().x(), unidad.getPosicion().y(), cargaActual, geometriaRetorno);
+                unidad.getPosicion().x(), unidad.getPosicion().y(), cargaActual, geometriaRetorno,
+                unidad.getActividadActual().name(), calcularActividadDesde(unidad));
+    }
+
+    /**
+     * Instante en que arrancó la fase actual de {@code unidad.getActividadActual()} -- ver el
+     * Javadoc de {@link VehiculoDTO#actividadDesde}. {@code EN_REFRIGERIO} ya lo guarda
+     * {@link UnidadTransporte#getHoraRefrigerioProgramada()} directamente (se fija al iniciar la
+     * pausa, se limpia al terminarla, ver {@code MotorSimulacion.manejarRefrigerio}).
+     * {@code ENTREGANDO} se deriva de la parada pendiente de la ruta en ejecución, el mismo dato
+     * que {@code MotorSimulacion} usa para decidir cuándo termina el servicio.
+     */
+    private static LocalDateTime calcularActividadDesde(UnidadTransporte unidad) {
+        if (unidad.getActividadActual() == ActividadVehiculo.EN_REFRIGERIO) {
+            return unidad.getHoraRefrigerioProgramada();
+        }
+        if (unidad.getActividadActual() == ActividadVehiculo.ENTREGANDO) {
+            Ruta rutaEnCurso = unidad.rutaEnEjecucion();
+            if (rutaEnCurso == null) {
+                return null;
+            }
+            return rutaEnCurso.getSecuenciaParadas().stream()
+                    .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                    .findFirst()
+                    .map(ParadaPlanificada::getHoraInicioServicio)
+                    .orElse(null);
+        }
+        return null;
     }
 
     /**

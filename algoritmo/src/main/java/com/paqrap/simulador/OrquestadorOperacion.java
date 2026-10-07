@@ -338,9 +338,17 @@ public class OrquestadorOperacion {
             return;
         }
 
+        // Desglose de tiempo por fase (bug real en investigacion: reporte directo de hasta 157s
+        // reales sin que el reloj avance, mientras la CPU del contenedor estaba casi en 0% -- no
+        // es un bloqueo/deadlock, es alguna fase tomando mucho mas de lo esperado. El log anterior
+        // solo media planificador.planificarRutas(), que en el lote sospechoso dio 0.000s -- la
+        // demora esta en otra parte de este metodo. Se mide cada fase para encontrar cual.
+        long tInicioLote = System.currentTimeMillis();
         asegurarDatosOficialesCargados(contextoProblema.marcaTiempoActual());
+        long tDespuesCarga = System.currentTimeMillis();
         aplicarSolicitudesVencidas();
         aplicarMantenimientos(contextoProblema.marcaTiempoActual());
+        long tDespuesSolicitudes = System.currentTimeMillis();
 
         // Rutas que ya venían EN_EJECUCION de un lote anterior (sin terminar todas sus paradas):
         // se retoman tal cual, NO se vuelven a planificar. UnidadTransporte.estaDisponibleParaRuta
@@ -403,6 +411,13 @@ public class OrquestadorOperacion {
             ruta.getUnidadTransporte().agregarRuta(ruta);
         }
         double segundosComputo = (System.currentTimeMillis() - inicioMs) / 1000.0;
+        // INFO siempre (no solo al exceder el presupuesto): visibilidad operativa real del costo
+        // de cada lote -- antes solo se sabia si se disparaba el warning de "supera el
+        // presupuesto", sin ningun numero para los casos normales. Util para calibrar sa/ta contra
+        // datos reales (p. ej. los meses mas pesados del curso, 2027-2028, que plafonan en 5000
+        // pedidos/mes) sin tener que instrumentar el codigo cada vez.
+        log.info("Lote planificado: {} pedidos ofrecidos, {} rutas nuevas, {}s de computo",
+                pedidosParaPlanificar.size(), rutasNuevas.size(), String.format(java.util.Locale.US, "%.3f", segundosComputo));
         if (segundosComputo > tiempoMaximoComputoSegundos) {
             log.warn("La planificación tomó {}s, supera el presupuesto de {}s", segundosComputo,
                     tiempoMaximoComputoSegundos);
@@ -414,8 +429,10 @@ public class OrquestadorOperacion {
         double horasAvance = (sa / 60.0) * k;
         List<Pedido> noAsignados = pedidosNoAsignados(todasLasRutas, pedidosDelLote);
         anclaUltimoLote = contextoProblema.marcaTiempoActual();
+        long tAntesSimular = System.currentTimeMillis();
         ultimosEventos = motorSimulacion.simularRutas(todasLasRutas, noAsignados, contextoDelLote, 0.0, horasAvance);
         ultimasRutas = todasLasRutas;
+        long tDespuesSimular = System.currentTimeMillis();
 
         // Solo se suma el costo de las rutas NUEVAS -- el de las que ya venían EN_EJECUCION se
         // contabilizó una única vez, en el lote donde se planificaron por primera vez.
@@ -431,6 +448,17 @@ public class OrquestadorOperacion {
 
         List<Pedido> pedidosVigentes = actualizarEstadosYFiltrarPendientes(pedidosDelLote, nuevoInstante);
         pedidosVigentes.addAll(generarPedidosSinteticos(nuevoInstante));
+        long tFinLote = System.currentTimeMillis();
+        // Desglose completo del lote -- ver el comentario de tInicioLote. "simular" es
+        // MotorSimulacion.simularRutas (recorre TODAS las rutas en_curso+nuevas, llama
+        // CalculadorDistancia por cada tramo -- la sospecha principal con rutasEnCurso creciendo
+        // sin tope en escenarios largos); "cierre" cubre recarga de almacenes + estados de pedidos
+        // + demanda sintetica (esta ultima crece con contadorPedidosSinteticos en COLAPSO_LOGISTICO).
+        log.info("Desglose de lote: carga={}ms solicitudes={}ms planificar={}ms simular={}ms cierre={}ms TOTAL={}ms"
+                        + " ({} rutas en curso, {} rutas nuevas)",
+                tDespuesCarga - tInicioLote, tDespuesSolicitudes - tDespuesCarga, Math.round(segundosComputo * 1000),
+                tDespuesSimular - tAntesSimular, tFinLote - tDespuesSimular, tFinLote - tInicioLote,
+                rutasEnCurso.size(), rutasNuevas.size());
 
         // Se guarda con el universo COMPLETO (todosLosBloqueos/todosLosMantenimientos), no con las
         // versiones recortadas de este lote -- así el próximo lote vuelve a recortar fresco según

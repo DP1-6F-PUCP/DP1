@@ -1,5 +1,6 @@
 package com.paqrap.simulador;
 
+import com.paqrap.dominio.ActividadVehiculo;
 import com.paqrap.dominio.Almacen;
 import com.paqrap.dominio.Bloqueo;
 import com.paqrap.dominio.CalculadorDistancia;
@@ -166,6 +167,7 @@ public class MotorSimulacion {
                     break;
                 }
 
+                unidad.setActividadActual(ActividadVehiculo.VIAJANDO);
                 ResultadoTramo resultado = recorrerCamino(camino, unidad, pedido.getIdPedido(), contexto, horaBase,
                         velocidad, costoKm, tiempoActual, distanciaRecorrida, tiempoFinMaxHoras, eventosFase,
                         TipoEvento.MOVIMIENTO_TRAMO, destino);
@@ -187,10 +189,12 @@ public class MotorSimulacion {
                         unidad.getIdUnidad(), pedido.getIdPedido(), destino.x(), destino.y(),
                         String.format("Inicia entrega y descarga de pedido %s", pedido.getIdPedido()),
                         String.format(Locale.US, "Duración de servicio: %.2fh", tiempoServicio)));
+                unidad.setActividadActual(ActividadVehiculo.ENTREGANDO);
             } else {
                 // Ya había llegado y arrancado el servicio en un lote anterior; venía esperando a
                 // que se cumplan las horas de servicio restantes (nodoActual ya es el destino).
                 nodoActual = destino;
+                unidad.setActividadActual(ActividadVehiculo.ENTREGANDO);
             }
 
             // El fin del servicio se ancla a horaInicioServicio (fijo, absoluto) + duración total
@@ -228,6 +232,7 @@ public class MotorSimulacion {
         if (cargaActual == 0 && tiempoActual < tiempoFinMaxHoras) {
             Almacen destino = Almacen.masCercanoConStock(contexto.almacenes(), nodoActual);
             if (destino != null && !nodoActual.equals(destino.getPosicion())) {
+                unidad.setActividadActual(ActividadVehiculo.VIAJANDO);
                 tiempoActual = simularRetornoAlmacen(unidad, nodoActual, destino, contexto, horaBase, velocidad,
                         costoKm, tiempoActual, distanciaRecorrida, tiempoFinMaxHoras, refrigerioTomado,
                         tiempoInicioRefrigerio, duracionRefrigerio, eventosFase);
@@ -247,6 +252,7 @@ public class MotorSimulacion {
         if (!quedanParadasPendientes) {
             ruta.setEstado(EstadoRuta.FINALIZADA);
             unidad.setEstado(EstadoUnidad.DISPONIBLE);
+            unidad.setActividadActual(ActividadVehiculo.INACTIVO);
         }
     }
 
@@ -328,6 +334,7 @@ public class MotorSimulacion {
         LocalDateTime horaFinAbs = horaInicioReal.plusSeconds(Math.round(duracionRefrigerio * 3600.0));
         double tiempoFinRelativo = horasDesdeAnchor(contexto, horaFinAbs);
         if (tiempoFinRelativo > tiempoFinMaxHoras) {
+            unidad.setActividadActual(ActividadVehiculo.EN_REFRIGERIO);
             return new ResultadoRefrigerio(tiempoFinMaxHoras, false);
         }
 

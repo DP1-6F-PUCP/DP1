@@ -38,6 +38,16 @@ const ESTADO_UNIDAD_A_STATUS: Record<string, VehicleStatus> = {
   AVERIADO: 'broken',
 };
 
+// Solo refina EN_RUTA: ENTREGANDO/EN_REFRIGERIO son sub-fases de "en ruta", nunca aplican a un
+// vehiculo DISPONIBLE/AVERIADO/EN_MANTENIMIENTO (ver ActividadVehiculo, siempre INACTIVO en esos
+// casos). Antes el front no podia distinguir "viajando" de "detenido entregando/en refrigerio" --
+// ambos se veian igual (en_route), sin forma de explicar por que un vehiculo con ruta asignada no
+// avanzaba entre dos snapshots.
+const ACTIVIDAD_A_STATUS: Partial<Record<string, VehicleStatus>> = {
+  ENTREGANDO: 'delivering',
+  EN_REFRIGERIO: 'on_break',
+};
+
 const ESTADO_RUTA_A_STATUS: Record<string, Route['status']> = {
   PLANIFICADA: 'planned',
   EN_EJECUCION: 'in_progress',
@@ -117,21 +127,53 @@ function destinoDeVehiculo(
 ): Point | undefined {
   const rutaActiva = rutas.find((r) => r.vehiculoId === vehiculo.idUnidad && r.estado === 'EN_EJECUCION');
   if (!rutaActiva || rutaActiva.secuenciaEntrega.length === 0) return undefined;
-  const ultimoPedidoId = rutaActiva.secuenciaEntrega[rutaActiva.secuenciaEntrega.length - 1];
-  const pedido = pedidosById.get(ultimoPedidoId);
+  // Bug real reportado (captura: el circulo de "destino seleccionado" aparecia lejos del
+  // vehiculo mientras este estaba ENTREGANDO): secuenciaEntrega trae TODAS las paradas de la
+  // ruta en orden, entregadas o no (ver EnsambladorRespuestas.aRutaDTO) -- tomar la ULTIMA
+  // apuntaba siempre a la parada final del recorrido completo, no a la que el vehiculo esta
+  // sirviendo ahora mismo. Se busca la primera NO entregada (ENTREGADA es el unico estado final
+  // de PedidoDTO.estado), que es la parada vigente.
+  const pedidoActualId = rutaActiva.secuenciaEntrega.find((id) => pedidosById.get(id)?.estado !== 'ENTREGADA')
+    ?? rutaActiva.secuenciaEntrega[rutaActiva.secuenciaEntrega.length - 1];
+  const pedido = pedidosById.get(pedidoActualId);
   return pedido ? { x: pedido.posX, y: pedido.posY } : undefined;
+}
+
+/**
+ * Minutos simulados restantes de la fase actual (entrega/refrigerio) -- dto.actividadDesde +
+ * duracionHoras (tiempoServicioClienteHoras o duracionRefrigerioHoras segun corresponda) es el
+ * instante en que esa fase deberia terminar; se resta contra nowMs (marcaTiempoActual del
+ * backend, mismo reloj simulado, no el reloj real del navegador). null si falta algun dato --
+ * nunca se inventa un numero cuando no hay con que calcularlo.
+ */
+function minutosRestantesActividad(
+  actividadDesde: string | null,
+  duracionHoras: number,
+  nowMs: number | null
+): number | undefined {
+  if (!actividadDesde || nowMs == null) return undefined;
+  const desdeMs = Date.parse(actividadDesde);
+  if (!Number.isFinite(desdeMs)) return undefined;
+  const finMs = desdeMs + duracionHoras * 3_600_000;
+  return Math.max(0, Math.round((finMs - nowMs) / 60_000));
 }
 
 export function adaptVehiculo(
   dto: VehiculoDTO,
   config: ConfiguracionActualDTO,
   rutas: RutaDTO[],
-  pedidosById: Map<string, PedidoDTO>
+  pedidosById: Map<string, PedidoDTO>,
+  nowMs: number | null
 ): Vehicle {
   const tipoDto = tipoVehiculoDe(dto.tipo, config.tiposVehiculo);
   const position = { x: dto.posXActual, y: dto.posYActual };
   const destination = destinoDeVehiculo(dto, rutas, pedidosById);
   const rutaActiva = rutas.find((r) => r.vehiculoId === dto.idUnidad && r.estado === 'EN_EJECUCION');
+  const activityRemainingMinutes = dto.actividad === 'ENTREGANDO'
+    ? minutosRestantesActividad(dto.actividadDesde, config.operacion.tiempoServicioClienteHoras, nowMs)
+    : dto.actividad === 'EN_REFRIGERIO'
+      ? minutosRestantesActividad(dto.actividadDesde, config.operacion.duracionRefrigerioHoras, nowMs)
+      : undefined;
 
   return {
     id: dto.idUnidad,
@@ -140,10 +182,14 @@ export function adaptVehiculo(
     capacity: tipoDto?.capacidad ?? 0,
     currentLoad: dto.cargaActual,
     speed: tipoDto?.velocidadKmH ?? 0,
-    status: ESTADO_UNIDAD_A_STATUS[dto.estado] || 'idle',
+    status: (dto.estado === 'EN_RUTA' && ACTIVIDAD_A_STATUS[dto.actividad])
+      || ESTADO_UNIDAD_A_STATUS[dto.estado]
+      || 'idle',
     position,
     destination,
     returnPath: dto.geometriaRetorno.map(parseNodo),
+    activityRemainingMinutes,
+    activitySince: dto.actividadDesde ?? undefined,
     historyPath: [], // no expuesto por el backend
     assignedOrderIds: rutaActiva?.secuenciaEntrega ?? [],
     totalDelivered: 0, // no expuesto por el backend (no hay contador por vehiculo)
@@ -261,7 +307,7 @@ export function adaptEstadoOperacion(
 
   return {
     vehicles: estado.vehiculos.map((v) =>
-      adaptVehiculo(v, config, estado.rutas, pedidosById)
+      adaptVehiculo(v, config, estado.rutas, pedidosById, nowMs)
     ),
     orders: pedidos.map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs)),
     routes: estado.rutas.map((r) => adaptRuta(r, vehiculosById.get(r.vehiculoId), pedidosById, blockedStreets)),

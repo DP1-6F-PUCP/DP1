@@ -1,22 +1,57 @@
 package com.paqrap.dominio;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Cierre planificado de un tramo de calle, vigente durante una ventana de tiempo.
  *
  * <p>Invariante: {@code secuenciaNodos} representa una polilínea abierta (el primer nodo es
- * distinto del último) de al menos 2 nodos. Un nodo bloqueado no se puede atravesar ni se
- * permite girar en él; una unidad que llegue a un nodo bloqueado debe regresar por el mismo
- * tramo por el que llegó (vuelta en U). Solo {@code Bloqueo} afecta la transitabilidad de la
- * red vial — una {@link Averia} nunca bloquea el tramo donde ocurre.
+ * distinto del último) de al menos 2 nodos, YA EXPANDIDA nodo a nodo (cada par consecutivo es
+ * adyacente en la grilla, nunca a más de un paso) -- ver el constructor. Un nodo bloqueado no se
+ * puede atravesar ni se permite girar en él; una unidad que llegue a un nodo bloqueado debe
+ * regresar por el mismo tramo por el que llegó (vuelta en U). Solo {@code Bloqueo} afecta la
+ * transitabilidad de la red vial — una {@link Averia} nunca bloquea el tramo donde ocurre.
  */
 public class Bloqueo {
 
     private final List<Nodo> secuenciaNodos;
     private final LocalDateTime fechaInicio;
     private final LocalDateTime fechaFin;
+
+    /**
+     * Bug real corregido (reporte directo, con captura: un vehículo circulaba en línea recta por
+     * EN MEDIO de un bloqueo largo sin llegar a cruzar ninguno de sus nodos). El formato oficial
+     * del curso ({@code bloqueo.*.txt}) solo lista las ESQUINAS de la poligonal (p. ej.
+     * "25,45,45,45,45,40" = 2 tramos, pero apenas 3 nodos) -- un tramo recto de la vida real puede
+     * cubrir 20+ nodos de grilla entre dos esquinas consecutivas, y ni {@link #interfiereCon}
+     * (que compara el tramo consultado contra pares CONSECUTIVOS de {@code secuenciaNodos}) ni la
+     * exclusión de nodos de paso en {@link CalculadorDistancia} tenían forma de saber que todos
+     * esos nodos intermedios también están bloqueados -- un vehículo podía viajar derecho sobre
+     * ellos sin que ninguna verificación lo detectara, porque ninguno de esos nodos intermedios
+     * aparecía literalmente en la lista. Se expande aquí, una sola vez al construir, a la secuencia
+     * completa nodo a nodo (asumiendo tramos rectos horizontales/verticales de un paso de grilla,
+     * igual que {@code CalculadorDistancia.caminoManhattan}) -- así todo consumidor aguas abajo
+     * (este mismo {@code interfiereCon}, el set de nodos bloqueados, y hasta la explosión de
+     * segmentos del frontend) queda correcto sin tener que reimplementar la geometría en cada uno.
+     */
+    private static List<Nodo> expandirPolilinea(List<Nodo> esquinas) {
+        List<Nodo> densos = new ArrayList<>();
+        densos.add(esquinas.get(0));
+        for (int i = 0; i < esquinas.size() - 1; i++) {
+            Nodo a = esquinas.get(i);
+            Nodo b = esquinas.get(i + 1);
+            int pasoX = Integer.compare(b.x(), a.x());
+            int pasoY = Integer.compare(b.y(), a.y());
+            Nodo actual = a;
+            while (!actual.equals(b)) {
+                actual = new Nodo(actual.x() + pasoX, actual.y() + pasoY);
+                densos.add(actual);
+            }
+        }
+        return densos;
+    }
 
     public Bloqueo(List<Nodo> secuenciaNodos, LocalDateTime fechaInicio, LocalDateTime fechaFin) {
         if (secuenciaNodos == null || secuenciaNodos.size() < 2) {
@@ -25,7 +60,7 @@ public class Bloqueo {
         if (secuenciaNodos.get(0).equals(secuenciaNodos.get(secuenciaNodos.size() - 1))) {
             throw new IllegalArgumentException("La secuencia de nodos de un bloqueo debe ser una polilínea abierta");
         }
-        this.secuenciaNodos = List.copyOf(secuenciaNodos);
+        this.secuenciaNodos = List.copyOf(expandirPolilinea(secuenciaNodos));
         this.fechaInicio = fechaInicio;
         this.fechaFin = fechaFin;
     }

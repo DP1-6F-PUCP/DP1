@@ -25,6 +25,9 @@ public class UnidadTransporte {
     private LocalDateTime tiempoInicioTurnoActual;
     private LocalDateTime horaRefrigerioProgramada;
     private boolean refrigerioTomado;
+    // No persiste historial, solo el ultimo valor conocido -- lo actualiza MotorSimulacion en cada
+    // lote segun en que fase termino la simulacion de este vehiculo (ver ActividadVehiculo).
+    private ActividadVehiculo actividadActual = ActividadVehiculo.INACTIVO;
 
     public UnidadTransporte(String idUnidad, TipoVehiculo tipoVehiculo, Nodo posicion,
             LocalDateTime tiempoInicioTurnoActual) {
@@ -99,6 +102,14 @@ public class UnidadTransporte {
 
     public void setRefrigerioTomado(boolean refrigerioTomado) {
         this.refrigerioTomado = refrigerioTomado;
+    }
+
+    public ActividadVehiculo getActividadActual() {
+        return actividadActual;
+    }
+
+    public void setActividadActual(ActividadVehiculo actividadActual) {
+        this.actividadActual = actividadActual;
     }
 
     /**

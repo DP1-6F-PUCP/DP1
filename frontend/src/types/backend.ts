@@ -6,6 +6,10 @@
 
 export type EstadoPedido = 'PENDIENTE' | 'ENTREGADA' | 'INCUMPLIDA';
 export type EstadoUnidad = 'DISPONIBLE' | 'EN_RUTA' | 'EN_MANTENIMIENTO' | 'AVERIADO';
+
+// Que esta haciendo la unidad dentro de su EstadoUnidad general (ver ActividadVehiculo en el
+// dominio) -- distingue, p. ej., EN_RUTA viajando de EN_RUTA detenido entregando o en refrigerio.
+export type ActividadVehiculo = 'INACTIVO' | 'VIAJANDO' | 'ENTREGANDO' | 'EN_REFRIGERIO';
 export type EstadoRuta = 'PLANIFICADA' | 'EN_EJECUCION' | 'FINALIZADA' | 'REEMPLAZADA';
 export type EstadoEjecucion = 'INICIADA' | 'EN_CURSO' | 'PAUSADA' | 'FINALIZADA' | 'DETENIDA_POR_INCUMPLIMIENTO';
 export type TipoEscenarioBackend = 'DIA_A_DIA' | 'CINCO_DIAS' | 'COLAPSO_LOGISTICO';
@@ -44,6 +48,10 @@ export interface VehiculoDTO {
   // de vuelta (Ruta ya esta FINALIZADA en ese punto, por eso no vive en RutaDTO.geometria). Mismo
   // formato "x,y"; vacio cuando no aplica.
   geometriaRetorno: string[];
+  actividad: ActividadVehiculo;
+  // Instante (LocalDateTime ISO sin zona) en que arranco la fase actual de `actividad` --
+  // solo presente para ENTREGANDO/EN_REFRIGERIO, null en cualquier otro caso.
+  actividadDesde: string | null;
 }
 
 export interface RutaDTO {

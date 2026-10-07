@@ -1,5 +1,5 @@
 import React from 'react';
-import { Circle, AlertTriangle, AlertOctagon, MinusCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Circle, AlertTriangle, AlertOctagon, MinusCircle, CheckCircle2, Clock, Package, Coffee } from 'lucide-react';
 import { VehicleSemaforoState } from '../types';
 
 export interface StatusBadgeProps {
@@ -8,6 +8,10 @@ export interface StatusBadgeProps {
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   className?: string;
+  /** Minutos simulados restantes de la fase actual (Vehicle.activityRemainingMinutes) -- solo se
+   * usa cuando status es 'delivering'/'on_break', para que el usuario sepa cuanto le falta en vez
+   * de solo saber que esta detenido. */
+  remainingMinutes?: number;
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
@@ -16,6 +20,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   size = 'md',
   showLabel = true,
   className = '',
+  remainingMinutes,
 }) => {
   const iconSize = size === 'sm' ? 12 : size === 'lg' ? 18 : 14;
 
@@ -26,7 +31,19 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     let label = 'Inactivo';
     let Icon = MinusCircle;
 
-    if (semaforoState === 'on_time' || status === 'en_route') {
+    if (status === 'delivering') {
+      // VehiculoDTO.actividad=ENTREGANDO -- EN_RUTA pero detenido en el destino, dentro del
+      // tiempoServicioClienteHoras. No es un riesgo distinto a 'en_route' (mismos pedidos, mismo
+      // plazo), solo una etiqueta mas precisa de por que no se mueve en este instante.
+      hex = '#2E7D32';
+      label = remainingMinutes != null ? `Entregando · ${remainingMinutes}m` : 'Entregando';
+      Icon = Package;
+    } else if (status === 'on_break') {
+      // actividad=EN_REFRIGERIO -- pausa obligatoria del conductor, tampoco es un riesgo en si.
+      hex = '#2E7D32';
+      label = remainingMinutes != null ? `En refrigerio · ${remainingMinutes}m` : 'En refrigerio';
+      Icon = Coffee;
+    } else if (semaforoState === 'on_time' || status === 'en_route') {
       hex = '#2E7D32';
       label = 'A tiempo';
       Icon = Circle;

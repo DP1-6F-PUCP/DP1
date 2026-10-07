@@ -498,28 +498,32 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     }
 
     /**
-     * Bug real corregido (reporte directo: el reloj del front seguia avanzando sin fin despues de
-     * detener una ejecucion, y al iniciar una nueva los vehiculos parecian "regresar" de golpe al
-     * almacen): {@code idEjecucionActiva} nunca se limpia en {@link #detenerEjecucion} -- sigue
-     * apuntando al {@link OrquestadorOperacion} YA DETENIDO hasta que arranca una ejecucion nueva.
-     * Antes, este metodo devolvia ese orquestador tal cual con solo verificar que no fuera
-     * {@code null}, asi que {@link #consultarEstadoOperacion()} seguia sirviendo para siempre el
-     * {@code ContextoProblema} CONGELADO de la ejecucion detenida (su reloj dejo de avanzar, pero
-     * el front lo extrapola localmente sin saber que ya nadie lo esta actualizando) -- en vez de la
-     * respuesta "vacia" que ya recibia correctamente {@link #consultarEjecucionActiva()} (que sí
-     * aplicaba este mismo filtro). Se centraliza aqui para que todo consultor (estado de operacion,
-     * rutas vigentes, pedidos actuales, ejecucion activa) trate una ejecucion ya terminada
-     * exactamente igual: como si no hubiera ninguna activa.
+     * Deliberadamente SIN filtrar por {@link #esEjecucionActiva}: {@code idEjecucionActiva} sigue
+     * apuntando al {@link OrquestadorOperacion} ya detenido hasta que arranca una ejecucion nueva
+     * (no se limpia en {@link #detenerEjecucion}), y eso es correcto -- este metodo respalda a
+     * {@code consultarEstadoOperacion}/{@code consultarRutasVigentes}/{@code pedidosActuales}, que
+     * deben poder seguir mostrando el ultimo estado REAL (congelado) de una ejecucion recien
+     * terminada: posiciones finales, rutas finales y, sobre todo, el motivo exacto del corte
+     * ({@code ReporteDesempeno.contadorIncumplidos}, que es lo que explica POR QUE se detuvo).
+     *
+     * <p>Bug real corregido (reporte directo, con captura): una version anterior de este metodo SI
+     * filtraba por {@code esEjecucionActiva} -- "arreglaba" que el reloj del front seguia avanzando
+     * sin fin despues de detener una ejecucion, pero como efecto secundario, {@code
+     * EjecucionDetenidaBanner} (que lee {@code contadorIncumplidos} de este mismo endpoint) se
+     * quedo mostrando "0 pedidos incumplidos" en una ejecucion que SI se detuvo por incumplimiento
+     * -- el contexto vacio de respaldo trae {@code ReporteDesempeno} en cero, no el real. La causa
+     * original del reloj (el front extrapolaba con k sin saber que la ejecucion ya no avanzaba) se
+     * corrigio del lado correcto: {@code SimClock} ahora solo extrapola mientras
+     * {@code ejecucion.estado} sea realmente {@code EN_CURSO}/{@code INICIADA} -- no hacia falta
+     * (ni convenia) que el backend dejara de servir el dato real para lograrlo.
+     *
+     * <p>{@link #consultarEjecucionActiva()} SI necesita filtrar (es la query de "unirme a una
+     * ejecucion en curso" que usa {@code SeleccionarEscenarioGate} al cargar la app) -- aplica su
+     * propio chequeo de {@code esEjecucionActiva} de forma independiente, no depende de este metodo
+     * para eso.
      */
     private OrquestadorOperacion ejecucionActivaOrquestador() {
-        if (idEjecucionActiva == null) {
-            return null;
-        }
-        OrquestadorOperacion orquestador = ejecuciones.get(idEjecucionActiva);
-        if (orquestador == null || !esEjecucionActiva(orquestador.getEjecucionActual())) {
-            return null;
-        }
-        return orquestador;
+        return idEjecucionActiva != null ? ejecuciones.get(idEjecucionActiva) : null;
     }
 
     /** {@code true} si la ejecución sigue en un estado no terminal (puede recibir lotes futuros). */
@@ -586,8 +590,14 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      * de abajo), y el valor ilustrativo original del profesor (K=14) daba ~514 minutos (~8.6
      * horas), muy fuera de ese rango -- violación confirmada de un requisito duro, no un ajuste de
      * calibración libre. K=150 da 48 minutos, a mitad del rango permitido. {@code COLAPSO_LOGISTICO}
-     * (K=75) sigue siendo el valor ilustrativo del profesor, a calibrar -- el enunciado no fija una
-     * duración objetivo para ese escenario (corre "hasta el punto de quiebre", sin ventana fija).
+     * (K=10, bajado del valor ilustrativo original del profesor K=75) -- el enunciado no fija una
+     * duración objetivo para ese escenario (corre "hasta el punto de quiebre", sin ventana fija),
+     * pero K=75 se confirmó en vivo demasiado agresivo: la demanda sintética CRECIENTE
+     * (generarPedidosSinteticos) ya empieza a competir con plazos de apenas 4 horas, y con
+     * horasAvance=(sa/60)*75=25 min/lote eso dejaba muy pocos lotes de margen antes del primer
+     * incumplimiento -- confirmado en vivo: colapsaba en ~16 lotes (~6-7 horas simuladas), sin
+     * alcanzar a mostrar una rampa real de estrés. K=10 da horasAvance=3.33 min/lote, ~7.5x más
+     * granularidad para que el planificador reaccione antes de que un pedido crítico venza.
      * {@code Sa}/{@code Ta}
      * también se confirmaron como libres de ajustar: originalmente 5min/1min (sugerencia inicial
      * del profesor, no un requisito de la consigna) -- bajados primero a 1min/0.5min, y aquí otra
@@ -607,7 +617,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         float k = switch (tipo) {
             case DIA_A_DIA -> 1f;
             case CINCO_DIAS -> 150f;
-            case COLAPSO_LOGISTICO -> 75f;
+            case COLAPSO_LOGISTICO -> 10f;
         };
         return new ParametrosOrquestacion(sa, ta, k, tiempoMaximoComputoSegundos);
     }

@@ -221,7 +221,9 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // aqui directamente, solo se registra el tramo para que el bucle (efecto aparte, corre siempre)
   // lo use.
   const vehicleSyncRef = useRef<Map<string, SincroVehiculo>>(new Map());
-  // undefined = todavia no se vio ningun idEjecucion (primer render, no limpiar nada).
+  // undefined = todavia no se vio ningun id REAL (ni en el primer render ni durante el hueco
+  // null entre detener una ejecucion e iniciar la siguiente -- solo se escribe con ids reales,
+  // nunca se vuelve a poner en undefined, ver el efecto que lo consume).
   const idEjecucionAnteriorRef = useRef<string | undefined>(undefined);
 
   // 1. Initialize Leaflet Map with L.CRS.Simple - Fixed, non-zoomable, adapted to max screen
@@ -570,14 +572,43 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     // segun los datos, pero una ejecucion nueva debe verse como un reinicio limpio, no como una
     // transicion. Al detectar que cambio idEjecucion se limpia todo de una (capas + estado de
     // sincronizacion) antes de reconstruir con los datos de la ejecucion nueva.
-    if (idEjecucionAnteriorRef.current !== undefined && idEjecucionAnteriorRef.current !== idEjecucion) {
+    //
+    // Bug real corregido (reporte directo, con captura: seguia pasando despues del fix anterior):
+    // entre detener una ejecucion e iniciar la siguiente, idEjecucion pasa por un estado
+    // intermedio undefined (mientras SeleccionarEscenarioGate muestra el picker, con
+    // scenarioStore.ejecucion en null) -- la version anterior de este chequeo trataba CUALQUIER
+    // undefined como "primera vez, nada que limpiar" y sobreescribia la referencia con undefined,
+    // asi que cuando llegaba el id de la ejecucion REALMENTE nueva, ya no tenia con que compararlo
+    // (penso que tambien era "la primera vez") y nunca disparaba la limpieza. Ahora el ref solo se
+    // actualiza cuando idEjecucion es un id real -- sobrevive el hueco undefined intacto, asi que
+    // la comparacion contra el siguiente id real sigue siendo correcta.
+    const huboResetDeEjecucion = Boolean(idEjecucion)
+      && idEjecucionAnteriorRef.current != null
+      && idEjecucionAnteriorRef.current !== idEjecucion;
+    if (huboResetDeEjecucion) {
       for (const marker of markers.values()) {
         group.removeLayer(marker);
       }
       markers.clear();
       sync.clear();
     }
-    idEjecucionAnteriorRef.current = idEjecucion;
+    if (idEjecucion) {
+      idEjecucionAnteriorRef.current = idEjecucion;
+    }
+
+    // Bug real corregido (reporte directo, con captura: vehiculos dispersos e inactivos justo al
+    // arrancar una ejecucion nueva -- deberian aparecer todos en el almacen central). Causa:
+    // condicion de carrera entre el store (idEjecucion se actualiza sincronico en
+    // iniciarMutation.onSuccess) y React Query (invalidateQueries dispara un refetch ASINCRONO) --
+    // este efecto se disparaba de inmediato por el cambio de idEjecucion, pero `vehicles` todavia
+    // traia los datos VIEJOS (el refetch no habia resuelto aun), asi que los marcadores se
+    // reconstruian en las posiciones de la ejecucion anterior. En vez de reconstruir con datos que
+    // podrian ser viejos, se corta aqui (ya quedaron limpios los marcadores arriba) y se espera a
+    // que `vehicles` cambie de verdad -- WS o el poll de 3s van a traer el estado real reseteado en
+    // breve y disparar este mismo efecto de nuevo (esta en los deps).
+    if (huboResetDeEjecucion) {
+      return;
+    }
 
     const idsActuales = new Set(vehicles.map((v) => v.id));
     for (const [id, marker] of markers) {
@@ -592,10 +623,19 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const isSelected = selectedVehicleId === v.id;
       const semaforo = getVehicleSemaforoStatus(v, orders, simMinutes);
       const isDelayedOrBroken = semaforo.state === 'delayed' || v.status === 'broken';
+      // Bug real reportado: un vehiculo en refrigerio (VehiculoDTO.actividad=EN_REFRIGERIO) se
+      // veia en el mapa IDENTICO a uno viajando normalmente -- el semaforo solo mira riesgo de
+      // SLA, y el badge con la etiqueta "En refrigerio" vive en el panel lateral, no en el mapa.
+      // Color propio (no reutiliza ninguno de los 4 del semaforo) + icono de pausa, agregado a la
+      // leyenda (ver MapLegend).
+      const isEnRefrigerio = v.status === 'on_break';
 
-      // Color de la burbuja según semáforo oficial (rojo para avería/retraso, azul de selección, o color de semáforo)
+      // Color de la burbuja según semáforo oficial (rojo para avería/retraso, teal para
+      // refrigerio, azul de selección, o color de semáforo)
       const bubbleFill = isDelayedOrBroken
         ? '#C62828'
+        : isEnRefrigerio
+        ? '#0D9488'
         : isSelected
         ? isDarkTheme
           ? '#38bdf8'
@@ -664,6 +704,14 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
                 : ''
             }
 
+            <!-- Icono de pausa para refrigerio (dos barras verticales) -->
+            ${
+              !isDelayedOrBroken && isEnRefrigerio
+                ? `<rect x="-2" y="-2" width="1.4" height="4" rx="0.3" fill="#ffffff" />
+                   <rect x="0.6" y="-2" width="1.4" height="4" rx="0.3" fill="#ffffff" />`
+                : ''
+            }
+
             <!-- Vehicle Code Badge placed cleanly below the circle -->
             <rect
               x="-13"
@@ -718,6 +766,28 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const rutaActiva = routes.find((r) => r.vehicleId === v.id && r.status === 'in_progress');
       const fuenteId = rutaActiva ? rutaActiva.id : 'retorno';
 
+      // Bug real reportado (persistia despues del intento anterior de "saltar" via duracionMs=0
+      // en la logica de sincronizacion normal -- esa ruta comparte codigo con el resto de
+      // transiciones y puede arrastrar un origen a mitad de camino si algo mas fallo en el tick
+      // anterior). Esto es un bypass directo, sin pasar por posicionInterpolada en absoluto: si el
+      // backend dice que el vehiculo esta ENTREGANDO o EN_REFRIGERIO, el marcador se clava en su
+      // posicion real de una, siempre, sin excepciones ni dependencia del estado previo. Se
+      // sacrifica la animacion del ultimo tramo a cambio de que la etiqueta y el punto en el mapa
+      // NUNCA puedan quedar inconsistentes.
+      if (v.status === 'delivering' || v.status === 'on_break') {
+        marker.setLatLng([v.position.y, v.position.x]);
+        sync.set(v.id, {
+          origen: v.position,
+          destino: v.position,
+          waypoints: [],
+          caminoFuturo: rutaActiva?.waypoints ?? v.returnPath,
+          inicioMs: performance.now(),
+          duracionMs: 0,
+          fuenteId,
+        });
+        return;
+      }
+
       const sinCambios = syncAnterior && syncAnterior.destino.x === v.position.x
         && syncAnterior.destino.y === v.position.y && syncAnterior.fuenteId === fuenteId;
       if (sinCambios) {
@@ -728,9 +798,20 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       // Continuidad: el nuevo tramo arranca donde el marcador esta VISUALMENTE ahora (no donde
       // decia el ultimo dato del backend), para que nunca haya un salto visible al resincronizar.
       const origen = syncAnterior ? posicionInterpolada(syncAnterior, ahora) : v.position;
-      // Pautado por el sa NOMINAL (declarado por el backend), no por el intervalo real medido
-      // entre los dos ultimos lotes -- ver el comentario de la prop sa.
-      const duracionMs = sa && sa > 0 ? sa * 60_000 : DURACION_RESPALDO_MS;
+      // Pautado por el sa NOMINAL (declarado por el backend), no por el intervalo real medido --
+      // ver el comentario de la prop sa. PERO si este vehiculo paso varios lotes sin resincronizar
+      // (sinCambios=true repetido -- se quedo detenido sirviendo un pedido o en refrigerio), la
+      // distancia acumulada entre origen y destino puede representar VARIOS lotes de avance, no
+      // uno solo. Animar esa distancia en una sola ventana de sa lo haria verse correr demasiado
+      // rapido (bug real reportado: "algunos vehiculos avanzan mas rapido en ciertos momentos").
+      // Se redondea el tiempo real transcurrido al multiplo de sa mas cercano -- cancela el jitter
+      // normal de un solo lote (la razon original de usar sa fijo en vez de medir) mientras sigue
+      // escalando correctamente cuando se saltaron varios lotes de verdad.
+      const saMs = sa && sa > 0 ? sa * 60_000 : DURACION_RESPALDO_MS;
+      const lotesTranscurridos = syncAnterior
+        ? Math.max(1, Math.round((ahora - syncAnterior.inicioMs) / saMs))
+        : 1;
+      const duracionMs = lotesTranscurridos * saMs;
 
       // Camino real para este tramo: el caminoFuturo que YA conociamos desde el tick anterior
       // arranca exactamente en origen (es geometria del backend calculada desde la posicion del
@@ -750,6 +831,10 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const waypoints = hayCaminoReal ? caminoFuturoAnterior.slice(0, idxDestino + 1) : puenteSeguro ?? [];
 
       const caminoFuturo = rutaActiva?.waypoints ?? v.returnPath;
+
+      // Nota: entregando/en_refrigerio ya se resolvieron arriba (bypass directo, ver el bloque que
+      // hace return antes de llegar aqui) -- de aqui en adelante solo quedan viajando/inactivo,
+      // que si se benefician de la animacion normal.
       sync.set(v.id, {
         origen,
         destino: v.position,

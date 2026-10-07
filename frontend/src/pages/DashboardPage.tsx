@@ -77,12 +77,11 @@ export const DashboardPage: React.FC = () => {
         <MetricasStrip metricas={estadoRaw?.metricas} />
       </div>
 
-      {/* Cuerpo Principal: Mapa Central + Inspector Lateral */}
+      {/* Cuerpo Principal: Inspector Lateral + Mapa -- mismo lado del panel que Rutas/Seguimiento
+          (antes el mapa iba primero aqui, invirtiendo el patron de las otras 2 paginas sin razon). */}
       <div className="flex-1 flex overflow-hidden">
-        <MapSlot className="flex-1 relative h-full" />
-
         {/* Panel Lateral de Inspección Rápida */}
-        <aside className="w-80 border-l border-slate-800 bg-slate-900/95 flex flex-col p-4 space-y-4 overflow-y-auto shrink-0 text-xs">
+        <aside className="w-96 border-r border-slate-800 bg-slate-900/95 flex flex-col p-4 space-y-4 overflow-y-auto shrink-0 text-xs">
           <div>
             <h3 className="font-bold text-sm text-white mb-1">Centro de Despacho</h3>
             <p className="text-[11px] text-slate-400">
@@ -181,6 +180,8 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
         </aside>
+
+        <MapSlot className="flex-1 relative h-full" />
       </div>
     </div>
   );

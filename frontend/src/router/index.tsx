@@ -3,7 +3,7 @@ import { createBrowserRouter, RouterProvider, Navigate, Outlet, Link, useLocatio
 import { DashboardPage } from '../pages/DashboardPage';
 import { RutasPage } from '../pages/RutasPage';
 import { SeguimientoPage } from '../pages/SeguimientoPage';
-import { LayoutDashboard, Route as RouteIcon, Navigation, Truck } from 'lucide-react';
+import { LayoutDashboard, Navigation, Truck } from 'lucide-react';
 import { ToastProvider } from '../components/ToastProvider';
 import { LiveAnnouncer } from '../components/LiveAnnouncer';
 import { MapErrorBoundary } from '../components/map/MapErrorBoundary';
@@ -31,9 +31,11 @@ const RootLayout: React.FC = () => {
   const mapHostRef = useRef<HTMLDivElement>(null);
   const { warehouses, vehicles, blockedStreets, orders, routes } = useEstadoOperacion();
 
+  // "Rutas" oculta del nav a pedido explicito -- la pagina/ruta sigue existiendo (RutasPage,
+  // /rutas en el router de abajo), solo no aparece como pestaña. Reversible: solo agregar de
+  // vuelta la entrada aqui.
   const navLinks = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-    { to: '/rutas', label: 'Rutas', icon: RouteIcon },
     { to: '/seguimiento', label: 'Seguimiento', icon: Navigation },
   ];
 
@@ -41,13 +43,15 @@ const RootLayout: React.FC = () => {
     <LiveAnnouncer>
     <ToastProvider>
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0B111E] text-slate-100 font-sans">
-      {/* Barra de Navegación Superior Centralizada */}
+      {/* Barra de Navegación Superior -- 3 zonas explícitas (identidad+navegación / estado de
+          ejecución / utilidades), en vez de una sola fila donde todo competía por espacio. */}
       <nav
         id="main-app-nav"
         aria-label="Navegación principal"
-        className="h-14 border-b border-slate-800 bg-[#0F172A] px-4 flex items-center justify-between z-30 shrink-0"
+        className="h-16 border-b border-slate-800 bg-[#0F172A] px-4 flex items-center justify-between gap-4 z-30 shrink-0"
       >
-        <div className="flex items-center gap-6">
+        {/* Zona 1: identidad + navegación entre páginas */}
+        <div className="flex items-center gap-6 shrink-0">
           <Link to="/" className="flex items-center gap-2.5 group">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-xs shadow">
               <Truck className="h-4 w-4" />
@@ -82,13 +86,20 @@ const RootLayout: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Zona 2: estado de ejecución -- agrupado en su propio bloque, es lo que el usuario
+            monitorea constantemente y antes competía por espacio con botones de utilidad. */}
+        <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-slate-700/80 bg-slate-900/60 shrink-0">
           <SimClock />
+          <div className="w-px h-6 bg-slate-700/80" />
+          <EjecucionControls />
+        </div>
+
+        {/* Zona 3: utilidades -- alertas, log de eventos, archivos, solicitudes */}
+        <div className="flex items-center gap-2 shrink-0">
           <AlertasBell />
           <EventLogButton />
           <ArchivosButton />
           <NuevaSolicitudButton />
-          <EjecucionControls />
         </div>
       </nav>
 
