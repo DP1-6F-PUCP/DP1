@@ -3,7 +3,6 @@ import L from 'leaflet';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route, Point } from '../../types';
 import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
 import { getVehicleSemaforoStatus } from '../../utils/vehicleStatus';
-import { useMapStore } from '../../store/mapStore';
 
 /**
  * Info de sincronizacion para interpolar suavemente la posicion de un vehiculo entre dos lotes
@@ -240,9 +239,6 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   sa,
   className = '',
 }) => {
-  const vehicleFilterType = useMapStore((s) => s.vehicleFilterType);
-  const vehicleFilterStatus = useMapStore((s) => s.vehicleFilterStatus);
-  const vehicleSearchTerm = useMapStore((s) => s.vehicleSearchTerm);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
@@ -673,16 +669,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const group = vehiclesLayerGroupRef.current;
     const markers = vehicleMarkersRef.current;
     const sync = vehicleSyncRef.current;
-    const normalizedSearchTerm = vehicleSearchTerm.trim().toLowerCase();
-    const visibleVehicles = vehicles.filter((v) => {
-      const matchesType = vehicleFilterType === 'all' || v.type === vehicleFilterType;
-      const matchesStatus = vehicleFilterStatus === 'all' || v.status === vehicleFilterStatus;
-      const matchesSearch =
-        !normalizedSearchTerm ||
-        v.code.toLowerCase().includes(normalizedSearchTerm) ||
-        v.id.toLowerCase().includes(normalizedSearchTerm);
-      return matchesType && matchesStatus && matchesSearch;
-    });
+    const visibleVehicles = vehicles;
 
     // Bug real corregido (reporte directo: "veo que hace regresar a los vehiculos" al detener una
     // ejecucion y arrancar otra): la MISMA flota de ids (TA01, TM01, ...) existe en toda ejecucion
@@ -977,9 +964,6 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     idEjecucion,
     sa,
     blockedStreets,
-    vehicleFilterType,
-    vehicleFilterStatus,
-    vehicleSearchTerm,
   ]);
 
   // Bucle continuo de interpolacion: corre en todo momento, no solo cuando llegan datos nuevos,

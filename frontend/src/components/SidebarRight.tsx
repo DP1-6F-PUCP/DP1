@@ -41,12 +41,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const { ejecucion } = useEscenario();
   const selectedVehicleId = useMapStore((s) => s.selectedVehicleId);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
-  const fleetSearchTerm = useMapStore((s) => s.vehicleSearchTerm);
-  const setFleetSearchTerm = useMapStore((s) => s.setVehicleSearchTerm);
-  const fleetFilterType = useMapStore((s) => s.vehicleFilterType);
-  const setFleetFilterType = useMapStore((s) => s.setVehicleFilterType);
-  const fleetFilterStatus = useMapStore((s) => s.vehicleFilterStatus);
-  const setFleetFilterStatus = useMapStore((s) => s.setVehicleFilterStatus);
   const selectedWarehouseId = useMapStore((s) => s.selectedWarehouseId);
   const setSelectedWarehouseId = useMapStore((s) => s.setSelectedWarehouseId);
   const { alertas } = useAlertas();
@@ -57,6 +51,11 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const [activeTab, setActiveTab] = useState<'operation' | 'fleet'>('operation');
   const [isAlertsCollapsed, setIsAlertsCollapsed] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [fleetSearchTerm, setFleetSearchTerm] = useState('');
+  const [fleetFilterType, setFleetFilterType] = useState<'all' | 'car' | 'motorcycle' | 'bicycle'>('all');
+  const [fleetFilterStatus, setFleetFilterStatus] = useState<
+    'all' | 'idle' | 'en_route' | 'delivering' | 'broken' | 'maintenance'
+  >('all');
 
   const previousSelectedVehicleId = useRef<string | null>(selectedVehicleId);
   const vehicleCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -170,33 +169,34 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
           isCollapsed ? 'w-16' : 'w-80 lg:w-96'
         } bg-[var(--color-sidebar-background)] text-slate-100 shadow-xl h-full overflow-hidden`}
       >
-        {/* Toggle Collapse Button flotante */}
-        <button
-          type="button"
-          id="btn-toggle-ops-sidebar"
-          onClick={onToggleCollapse}
-          title={isCollapsed ? 'Expandir panel de control' : 'Colapsar panel de control'}
-          className="absolute -right-3 top-5 z-30 flex h-6 w-6 items-center justify-center rounded-full border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-surface)] text-[var(--color-sidebar-icon-muted)] hover:text-white shadow-md hover:bg-[var(--color-sidebar-border)] transition-colors cursor-pointer"
-        >
-          {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-        </button>
-
-        {/* Header compacto con logo SM */}
+        {/* Header con logo y botón collapse */}
         <div className="flex h-14 items-center justify-between px-3.5 border-b border-[var(--color-sidebar-border)]/70 shrink-0">
           {!isCollapsed ? (
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E5B9A] text-white font-bold text-xs shadow-sm tracking-wide">
-                SM
+            <>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E5B9A] text-white font-bold text-xs shadow-sm tracking-wide">
+                  SM
+                </div>
+                <div className="text-sm font-bold tracking-wider font-mono-code">
+                  <span className="text-white">SYS</span>
+                  <span className="text-[var(--color-sidebar-icon-muted)] font-medium">MILE</span>
+                </div>
               </div>
-              <div className="text-sm font-bold tracking-wider font-mono-code">
-                <span className="text-white">SYS</span>
-                <span className="text-[var(--color-sidebar-icon-muted)] font-medium">MILE</span>
-              </div>
-            </div>
+              <button
+                type="button"
+                id="btn-toggle-ops-sidebar"
+                onClick={onToggleCollapse}
+                title="Colapsar menú"
+                className="text-[var(--color-sidebar-icon-muted)] hover:text-white p-1 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            </>
           ) : (
             <div className="w-full flex items-center justify-center">
               <button
                 type="button"
+                id="btn-toggle-ops-sidebar"
                 onClick={onToggleCollapse}
                 title="Expandir menú"
                 className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E5B9A] text-white font-bold text-xs shadow-sm cursor-pointer hover:opacity-90"
