@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route, Point } from '../../types';
-import { GRID_WIDTH_KM, GRID_HEIGHT_KM } from '../../utils/manhattan';
+import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
 import { getVehicleSemaforoStatus } from '../../utils/vehicleStatus';
+import { useMapStore } from '../../store/mapStore';
 
 /**
  * Info de sincronizacion para interpolar suavemente la posicion de un vehiculo entre dos lotes
@@ -83,6 +84,43 @@ function posicionInterpolada(sync: SincroVehiculo, ahoraMs: number): Point {
     objetivo -= largo;
   }
   return waypoints[waypoints.length - 1];
+}
+
+/**
+ * Puntos desde la posicion interpolada actual del marcador hasta {@code destino}, siguiendo los
+ * waypoints del tramo (axis-aligned si waypoints lo es). El primer elemento es la posicion del
+ * marcador; el ultimo es siempre {@code destino}.
+ *
+ * Se usa para dibujar la linea de la ruta seleccionada: antes la linea iba de la posicion
+ * interpolada directo al SIGUIENTE punto de la cola, saltandose el nodo intermedio (destino) y
+ * produciendo segmentos en diagonal (imposibles en una grilla Manhattan) en las esquinas.
+ */
+function caminoRestante(sync: SincroVehiculo, ahoraMs: number): Point[] {
+  const { origen, destino, waypoints, inicioMs, duracionMs } = sync;
+  const fraccion = duracionMs > 0 ? Math.min(1, Math.max(0, (ahoraMs - inicioMs) / duracionMs)) : 1;
+  const camino = waypoints.length >= 2 ? waypoints : [origen, destino];
+
+  const largos: number[] = [];
+  let total = 0;
+  for (let i = 0; i < camino.length - 1; i++) {
+    const d = Math.abs(camino[i + 1].x - camino[i].x) + Math.abs(camino[i + 1].y - camino[i].y);
+    largos.push(d);
+    total += d;
+  }
+  if (total === 0) return [destino];
+
+  let objetivo = fraccion * total;
+  for (let i = 0; i < largos.length; i++) {
+    if (objetivo <= largos[i] || i === largos.length - 1) {
+      const t = largos[i] > 0 ? Math.min(1, objetivo / largos[i]) : 1;
+      const p0 = camino[i];
+      const p1 = camino[i + 1];
+      const punto = { x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t };
+      return [punto, ...camino.slice(i + 1)];
+    }
+    objetivo -= largos[i];
+  }
+  return [destino];
 }
 
 /** {@code true} si el segmento axis-aligned p0-p1 se superpone con algun tramo de {@code bloqueos}
@@ -202,6 +240,9 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   sa,
   className = '',
 }) => {
+  const vehicleFilterType = useMapStore((s) => s.vehicleFilterType);
+  const vehicleFilterStatus = useMapStore((s) => s.vehicleFilterStatus);
+  const vehicleSearchTerm = useMapStore((s) => s.vehicleSearchTerm);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
@@ -216,6 +257,10 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // Marcadores de vehiculo persistentes entre renders (en vez de destruir y recrear cada vez que
   // llegan datos nuevos) -- necesario para poder animar su posicion en vez de que "salten".
   const vehicleMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const selectedRouteLineRef = useRef<L.Polyline | null>(null);
+  const selectedRouteTailRef = useRef<[number, number][]>([]);
+  const selectedVehicleIdRef = useRef<string | null>(selectedVehicleId);
+  selectedVehicleIdRef.current = selectedVehicleId;
   // Punto de sincronizacion de cada vehiculo (tramo origen->destino + ventana de tiempo real para
   // recorrerlo), usado por el bucle continuo de abajo (ver posicionInterpolada) -- no se anima
   // aqui directamente, solo se registra el tramo para que el bucle (efecto aparte, corre siempre)
@@ -429,15 +474,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
   // 4. Render Projected Routes (Only shown when a vehicle is selected)
   //
-  // Bug real corregido (reporte directo): la linea punteada hacia el destino se construia con
-  // generateManhattanPath, una aproximacion local -- no el camino que el backend realmente eligio
-  // para ese vehiculo (CalculadorDistancia, que evade bloqueos via A*). Cuando ambos difieren se ve
-  // como ruido visual: una linea que cruza por donde el vehiculo NO va a pasar. Se quita la linea;
-  // el circulo de destino se mantiene (es solo un punto, selectedVehicle.destination ya es un dato
-  // real, no una aproximacion).
+  // Dos casos:
+  //  - Vehiculo en camino a entregar un pedido: ruta activa (in_progress) -> geometria de
+  //    activeRoute.waypoints, en azul.
+  //  - Vehiculo regresando a un almacen: la Ruta ya quedo FINALIZADA, asi que no hay ruta activa;
+  //    se usa Vehicle.returnPath (VehiculoDTO.geometriaRetorno), en ambar y mas punteado.
+  //
+  // El fallback directo solo cubre estados sin geometria.
   useEffect(() => {
     const group = routesLayerGroupRef.current;
     group.clearLayers();
+    selectedRouteLineRef.current = null;
+    selectedRouteTailRef.current = [];
 
     if (!showProjectedRoutes) return;
     if (!selectedVehicleId) return;
@@ -445,14 +493,77 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
     if (!selectedVehicle) return;
 
-    const isBroken = selectedVehicle.status === 'broken';
+    // Mientras entrega no se muestra su siguiente ruta
+    if (selectedVehicle.status === 'delivering') return;
 
-    // Destination Marker on the Grid (Concentric circle matching SVG)
-    if (selectedVehicle.destination) {
+    const isBroken = selectedVehicle.status === 'broken';
+    const activeRoute = routes.find(
+      (route) =>
+        route.vehicleId === selectedVehicle.id &&
+        route.status === 'in_progress'
+    );
+
+    // Camino hacia un pedido (ruta activa) o de regreso a un almacén (sin ruta activa)
+    const deliveryPath = activeRoute?.waypoints ?? [];
+    const returnPath = selectedVehicle.returnPath ?? [];
+    const isReturning = deliveryPath.length < 2 && returnPath.length > 1;
+
+    const geometry = deliveryPath.length > 1
+      ? deliveryPath
+      : isReturning
+        ? returnPath
+        : [];
+
+    const fallbackDestination = selectedVehicle.destination;
+    const routePath = geometry.length > 1
+      ? geometry
+      : fallbackDestination
+        ? normalizeManhattanPath([selectedVehicle.position, fallbackDestination])
+        : [];
+
+    if (routePath.length > 1) {
+      // Azul = hacia pedido, ámbar = hacia almacén, gris/rojo = averiado
+      const accent = isBroken ? '#94a3b8' : isReturning ? '#f59e0b' : '#38bdf8';
+      const ringAccent = isBroken ? '#ef4444' : accent;
+
+      const firstPoint = routePath[0];
+      // La geometría del backend pertenece al último snapshot y puede comenzar en una
+      // posición distinta a la que el marcador ya alcanzó por interpolación. Al anteponer la
+      // posición actual hay que volver a normalizar el camino completo; de lo contrario el
+      // primer segmento queda diagonal (la línea visible se separa del camino Manhattan).
+      const destinationPath = normalizeManhattanPath(
+        firstPoint?.x === selectedVehicle.position.x && firstPoint.y === selectedVehicle.position.y
+          ? routePath
+          : [selectedVehicle.position, ...routePath]
+      );
+      // La geometría real termina en el destino que el backend pudo calcular. Usar ese extremo
+      // para el marcador evita que un pedido atrasado del endpoint /pedidos deje el círculo en
+      // otra ubicación distinta al final visible de la ruta.
+      const destination = destinationPath[destinationPath.length - 1];
+
+      const routeLine = L.polyline(
+        destinationPath.map((point) => [point.y, point.x] as [number, number]),
+        {
+          color: accent,
+          weight: 2.5,
+          opacity: 0.9,
+          dashArray: isReturning ? '2, 8' : '6, 8', // el regreso se ve más punteado
+          lineCap: 'round',
+          lineJoin: 'round',
+          interactive: false,
+        }
+      ).addTo(group);
+      selectedRouteLineRef.current = routeLine;
+      // La cola empieza en destinationPath[1]; el bucle de animación antepone el tramo restante
+      // del marcador hasta destinationPath[0] (ver caminoRestante).
+      selectedRouteTailRef.current = destinationPath
+        .slice(1)
+        .map((point) => [point.y, point.x] as [number, number]);
+
       // Outer dashed ring
-      L.circleMarker([selectedVehicle.destination.y, selectedVehicle.destination.x], {
+      L.circleMarker([destination.y, destination.x], {
         radius: 7,
-        color: isBroken ? '#ef4444' : '#38bdf8',
+        color: ringAccent,
         weight: 1.5,
         dashArray: '3, 2',
         fill: false,
@@ -460,16 +571,16 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       }).addTo(group);
 
       // Inner solid circle
-      L.circleMarker([selectedVehicle.destination.y, selectedVehicle.destination.x], {
+      L.circleMarker([destination.y, destination.x], {
         radius: 3.5,
         color: '#ffffff',
         weight: 1,
-        fillColor: isBroken ? '#ef4444' : '#38bdf8',
+        fillColor: ringAccent,
         fillOpacity: 1,
         interactive: false,
       }).addTo(group);
     }
-  }, [showProjectedRoutes, vehicles, selectedVehicleId]);
+  }, [showProjectedRoutes, vehicles, routes, selectedVehicleId]);
 
   // 5. Render Warehouses (No balloon popups - triggers left inspector popup on click)
   useEffect(() => {
@@ -562,6 +673,16 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const group = vehiclesLayerGroupRef.current;
     const markers = vehicleMarkersRef.current;
     const sync = vehicleSyncRef.current;
+    const normalizedSearchTerm = vehicleSearchTerm.trim().toLowerCase();
+    const visibleVehicles = vehicles.filter((v) => {
+      const matchesType = vehicleFilterType === 'all' || v.type === vehicleFilterType;
+      const matchesStatus = vehicleFilterStatus === 'all' || v.status === vehicleFilterStatus;
+      const matchesSearch =
+        !normalizedSearchTerm ||
+        v.code.toLowerCase().includes(normalizedSearchTerm) ||
+        v.id.toLowerCase().includes(normalizedSearchTerm);
+      return matchesType && matchesStatus && matchesSearch;
+    });
 
     // Bug real corregido (reporte directo: "veo que hace regresar a los vehiculos" al detener una
     // ejecucion y arrancar otra): la MISMA flota de ids (TA01, TM01, ...) existe en toda ejecucion
@@ -610,7 +731,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       return;
     }
 
-    const idsActuales = new Set(vehicles.map((v) => v.id));
+    const idsActuales = new Set(visibleVehicles.map((v) => v.id));
     for (const [id, marker] of markers) {
       if (!idsActuales.has(id)) {
         group.removeLayer(marker);
@@ -619,7 +740,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       }
     }
 
-    vehicles.forEach((v) => {
+    visibleVehicles.forEach((v) => {
       const isSelected = selectedVehicleId === v.id;
       const semaforo = getVehicleSemaforoStatus(v, orders, simMinutes);
       const isDelayedOrBroken = semaforo.state === 'delayed' || v.status === 'broken';
@@ -845,11 +966,29 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         fuenteId,
       });
     });
-  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, idEjecucion, sa, blockedStreets]);
+  }, [
+    vehicles,
+    routes,
+    selectedVehicleId,
+    isDarkTheme,
+    orders,
+    simMinutes,
+    onSelectVehicle,
+    idEjecucion,
+    sa,
+    blockedStreets,
+    vehicleFilterType,
+    vehicleFilterStatus,
+    vehicleSearchTerm,
+  ]);
 
   // Bucle continuo de interpolacion: corre en todo momento, no solo cuando llegan datos nuevos,
   // moviendo cada marcador segun posicionInterpolada. Montado una sola vez (deps []); lee
   // vehicleSyncRef, que el otro efecto mantiene al dia.
+  //
+  // Para el vehiculo seleccionado tambien redibuja su linea de ruta: tramo pendiente del marcador
+  // hasta el ultimo dato del backend (caminoRestante, sigue el camino real y evita diagonales) +
+  // resto de la ruta (selectedRouteTailRef).
   useEffect(() => {
     let frameId: number;
     const tick = () => {
@@ -859,6 +998,16 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         if (!syncVehiculo) continue;
         const punto = posicionInterpolada(syncVehiculo, ahora);
         marker.setLatLng([punto.y, punto.x]);
+
+        if (id === selectedVehicleIdRef.current && selectedRouteLineRef.current) {
+          const restante = caminoRestante(syncVehiculo, ahora).map(
+            (p) => [p.y, p.x] as [number, number]
+          );
+          selectedRouteLineRef.current.setLatLngs([
+            ...restante,
+            ...selectedRouteTailRef.current,
+          ]);
+        }
       }
       frameId = requestAnimationFrame(tick);
     };

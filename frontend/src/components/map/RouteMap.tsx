@@ -3,8 +3,6 @@ import { useMapStore } from '../../store/mapStore';
 import { useScenarioStore } from '../../store/scenarioStore';
 import { Vehicle, Warehouse, BlockedStreet, Order, Route } from '../../types';
 import { LeafletManhattanMap } from './LeafletManhattanMap';
-import { MapLegend } from './MapLegend';
-import { MapLayersControl } from './MapLayersControl';
 import { useEstadoOperacion } from '../../hooks/useEstadoOperacion';
 
 export interface RouteMapProps {
@@ -80,8 +78,6 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         isDarkTheme={isDarkTheme}
         className="w-full h-full"
       />
-      <MapLayersControl />
-      <MapLegend />
     </div>
   );
 };

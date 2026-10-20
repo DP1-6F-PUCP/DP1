@@ -8,6 +8,15 @@ export interface MapLayersState {
   orderPins: boolean;
 }
 
+export type VehicleFilterType = 'all' | 'car' | 'motorcycle' | 'bicycle';
+export type VehicleFilterStatus =
+  | 'all'
+  | 'idle'
+  | 'en_route'
+  | 'delivering'
+  | 'broken'
+  | 'maintenance';
+
 interface MapState {
   selectedVehicleId: string | null;
   selectedWarehouseId: string | null;
@@ -16,6 +25,9 @@ interface MapState {
   realtimePositions: Record<string, Point>;
   zoomLevel: number;
   panOffset: Point;
+  vehicleFilterType: VehicleFilterType;
+  vehicleFilterStatus: VehicleFilterStatus;
+  vehicleSearchTerm: string;
 
   // Acciones (siempre inmutables)
   setSelectedVehicleId: (id: string | null) => void;
@@ -27,6 +39,9 @@ interface MapState {
   updateBatchPositions: (positions: Record<string, Point>) => void;
   setZoomLevel: (zoom: number | ((prev: number) => number)) => void;
   setPanOffset: (offset: Point | ((prev: Point) => Point)) => void;
+  setVehicleFilterType: (filter: VehicleFilterType) => void;
+  setVehicleFilterStatus: (filter: VehicleFilterStatus) => void;
+  setVehicleSearchTerm: (term: string) => void;
   resetMapTransform: () => void;
 }
 
@@ -43,6 +58,9 @@ export const useMapStore = create<MapState>((set) => ({
   realtimePositions: {},
   zoomLevel: 1,
   panOffset: { x: 0, y: 0 },
+  vehicleFilterType: 'all',
+  vehicleFilterStatus: 'all',
+  vehicleSearchTerm: '',
 
   setSelectedVehicleId: (id) =>
     set({
@@ -103,6 +121,10 @@ export const useMapStore = create<MapState>((set) => ({
           ? offsetOrUpdater(state.panOffset)
           : offsetOrUpdater,
     })),
+
+  setVehicleFilterType: (vehicleFilterType) => set({ vehicleFilterType }),
+  setVehicleFilterStatus: (vehicleFilterStatus) => set({ vehicleFilterStatus }),
+  setVehicleSearchTerm: (vehicleSearchTerm) => set({ vehicleSearchTerm }),
 
   resetMapTransform: () => set({ zoomLevel: 1, panOffset: { x: 0, y: 0 } }),
 }));

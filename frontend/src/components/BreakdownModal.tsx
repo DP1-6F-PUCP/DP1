@@ -71,9 +71,6 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
   isDarkTheme = true,
 }) => {
   const activeVehicles = vehicles.filter((v) => v.status !== 'broken');
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>(
-    activeVehicles[0]?.id || ''
-  );
   const [selectedType, setSelectedType] = useState<BreakdownType>(1);
 
   if (!isOpen) return null;
@@ -83,11 +80,7 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
   };
 
   const handleConfirm = () => {
-    let targetId = selectedVehicleId;
-    if (!targetId || targetId === 'random') {
-      const randomIndex = Math.floor(Math.random() * activeVehicles.length);
-      targetId = activeVehicles[randomIndex]?.id;
-    }
+    const targetId = activeVehicles[0]?.id;
     if (targetId) {
       const opt = TYPE_OPTIONS.find((o) => o.type === selectedType);
       const reason = opt?.defaultReason || `Avería Tipo ${selectedType}`;
@@ -133,7 +126,7 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
                   isDarkTheme ? 'text-slate-400' : 'text-[var(--color-text-secondary)]'
                 }`}
               >
-                Seleccione la unidad y el tipo normativo de avería
+                Confirme la unidad y seleccione el tipo normativo de avería
               </p>
             </div>
           </div>
@@ -149,7 +142,7 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
           </button>
         </div>
 
-        {/* Selection of Vehicle */}
+        {/* Vehicle selected from the fleet card */}
         <div className="space-y-3 text-xs">
           <div>
             <label
@@ -159,30 +152,17 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
             >
               Unidad de Transporte Objetivo
             </label>
-            <select
-              value={selectedVehicleId}
-              onChange={(e) => setSelectedVehicleId(e.target.value)}
-              className={`w-full rounded-xl px-3 py-2 font-mono-code focus:outline-none focus:border-blue-500 border ${
+            <div
+              className={`w-full rounded-xl px-3 py-2.5 font-mono-code border ${
                 isDarkTheme
                   ? 'bg-slate-800 border-slate-700 text-white'
                   : 'bg-slate-50 border-slate-300 text-slate-900'
               }`}
             >
-              <option value="random">🎲 Seleccionar aleatorio (Cualquier activo)</option>
-              {activeVehicles.map((v) => {
-                const typeLabel =
-                  v.type === 'car'
-                    ? 'Auto (TA)'
-                    : v.type === 'bicycle'
-                    ? 'Bicicleta (TB)'
-                    : 'Moto (TM)';
-                return (
-                  <option key={v.id} value={v.id}>
-                    {v.code} - {typeLabel} ({v.currentLoad}/{v.capacity} paquetes en ruta)
-                  </option>
-                );
-              })}
-            </select>
+              {activeVehicles[0]
+                ? `${activeVehicles[0].code} (${activeVehicles[0].currentLoad}/${activeVehicles[0].capacity} paquetes en ruta)`
+                : 'Vehículo no disponible'}
+            </div>
           </div>
 
           {/* 3 Types of Breakdowns */}
@@ -285,4 +265,3 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
     </div>
   );
 };
-

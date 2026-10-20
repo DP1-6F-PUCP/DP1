@@ -18,6 +18,31 @@ export function manhattanDistance(a: Point, b: Point): number {
 }
 
 /**
+ * Ensures that a polyline only contains horizontal and vertical segments.
+ * Backend geometries normally already have this shape, but normalizing at the
+ * adapter boundary also protects the map when an older or malformed geometry
+ * contains a diagonal segment.
+ */
+export function normalizeManhattanPath(path: Point[]): Point[] {
+  if (path.length < 2) {
+    return path.map((point) => ({ ...point }));
+  }
+
+  const normalized: Point[] = [{ ...path[0] }];
+  for (let i = 1; i < path.length; i++) {
+    const previous = normalized[normalized.length - 1];
+    const current = path[i];
+
+    if (previous.x !== current.x && previous.y !== current.y) {
+      normalized.push({ x: current.x, y: previous.y });
+    }
+    normalized.push({ ...current });
+  }
+
+  return normalized;
+}
+
+/**
  * Check if a vertical/horizontal segment intersects a blocked street
  */
 export function isSegmentBlocked(
@@ -102,12 +127,50 @@ export function generateManhattanPath(
     return [{ ...start }, cornerVH, { ...destination }];
   }
 
-  // If both direct corners are blocked, create a detour by shifting 3km parallel
-  const detourY = Math.max(2, Math.min(GRID_HEIGHT_KM - 2, start.y + 4));
-  return [
-    { ...start },
-    { x: start.x, y: detourY },
-    { x: destination.x, y: detourY },
-    { ...destination },
+  // If both direct corners are blocked, search the grid instead of inventing a detour.
+  // An arbitrary parallel line can itself cross a blocked street.
+  const queue: Point[] = [{ ...start }];
+  const visited = new Set([`${start.x},${start.y}`]);
+  const previous = new Map<string, Point>();
+  const directions = [
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
   ];
+
+  for (let index = 0; index < queue.length; index++) {
+    const current = queue[index];
+    if (current.x === destination.x && current.y === destination.y) {
+      const path: Point[] = [];
+      let cursor = current;
+      while (true) {
+        path.unshift({ ...cursor });
+        if (cursor.x === start.x && cursor.y === start.y) return path;
+        cursor = previous.get(`${cursor.x},${cursor.y}`)!;
+      }
+    }
+
+    for (const direction of directions) {
+      const next = { x: current.x + direction.x, y: current.y + direction.y };
+      const key = `${next.x},${next.y}`;
+      if (
+        next.x < 0 ||
+        next.x > GRID_WIDTH_KM ||
+        next.y < 0 ||
+        next.y > GRID_HEIGHT_KM ||
+        visited.has(key) ||
+        isSegmentBlocked(current, next, blockedStreets)
+      ) {
+        continue;
+      }
+      visited.add(key);
+      previous.set(key, current);
+      queue.push(next);
+    }
+  }
+
+  // No safe visual path exists. Keep the vehicle at its known position rather than drawing a
+  // line through a closure.
+  return [{ ...start }];
 }

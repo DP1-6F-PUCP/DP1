@@ -2,6 +2,8 @@
 @import "leaflet/dist/leaflet.css";
 @import "./tokens.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #1F3864;
   --color-secondary: #4C7CBF;
@@ -31,6 +33,29 @@
     padding: 0;
     line-height: 1.5;
   }
+}
+
+/* Glassmorphism y utilidades de animación */
+.glass {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Tokens de diseño oficiales */

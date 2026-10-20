@@ -3,16 +3,6 @@ import { Clock } from 'lucide-react';
 import { useEstadoOperacion } from '../../../hooks/useEstadoOperacion';
 import { useScenarioStore } from '../../../store/scenarioStore';
 
-function formatElapsed(ms: number): string {
-  const totalMinutos = Math.max(0, Math.floor(ms / 60000));
-  const dias = Math.floor(totalMinutos / 1440);
-  const horas = Math.floor((totalMinutos % 1440) / 60);
-  const minutos = totalMinutos % 60;
-  if (dias > 0) return `${dias}d ${horas}h ${minutos}m`;
-  if (horas > 0) return `${horas}h ${minutos}m`;
-  return `${minutos}m`;
-}
-
 /**
  * No existia ningun reloj en el front para seguir el avance de la simulacion -- el unico lugar
  * que mostraba una hora era DelayAlertModal (al abrir una alerta puntual).
@@ -26,7 +16,6 @@ function formatElapsed(ms: number): string {
  */
 export const SimClock: React.FC = () => {
   const { estadoRaw } = useEstadoOperacion();
-  const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
   const k = useScenarioStore((s) => s.ejecucion?.k) ?? 0;
   const estadoEjecucion = useScenarioStore((s) => s.ejecucion?.estado);
   const [, forceTick] = useState(0);
@@ -69,7 +58,6 @@ export const SimClock: React.FC = () => {
   const nowMs = avanzando && Number.isFinite(nowMsConocido) && k > 0
     ? nowMsConocido + k * haceSegundos * 1000
     : nowMsConocido;
-  const elapsedMs = scenarioStartMs != null && Number.isFinite(nowMs) ? nowMs - scenarioStartMs : null;
   const fechaFormateada = Number.isFinite(nowMs)
     ? new Date(nowMs).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : marcaTiempoActual;
@@ -78,12 +66,11 @@ export const SimClock: React.FC = () => {
 
   return (
     <div
-      className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800 text-[11px] font-mono-code text-slate-300"
+      className="flex items-center gap-2 px-0 pt-0.5 text-[11px] font-mono-code text-slate-300"
       title="Hora simulada actual de la ejecución"
     >
       <Clock className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
       <span className="text-slate-100 font-medium">{fechaFormateada}</span>
-      {elapsedMs != null && <span className="text-slate-500">· +{formatElapsed(elapsedMs)}</span>}
       <span className={`text-[10px] ${estancado ? 'text-amber-400' : 'text-slate-500'}`}>
         actualizado hace {haceSegundos}s
       </span>
