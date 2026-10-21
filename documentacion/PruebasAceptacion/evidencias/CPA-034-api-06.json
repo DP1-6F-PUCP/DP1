@@ -1,0 +1,921 @@
+{
+  "caso": "CPA-034",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/estado-operacion",
+  "peticion": null,
+  "status": 200,
+  "body": {
+    "data": {
+      "marcaTiempoActual": "2026-09-01T11:59:40",
+      "rutas": [
+        {
+          "idRuta": "TA01-20260901115920-r1",
+          "vehiculoId": "TA01",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA02-20260901115920-r1",
+          "vehiculoId": "TA02",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA03-20260901115920-r1",
+          "vehiculoId": "TA03",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA04-20260901115920-r1",
+          "vehiculoId": "TA04",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA05-20260901115920-r1",
+          "vehiculoId": "TA05",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA06-20260901115920-r1",
+          "vehiculoId": "TA06",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA07-20260901115920-r1",
+          "vehiculoId": "TA07",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA08-20260901115920-r1",
+          "vehiculoId": "TA08",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA09-20260901115920-r1",
+          "vehiculoId": "TA09",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA10-20260901115920-r1",
+          "vehiculoId": "TA10",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM01-20260901115920-r1",
+          "vehiculoId": "TM01",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM02-20260901115920-r1",
+          "vehiculoId": "TM02",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM03-20260901115920-r1",
+          "vehiculoId": "TM03",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM04-20260901115920-r1",
+          "vehiculoId": "TM04",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM05-20260901115920-r1",
+          "vehiculoId": "TM05",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM06-20260901115920-r1",
+          "vehiculoId": "TM06",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM07-20260901115920-r1",
+          "vehiculoId": "TM07",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM08-20260901115920-r1",
+          "vehiculoId": "TM08",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM09-20260901115920-r1",
+          "vehiculoId": "TM09",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM10-20260901115920-r1",
+          "vehiculoId": "TM10",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM11-20260901115920-r1",
+          "vehiculoId": "TM11",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM12-20260901115920-r1",
+          "vehiculoId": "TM12",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM13-20260901115920-r1",
+          "vehiculoId": "TM13",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM14-20260901115920-r1",
+          "vehiculoId": "TM14",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TM15-20260901115920-r1",
+          "vehiculoId": "TM15",
+          "tipoVehiculo": "MOTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB01-20260901115920-r1",
+          "vehiculoId": "TB01",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB02-20260901115920-r1",
+          "vehiculoId": "TB02",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB03-20260901115920-r1",
+          "vehiculoId": "TB03",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB04-20260901115920-r1",
+          "vehiculoId": "TB04",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB05-20260901115920-r1",
+          "vehiculoId": "TB05",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB06-20260901115920-r1",
+          "vehiculoId": "TB06",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB07-20260901115920-r1",
+          "vehiculoId": "TB07",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB08-20260901115920-r1",
+          "vehiculoId": "TB08",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB09-20260901115920-r1",
+          "vehiculoId": "TB09",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB10-20260901115920-r1",
+          "vehiculoId": "TB10",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB11-20260901115920-r1",
+          "vehiculoId": "TB11",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TB12-20260901115920-r1",
+          "vehiculoId": "TB12",
+          "tipoVehiculo": "BICI",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        }
+      ],
+      "vehiculos": [
+        {
+          "idUnidad": "TA01",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA02",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA03",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA04",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA05",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA06",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA07",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA08",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA09",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA10",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM01",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM02",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM03",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM04",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM05",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM06",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM07",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM08",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM09",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM10",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM11",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM12",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM13",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM14",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TM15",
+          "tipo": "MOTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB01",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB02",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB03",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB04",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB05",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB06",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB07",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB08",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB09",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB10",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB11",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TB12",
+          "tipo": "BICI",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        }
+      ],
+      "almacenes": [
+        {
+          "nombre": "Central",
+          "esCentral": true,
+          "posX": 27,
+          "posY": 14,
+          "stockActual": 0,
+          "capacidadMaxima": 0,
+          "nivelOcupacion": 0.0
+        },
+        {
+          "nombre": "Nor-Oeste",
+          "esCentral": false,
+          "posX": 12,
+          "posY": 38,
+          "stockActual": 1000,
+          "capacidadMaxima": 1200,
+          "nivelOcupacion": 83.333336
+        },
+        {
+          "nombre": "Este",
+          "esCentral": false,
+          "posX": 57,
+          "posY": 27,
+          "stockActual": 1000,
+          "capacidadMaxima": 1000,
+          "nivelOcupacion": 100.0
+        }
+      ],
+      "bloqueos": [],
+      "eventos": [
+        {
+          "instante": "2026-09-01T11:59:20",
+          "tipo": "PLANIFICACION_RUTAS",
+          "vehiculoId": null,
+          "x": -1,
+          "y": -1,
+          "pedidoId": null,
+          "descripcion": "Rutas planificadas activadas (37 vehículos, 0 pedidos asignados)"
+        }
+      ],
+      "metricas": {
+        "costoTotalAcumulado": 0.0,
+        "porcentajeEntregasATiempo": 100.0,
+        "contadorEntregados": 0,
+        "contadorIncumplidos": 0,
+        "contadorParadasReasignadas": 0,
+        "contadorAverias": 0,
+        "contadorInterferenciasBloqueo": 0
+      }
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:25:01.951729800Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:25:01Z"
+}

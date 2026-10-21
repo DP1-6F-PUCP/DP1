@@ -1,0 +1,27 @@
+{
+  "caso": "CPA-039",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/pedidos",
+  "peticion": null,
+  "status": 200,
+  "body": {
+    "data": [
+      {
+        "idPedido": "PED-2026-09-0001",
+        "idCliente": "CLI001",
+        "estado": "PENDIENTE",
+        "posX": 28,
+        "posY": 14,
+        "cantidadSolicitada": 0,
+        "cantidadEntregada": 0,
+        "fechaIngreso": "2026-09-01T07:00:00",
+        "horasLimite": 8,
+        "fechaLimite": "2026-09-01T15:00:00"
+      }
+    ],
+    "meta": {
+      "timestamp": "2026-10-21T17:14:42.575703Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:14:42Z"
+}

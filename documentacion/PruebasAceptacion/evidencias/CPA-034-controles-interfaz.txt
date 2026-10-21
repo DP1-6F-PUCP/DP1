@@ -1,0 +1,72 @@
+- complementary:
+  - generic: SM
+  - generic: SYSMILE
+  - button "Colapsar menú":
+  - button "Carga de Datos":
+    - generic: Carga de Datos
+  - generic: Escenarios de Operación
+  - button "Tiempo Real":
+    - generic: Tiempo Real
+  - button "Simulación 5 Días":
+    - generic: Simulación 5 Días
+  - button "Colapso Logístico":
+    - generic: Colapso Logístico
+  - button "Configuración" [active]:
+    - generic: Configuración
+- main:
+  - text: "Escenario:"
+  - strong: Tiempo Real
+  - heading "Inicio de ejecución" [level=1]
+  - paragraph: Define la fecha y hora para comenzar la operación
+  - generic: Fecha
+  - button "Hoy"
+  - textbox "Fecha": 2026-10-21
+  - paragraph: miércoles, 21 de octubre de 2026
+  - generic: Hora
+  - textbox "Hora": 07:00
+  - button "Iniciar Simulación":
+    - generic: Iniciar Simulación
+- banner:
+  - heading "Parámetros del Sistema" [level=2]
+  - paragraph: Ajuste de capacidades, velocidades de flota y visualización
+  - button "Cerrar configuración":
+- heading "Velocidad por Tipo de Flota (km/h)" [level=3]:
+  - text: Velocidad por Tipo de Flota (km/h)
+- text: Auto
+- spinbutton "Auto": "35"
+- text: Moto
+- spinbutton "Moto": "25"
+- text: Bicicleta
+- spinbutton "Bicicleta": "12"
+- heading "Capacidad Máxima de Almacenes" [level=3]:
+  - text: Capacidad Máxima de Almacenes
+- text: Central
+- spinbutton "Central": "0"
+- text: Nor-Oeste
+- spinbutton "Nor-Oeste": "1200"
+- text: Este
+- spinbutton "Este": "1000"
+- heading "Flota de Transporte (Formato TTNN)" [level=3]:
+  - text: Flota de Transporte (Formato TTNN)
+- paragraph: "TT: Tipo (TA: Autos, TB: Bicicletas, TM: Motos) / NN: Correlativo"
+- generic: "Total: 39 vehículos"
+- text: Auto
+- spinbutton "Auto": "10"
+- text: Moto
+- spinbutton "Moto": "17"
+- text: Bicicleta
+- spinbutton "Bicicleta": "12"
+- heading "Tema Visual de la Interfaz" [level=3]
+- button "Modo Oscuro":
+  - text: Modo Oscuro
+- button "Modo Claro":
+  - text: Modo Claro
+- contentinfo:
+  - button "Valores por defecto":
+    - text: Valores por defecto
+  - button "Cancelar"
+  - button "Guardar Parámetros":
+    - text: Guardar Parámetros
+- complementary "Notificaciones del sistema"
+- status
+- alert

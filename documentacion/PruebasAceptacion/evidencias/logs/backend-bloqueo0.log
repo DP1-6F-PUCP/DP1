@@ -1,0 +1,31 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-21T12:14:47.687-05:00  INFO 25268 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.8 with PID 25268 (C:\Users\alvar\OneDrive\Desktop\DP1_Sem9\DP1-main\backend\target\paqrap-backend-0.0.1-SNAPSHOT.jar started by alvar in C:\Users\alvar\.codex\.chatgpt-projects\g-p-6aad4edbbf7c8191b1639606d966e518\tmp\pruebas-runtime)
+2026-10-21T12:14:47.690-05:00  INFO 25268 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-21T12:14:48.843-05:00  INFO 25268 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-21T12:14:48.855-05:00  INFO 25268 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-21T12:14:48.855-05:00  INFO 25268 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-21T12:14:48.889-05:00  INFO 25268 --- [paqrap-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-21T12:14:48.889-05:00  INFO 25268 --- [paqrap-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1156 ms
+2026-10-21T12:14:49.437-05:00  INFO 25268 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T12:14:49.454-05:00  INFO 25268 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Started BackendApplication in 2.152 seconds (process running for 2.619)
+2026-10-21T12:14:49.525-05:00  INFO 25268 --- [paqrap-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T12:14:49.525-05:00  INFO 25268 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-21T12:14:49.526-05:00  INFO 25268 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-21T12:14:49.588-05:00  INFO 25268 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 731b4d76-48e5-1855-99d9-15c6426ad02a (1 activas)
+2026-10-21T12:14:49.904-05:00  INFO 25268 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.controller.IngestaController       : Archivo ingerido: bloqueo.2609.txt
+2026-10-21T12:14:50.010-05:00  INFO 25268 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Escenario iniciado/unido: id=3b2743f2-bc78-485d-8f92-9493cfda6225 tipo=DIA_A_DIA fechaInicioSimulada=2026-09-01T07:00 (solicitado: tipo=DIA_A_DIA)
+2026-10-21T12:14:50.014-05:00  WARN 25268 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : No se pudieron cargar los bloqueos oficiales de 2026-10: data\bloqueos\bloqueo.2610.txt
+2026-10-21T12:14:50.050-05:00  INFO 25268 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 1 pedidos ofrecidos, 37 rutas nuevas, 0.033s de computo
+2026-10-21T12:14:50.058-05:00  INFO 25268 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=5ms solicitudes=0ms planificar=33ms simular=6ms cierre=1ms TOTAL=48ms (0 rutas en curso, 37 rutas nuevas)
+2026-10-21T12:14:50.334-05:00  WARN 25268 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:14:51.345-05:00  WARN 25268 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:14:51.536-05:00  INFO 25268 --- [paqrap-backend] [io-8080-exec-10] c.p.b.controller.SimulacionController    : Ejecución 3b2743f2-bc78-485d-8f92-9493cfda6225 detenida

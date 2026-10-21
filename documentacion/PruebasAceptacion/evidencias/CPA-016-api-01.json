@@ -1,0 +1,25 @@
+{
+  "caso": "CPA-016",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios",
+  "peticion": {
+    "tipo": "COLAPSO_LOGISTICO",
+    "fechaInicioSimulada": "2026-09-01T07:00:00Z"
+  },
+  "status": 201,
+  "body": {
+    "data": {
+      "idEjecucion": "68e83ef2-69eb-4095-a39c-80a348a33c24",
+      "tipoEscenario": "COLAPSO_LOGISTICO",
+      "estado": "EN_CURSO",
+      "fechaInicio": "2026-10-21T12:10:12.697398100Z",
+      "fechaInicioSimulada": "2026-09-01T07:00:00Z",
+      "sa": 0.33333334,
+      "k": 10.0
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:10:12.704396Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:10:12Z"
+}

@@ -1,0 +1,19 @@
+{
+  "caso": "CPA-028",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios/cdd8eb90-fe76-4fc7-8071-935660e1ea5c/solicitudes",
+  "peticion": {
+    "tiempoSimulado": "2026-09-01T07:00:40Z",
+    "tipoSolicitud": "CAMBIO_CAPACIDAD",
+    "entidadObjetivo": "MOTO",
+    "valorNuevo": "10"
+  },
+  "status": 200,
+  "body": {
+    "data": null,
+    "meta": {
+      "timestamp": "2026-10-21T17:11:17.859404800Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:11:17Z"
+}

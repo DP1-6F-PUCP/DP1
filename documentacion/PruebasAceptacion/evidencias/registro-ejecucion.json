@@ -1,0 +1,1302 @@
+{
+  "fecha_local": "2026-10-21",
+  "zona": "America/Lima",
+  "codigo": "C:\\Users\\alvar\\OneDrive\\Desktop\\DP1_Sem9\\DP1-main",
+  "commit": null,
+  "nota_version": "Copia descargada sin carpeta .git; versión identificada mediante hashes.",
+  "backend_jar_sha256": "3ccddf39993d41614cae5efb8f581d94cc5817a2d0660d7ecbe015e3d7567b4e",
+  "source_sha256": {
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\BackendApplication.java": "809b8e832dc16e74382fa1817a13b9dbba43322ff3523f8339e509304dd7fe8d",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\config\\PaqRapConfig.java": "9dfacde7eda2152fe2d0406e69e3d993d533c2fec517c081fc77e89f1e1145f2",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\config\\WebSocketConfig.java": "0e4dcb574f421dcdc2284cb01594b7dd54ee96fc5deea3294c824dfbce5eb8e9",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\controller\\AlertasController.java": "5b5772e44fa9ace43f75b58c2ac1fb1506538fbf35b8655e4eae286be2d7da0a",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\controller\\ConsultaController.java": "dea70d1314f18c04b9401bcf44da49345ebac1074d6b1bcb4e827f85630acdeb",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\controller\\HealthController.java": "61e40a0a60a3a206afc86acc82bbe646628ee9639688531746f46d0bc6b9f78f",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\controller\\IngestaController.java": "079e4f77da455eda4ca946955427666083fa427105a4ae82cad6b1129bbb3417",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\controller\\SimulacionController.java": "5e27ad27f5197229105e8e20b4c8ba0ded0737b099af2388bff0b9262c9ffdf9",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\AjusteInicialDTO.java": "6b868d0868b128d4a031c343da9b438066cd098e3126b9ea729b3ab964002e29",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\ApiErrorDTO.java": "4b665c7e6e830dfaf0ad7c687878ae7f195699b86ada206c10a83b9e8a4e2cb9",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\ApiResponseDTO.java": "d0e1fd7af61d00a668c34222ec1216cd50dbfd2805387e2548e4a2d8395ab1ff",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\EjecucionEscenarioDTO.java": "7420163c3812f36d4b75c54ec8f69559fc36ef29d450bb4ec7e523777ead9f69",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\ProgramarSolicitudRequestDTO.java": "685e3f4123d3600612439884fa6e2b0cfa57a8bacb168aafe9f93dc306a30182",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\ResultadoCargaDTO.java": "8abd298d3d5a61ba9303426354f306c1cc62206cca92d7be987bd98cbd93ad97",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\SeleccionarEscenarioRequestDTO.java": "8cc26d349d129c3995c2446365cc17f38a60230cc45c6ae15d334dd721697b82",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\dto\\TickUpdateDTO.java": "bde198c2f002a35b5cd25e8ebbf03091339d02dfcd8f8e8e04939517b540098b",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\exception\\ApiException.java": "c3d23ef7c8b157d436c93bb4486126caf5f0f9f27a7273d32cc4d2eafa249cea",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\exception\\ArchivoIlegibleException.java": "7169d81c4c9a24613e9c0f6ca42dbd47698a220795564946e5e46a825c1d61e5",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\exception\\GlobalExceptionHandler.java": "9bf69f4b6819f2a78383f4fc77e1f52133976209224deb444ad6855eae6484e4",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\ws\\SimulationBroadcaster.java": "943a65cc87366bff0f818955c09ac6e318c8ee078e125f22caf52a5eca123639",
+    "backend\\src\\main\\java\\com\\paqrap\\backend\\ws\\SimulationWebSocketHandler.java": "a174a573a8488410c9237bd69397ca70453259aa7e5f7b22f8463c66e9a8aab2",
+    "backend\\src\\main\\resources\\application.properties": "8b142f1f3fa32c89b469da41468d7b8d2093b9963d195acfb5434834a8bd4e07",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\busquedalocal\\BusquedaLocalRVND.java": "a222fd66b6be680fcf71c9bcd5ba256f50a6337485ffcabfe65f0443239c415d",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\ConfiguracionALNS.java": "7826005f3d5d6ad78e5cc135495d7a6291c9e9250e7374ba76b5b01edfa2a8b1",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\EvaluadorCostos.java": "9317f691876e5aca68f589525c38bca67f0e4d6bf3e8214d5e67ff1e45b9d3a6",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\nucleo\\GestorPesosAdaptativo.java": "fde31e9ed84af6bc44c9a9e6fa64acb34523e910b3b9a3c8a94d362bf5658d03",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\nucleo\\SolucionadorParticionConjuntos.java": "0f907a79160e0d404582f2de1c523c6428ba0da516d3913004bea8ec77302cc5",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\DestruccionAleatoria.java": "a33cb784eef866474088ff1e4343a0f84e1981fd9d52cc4e6357f8dc9283cb8e",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\DestruccionCluster.java": "4eeaca3e0d3264c958fd32531fc2ae55dc87fe7a36dae3ceac31bc6483dfa478",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\DestruccionPeorCosto.java": "eda58487b8b25ad44a7ca78441cfa6fbef9d2f13d39bfcd7c2034de92c7bcc6f",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\DestruccionRutaCompleta.java": "6e6bb54258d1d991126909343a422595adee2d30ddf2a65be633c829a7669a34",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\DestruccionShaw.java": "0d260f9aaf42701e39deb1962bdb394243a7374cf7fedeea963a4ae4b58f40bf",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\OperadorDestruccion.java": "0eb23179478cd70a82aea5828a05fd4953c56d8e2b3a35d226713ac970219e78",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\OperadorReparacion.java": "1a0b3a19ac4206e26fe25ce53de83e96a9cb4784160bd8a5f481a1c545b98a6e",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\OperadorUtil.java": "a77bd8fa3fa566e37bab70d02b1597f8f91b61cbc3be274acf4cd371fb30d8ab",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\ReparacionRegret.java": "560127d4b535b572db0f16308f1a9e9e454bd100e9e3b41cd9b0c549153d0f8d",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\ReparacionRegretRuido.java": "7b9cba7d9444cfc0f99c4ac756fc1e9d89618b3916e51edc4053899571865b83",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\operadores\\ReparacionVoraz.java": "10c2aeecd8e8a377fd7c8ef02e6d9e92aeb64a6628295b9479338aee65fb511e",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\PlanificadorRutas.java": "7f654a1dcada356c26da3017dd0aaa382f87d48071cd4d039666ab082042dcb2",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\Solucion.java": "71b7a4bf80ddd4f458b12f9c8e091da05669888ae268460dfa7344bae763470e",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\SolucionadorALNS.java": "a612123b528ff26c48be6b83b7d7487382280c0db04c792b3a78c7434a006886",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\TiempoUtil.java": "b5fb812fb1e71aaef8b6cd1053d75a94fcc4a4227d1deadf85191e288db3e939",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\alns\\VerificadorRestricciones.java": "200946c641ef80fcc754064bff818621035ad6d0e4a318cb1a1774c587e04ecc",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\ActividadVehiculo.java": "0b69c9291f5af15d0942da65fac5e6ee808d59097006bd6fb179771c13455af3",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Almacen.java": "03e0338c226e644fee1620fdf1ab6c13c39dcc585b7bf8b082a72c9b8628668f",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\AlmacenCentral.java": "8463a6b7466059f9f402a66c900caae7ab34814427782530573149af1106f942",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\AlmacenIntermedio.java": "6d6b8a5a955aeb4bc70822504ab6d1b0be6f1febf2413f11a146a52831bf90f2",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Averia.java": "97439562b137219435880a9cd696966c58822fd109ebd2122f1a451d3fa24168",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Bloqueo.java": "694c525b79bb7234f72f0e1344cf5041d995dd331f1f644aa27edcfe3b66d501",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\CalculadorDistancia.java": "e06f225b1f3afeb5e74fb5bf735e342b01631b4de9fbb521713529d5124e028d",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Ciudad.java": "6ec4cbd3a7ac695c15d9596c6317a34d17e793ee3396540d243bf3f5695f1bde",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\ConfiguracionOperacion.java": "105a52a5c209acc58768580b8c9ec87c8ceb5b659ca5d8ff4437d51b029a09b5",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\ContextoProblema.java": "74c8e66e8eda2f5a43ef7f6997724f9d19e318d5d8daa4c87848a265ecc3ab81",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\EstadoParada.java": "7d24688b9e60a88ce8d6043ea39112994b81560c3dae40b0c44da10ff7d1fcc5",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\EstadoPedido.java": "557b2da6a43cf1eedde0ae5e223cc19d00b61105a4e1252ec83c5eaeaa3fe358",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\EstadoRuta.java": "bf33863174768b48b8a363dfa5d0155da4962266cc777035641e81961d91fc43",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\EstadoUnidad.java": "e14f138a77de349d18eadba762bb1a4b14d0c54414e6709b904c4e6caff3aa10",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Mantenimiento.java": "2832f0cdc71251abb5013f61566eb5d06ccf662d87b3a45d658a63b9fc1ecd85",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\MovimientoInventario.java": "824726215291808878a7e12341c317782f6ab633209ed932fbbf7ce6307dfb35",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Nodo.java": "4258fde0491511c67d81abe3883e48c8571224a3ace367dd80310585129c6fd2",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\ParadaPlanificada.java": "0793ada6d799121b001b2e15d1d9fe5530cca120068d8aa474dd724e6698e5a9",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Pedido.java": "8bc922af495c3290c3765df4fd7fe676f9586a01cec488ea6817a00b7450e0ad",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Planificador.java": "9d36c01d68400e076cf0dc60d4b460db2d6ce6a6b88dbfa4f01b96b20fe5b519",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\Ruta.java": "3765f3cae642b6d1a638c7570d943447823e3b0b32aeb5073aedb17b1fb97f42",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\TipoAlgoritmo.java": "915d30825c1a84af3e961502d72cb653e6fc3a379129a519630a8d09c7c9e849",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\TipoArchivo.java": "6c08f6852b48e32bad57f7ba534e1577e6b10bae5b8806f392a1e510432511a8",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\TipoAveria.java": "1fb267e86fe0110db627ccae643f65eb6a7d0f0487fcc49dcc1e876b3e7be9fe",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\TipoMovimiento.java": "2f35d8305cc34c3193da176274b8057c2fbd4109f9b5d4bf3547f12671c17f24",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\TipoVehiculo.java": "ca912c73431538b7caf43d9bf2d1b7a80cb4cac6b328140f03333c57a9dee22b",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\dominio\\UnidadTransporte.java": "52804d93f24f6ef23f9956bb4eebc37fd88fede4f02a85173dbeb21079bc523e",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\entrada\\CargaArchivo.java": "149e4d0a2ecb94f7f9b215ec92fc0a29f42bf3f6328674faad85e537671a47b3",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\entrada\\CargadorRecursos.java": "55e2bbeffb4df52b7f0d40039219c5f741a9e83e8a9de9d497cc522bc57c0b6a",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\entrada\\ErrorImportacion.java": "03190cfab700cd5537b3b38998ec96d99eef745d2d0f4d0c0495efedd289a9d3",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\entrada\\LectorJson.java": "1ba7a4c98d1cefb127a8f7af584db991466a9a5934b86f3292d0e1d808138ad7",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\AlmacenDTO.java": "477edf077c2e889da336376e9ebd8bcb7c309a3d0d8624df66218d11291be95a",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\ArchivoEntrada.java": "ab11d8e713a4cc68a3f4a05135870eb1950476ab58f7b36a3ef0752e45b42a3e",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\BloqueoDTO.java": "3114e359dc5d93c73b0dce6e3059d57757f85cbd03cc0136c90cf11c3e77d246",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\CiudadDTO.java": "ec1de31a31e058f24452358969ba088450fc9ccc8ff86628bff3c80a2f941685",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\ConfiguracionActualDTO.java": "32d32d52aabb18454d1eaed38a050e77f1bb01ff4cdc0e09aedbd8aefa5a70ca",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\ConfiguracionOperacionDTO.java": "312a8ebdbdea976b7a7db5cef9cbc5a491960080005c4f41809e6611eac5e6d1",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\EnsambladorRespuestas.java": "8aa56da1f6b7fbf0bd6f894e8bd292256d43d431ba971d411d08e00fa560a3f9",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\EstadoOperacionDTO.java": "77eba983603380697b356f6aa5824e00864ac90d6315193bee552102d11005e2",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\EventoDTO.java": "0ea7f535f08d4436eec9d8b33efa34de4ff112ba09a969838fe1d1d87b3e9dd2",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\FiltroPedidos.java": "b2680fd954168b4ae55ecc460118dccf4db80ca65d6ef074118aff3bbe3d4226",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\MetricasOperacionDTO.java": "914a567c55cd764c110cf626a4cb4433d97c44868854a9f228372c39624e8499",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\PedidoDTO.java": "d7185d634001bd7686c2afe6af1a4a85529ccccd0ff8f43f9b2e91da0ea4673b",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\RutaDTO.java": "a8fa9c38920f12ddb3056c9a47db021da112f29520c91c937ff26acc1c783d29",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\ServicioPlanificacion.java": "27289ef9464d808f96759ae5d5233b32ee6d6d265c3b19761ae16ae6ac1554ce",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\ServicioPlanificacionImpl.java": "b67b66bd5383161f8cfe96b953ffaa62c643140522c19543e18bea9b2561a166",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\TipoVehiculoDTO.java": "536c7daf2b1881bf35accf661380e1950f533338684567e246b0e5ea18cdec2c",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\exposicion\\VehiculoDTO.java": "414108a5afe1c735068ac50b492e1b538cc728321bcb1b5fecd360d1e5b73600",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\ipso\\ClusterizadorPedidos.java": "77583a6a849ad9a405463c819afbb257c802f3c01df5dfa5d467a04f28688f20",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\ipso\\nucleo\\IPSOConfig.java": "4da861373e39472af2a057d003b04bc5b2aa752e527696ac16e1b1ebe346b26e",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\ipso\\nucleo\\IPSOOptimizador.java": "ba22d08e900d979acab3e1769dd2ced672558b35faeba1f3deee955ac173afec",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\ipso\\nucleo\\OperadorIntercambio.java": "90cb2312de65fa61553e955e45339b207f3a235dd2ef9cd34137974b6dc2fd70",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\ipso\\nucleo\\Particula.java": "f07bc16ec95b4f7abb06c4dc16952f495a3883b4bef9fb770489cdc8d7db3915",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\ipso\\nucleo\\ResultadoIPSO.java": "9b304edb13d4c647c4a58f82e154729c7f9a42e6b8db4e4a8b09d620ace62e4c",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\ipso\\PlanificadorIPSO.java": "ccdb32ca861f491fbb359eb9798386883ba4c8000748e6ed282f5209555133f3",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\PlanificadorFactory.java": "4c7ca0eceb15b8c0a3c1b2973a03377b94ed7323a04a015797a1bb50d2ffe395",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\EjecucionEscenario.java": "9ff9807c6e6a295e66f4e4bea6ec039e3aed18f8e677f09a4bb7b1be7ea2f0d4",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\EstadoEjecucion.java": "74c9a7034d612a91bb97d9dc269a8788a3d9903b12dd31ed5dae943e19bf9ab0",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\EventoSimulacion.java": "8b501ebcd8b6f182bb3b7c00e1c7537d0472af6e928a6cce82bd09e866f6b5d6",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\GestorLogSimulacion.java": "53831ab13ed19418838625c5fc20e2abe029ed5f2ee0a93e242ac78919400221",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\MotorSimulacion.java": "9f7ad791222ff4c2cdaecfd8f8ed58a59111dbfb2919e9cc065aff0be8228eb7",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\OrquestadorOperacion.java": "b44c6b7a89fdab25d7f86de28e289b118933453d960916a3224042baaa5a0ed7",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\ReporteDesempeno.java": "a67603302a39e8132e1b648f63fbea7613b43594a3c0b553a185fc2d54647e48",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\SolicitudOperacion.java": "69340009552345e570d87b55777c1b4eebe6aaf7de990477b8403938d8ec9af9",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\TipoEscenario.java": "2f4433051e4eb8a564ce7fc21c1a51c80e2d94ac3bbc17de42d4842cb53fe4ba",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\TipoEvento.java": "6ca5198a05b42ffb79c43fa7d6e7593ad85babf82bdf2bea1fdcb9034ebf546b",
+    "algoritmo\\src\\main\\java\\com\\paqrap\\simulador\\TipoSolicitud.java": "43bebe4ee6bdc94676bcc354d53a250d01181f5db48183d15ec723f78e020e7e",
+    "frontend\\src\\components\\BreakdownModal.tsx": "7efc6202f3eef5c6469e41891c5a7b14189006a245a6499a7142fd89e6d23183",
+    "frontend\\src\\components\\ConfigModal.tsx": "e9cfa29dfa2e3a487245f923fda351fc8b54cdd556257c7029a320c1d7995a23",
+    "frontend\\src\\components\\DelayAlertModal.tsx": "f559cd8751d1d648d36c2320435b7c56ee205dd748e97b61f71ad36f08738f26",
+    "frontend\\src\\components\\HomePage.tsx": "7b45f9a7af52c4be52bf442c8e9e38453248d3f96452864296dc9131bbe3d465",
+    "frontend\\src\\components\\LiveAnnouncer.tsx": "38f8a46981bafcf115c40213021d68a8b322b737b08e76f90c7f995198ae3775",
+    "frontend\\src\\components\\map\\LeafletManhattanMap.tsx": "227f94c2f85ee0baf112a873c4c76e6dfcab61528c4b7463df0f7a478e8fd377",
+    "frontend\\src\\components\\map\\MapErrorBoundary.tsx": "e4196630b2aba54a9bda87bc4f276bd85c22d05750e75cd3ae25a5e7821590ca",
+    "frontend\\src\\components\\map\\MapLayersControl.tsx": "788d876a19e56d5b2c75b80c8069b8d93fdca17f6a18e9409b9a5bc2cfffe836",
+    "frontend\\src\\components\\map\\MapLegend.tsx": "f1454c1dd8da18d5aa002a1b3ceb70216e72ee853ec435c40fb6d12198aadb7e",
+    "frontend\\src\\components\\map\\MapSlot.tsx": "ff0956e91fc7c4920240b16d163bc211db660f06729818f9172fe58963719b34",
+    "frontend\\src\\components\\map\\RouteMap.tsx": "a0d551349a43d0cbf929edc3e54297ddd1b0fa4fef2cfe0bc1ad7ae3bf0faed6",
+    "frontend\\src\\components\\OperacionTopbar.tsx": "4e0d2802d34e2fb86f7135831cd8b3995710902e6e286d7af29a8a8c38ee9deb",
+    "frontend\\src\\components\\SidebarLeft.tsx": "09be7574fbd2fd034d2a991496ce9f782593b13b176450dc80686bad5a61574a",
+    "frontend\\src\\components\\SidebarRight.tsx": "e74372f667e2c02a58826e4661f726bc477c4f6462af9be39a66a2b7c5fa7a28",
+    "frontend\\src\\components\\SimulationFinishedModal.tsx": "6024bca40ea05e4e9ce5666fb3e5eec94e7cc21066676922f6bc7d9134e05862",
+    "frontend\\src\\components\\StatusBadge.tsx": "36d01b928ccf1252e40466c1195222b8216196130117a6a0b8923202c7b2a035",
+    "frontend\\src\\components\\ToastProvider.tsx": "eda855cbb4ac38878fccb42bad9b26b551c49cda9c3834e3cdf6479e69202f30",
+    "frontend\\src\\components\\ui\\Button.tsx": "cf7586f9ab94ca406fdb06003663b857197cb4b2a6f1c827e9e636cddf64507c",
+    "frontend\\src\\components\\ui\\ConfirmModal.tsx": "5e6b4ac38141469efe67c677ae3138f0c3db62d35ac32acff3bd1fae8d83627b",
+    "frontend\\src\\contexts\\MapSlotContext.tsx": "01d01abb0cbe6656e5e14d4ebfe3d68782087ec6056bb03dbb7f26b3742aac02",
+    "frontend\\src\\features\\alertas\\components\\AlertasBell.tsx": "817eb65126c6af4c57ad1b7519b0ede577eb9530368d9de9613d8601ebb46833",
+    "frontend\\src\\features\\alertas\\hooks\\useAlertas.ts": "839d21b11144f73160b5ce156d7bbf0226e9529aaf51bf67a4214810d1b0efde",
+    "frontend\\src\\features\\archivos\\hooks\\useSubidaArchivos.ts": "d907cb80b64114bb3c01af97cbfe390a14c91279bad9d6f282cca911eb7041a2",
+    "frontend\\src\\features\\escenario\\components\\EjecucionControls.tsx": "98b5d2d002a04c4d9fcead3c9b4e602b899707afa289bfb19c32956523c40f64",
+    "frontend\\src\\features\\escenario\\components\\EjecucionDetenidaBanner.tsx": "ed1951ab1f8a74f2e3cddc5d6bc6b1aa41e550e966288736672e8410e3c03e14",
+    "frontend\\src\\features\\escenario\\components\\NuevaSolicitudButton.tsx": "24dcfa531e3205a8c5fa57b072ae556b2d3a5d769ede0c6a7bfa22d1340e7afa",
+    "frontend\\src\\features\\escenario\\components\\SeleccionarEscenarioGate.tsx": "d851c1acfa0bc855529362b49a2127f4e492da5df6da4c6963ae83d2714650bf",
+    "frontend\\src\\features\\escenario\\components\\SimClock.tsx": "dac8f6068250aa41d7112fbe82b6cf0ccdcbd1d9c51a1b590af1b2fac517757b",
+    "frontend\\src\\features\\escenario\\hooks\\useEscenario.ts": "bd8a4e71b7fd5cf6089ec4630e2a04ea742de9b24651ad241e44a2c9590393ae",
+    "frontend\\src\\features\\eventos\\components\\EventLogButton.tsx": "63e4fb6c97b8b2305af4d718513117e2c58f06c5930a57f927ab45d810126f44",
+    "frontend\\src\\features\\metricas\\components\\MetricasStrip.tsx": "fd16e068e2d6f49e05565c4e21772d2c75be466f1467a8d94cce26eefe20628d",
+    "frontend\\src\\features\\pedidos\\components\\OrderCard.tsx": "ffba28f60c7a411c4f5fa60be38a9beefd3a77fac498b76604b5dd8b56dc9def",
+    "frontend\\src\\features\\pedidos\\components\\OrderListContainer.tsx": "2bbf2390515a03228f22224a31627e60da4835d77e50dc540c667fd41ea7b59b",
+    "frontend\\src\\features\\pedidos\\hooks\\useOrders.ts": "998544f24b7b42750226462d670a5ce3bbc27cbc084b89cc0321e8bda6a37d1c",
+    "frontend\\src\\features\\rutas\\components\\RouteCard.tsx": "10343d8acb651f8bcb6c9c521ace57a1ed8613ca68b4e0b0c00214d4a14ee120",
+    "frontend\\src\\features\\rutas\\components\\RouteListContainer.tsx": "346dc6a86785cd79e2da75a77f62da46767c64424c98457a1ca34ba90f0cd709",
+    "frontend\\src\\features\\rutas\\hooks\\useRoutes.ts": "847a44ac07d0919288123d307c106a3c7da3f02cad136c9082db70605387e680",
+    "frontend\\src\\features\\vehiculos\\components\\VehiclePanelContainer.tsx": "a7f6d0f93bd1d3dfacf4ffab3d8554c86723dbca1b4604244d504d69c03fe547",
+    "frontend\\src\\features\\vehiculos\\hooks\\useVehicles.ts": "735463798a34588195031619e7d2ce57c70059f8b6b3221a637b5b8f821bd58e",
+    "frontend\\src\\hooks\\useDescubrirEjecucionActiva.ts": "be168a2816deec6e538fa8cfb2c2877ab8bed1eefeaed2be48d9034059879a69",
+    "frontend\\src\\hooks\\useEstadoOperacion.ts": "7bf71f7aee8c6339f4840fc832d38f044917e3e9770f5de5c0390adeb89ff420",
+    "frontend\\src\\hooks\\useSimulationSocket.ts": "d7f2880c0391428b08502ac575b6b7d72f30792773916f65c794fa6947c2e0b0",
+    "frontend\\src\\hooks\\useSincronizarEjecucion.ts": "087c7b530816d3ec9b10ab444384f420897ceb2da9a7dd2e061aeada24653a19",
+    "frontend\\src\\index.css": "d280cd3282988896e1c339f18db76ef43972a1d010a0f5e24d0df7a1c515d2c1",
+    "frontend\\src\\main.tsx": "63776fd67f9c1b79701b531ec141946e6fdda47c845d6ec244467df0568a8716",
+    "frontend\\src\\pages\\DashboardPage.tsx": "a6612067a8567acd49c5072cce86f68f0e7b7a7c5a3181cc11b6e90e88cb15b8",
+    "frontend\\src\\pages\\DataFilesPage.tsx": "f143c8ec12afdba29dd7d9314e334f9a3e0f1b699f69d56034952efc49e55538",
+    "frontend\\src\\pages\\SeguimientoPage.tsx": "1b6a599b53f23762af324b6a2b313327005b2662661c4d3e13e28a1ad300651c",
+    "frontend\\src\\router\\index.tsx": "da791980ef5c68865abd31eddf70816db3637006a3733140da588278b969e227",
+    "frontend\\src\\services\\alertsApi.ts": "31eb6b5f286fb417272afed31d7e189ac6172dcb53402b38f142da77db419a3d",
+    "frontend\\src\\services\\archivosApi.ts": "71779ac7172762e8a83fa6c14940b3cf1ca454028cd61083ca6f839479fa043a",
+    "frontend\\src\\services\\configuracionApi.ts": "07a3817227ef29ab6e74bcea88fade8cc8700c38599e48076fcc62667d88a160",
+    "frontend\\src\\services\\escenariosApi.ts": "440de183f23d1130bc57dfd37e6401aeae23b3f80251f94270563d3d9019c545",
+    "frontend\\src\\services\\estadoOperacionApi.ts": "a4d6b06f539ca87240f8eee04095611d01dc631a006b0043fd975c2d3f747dac",
+    "frontend\\src\\services\\httpClient.ts": "5e14fe320e64888e99f4e7d9e767b9f723e4b932b0cac5d167fd4c732422f412",
+    "frontend\\src\\services\\queryClient.ts": "53ccde8ac0499fb9d672d00ee0c48e4772dc466b1a8e14543b17bab09b5892ee",
+    "frontend\\src\\services\\simulationSocket.ts": "2976ee936ff4e16392526b72e76e67c2dd7610518130f0cb47b1a5c9728a6b02",
+    "frontend\\src\\store\\mapStore.ts": "5273b7457070ed9e7fba73f573f03798c44c531ec907e8a576c24212bc471b04",
+    "frontend\\src\\store\\scenarioStore.ts": "88c78a070bce5a0dc3574f8a2378efeeadf1fd1da73a99205e1009cc485dc6cf",
+    "frontend\\src\\store\\themeStore.ts": "3881a5858410bf8efc71fc5ebfacd14dbdd0c80ee8aaa339fc4abd6de80e7de5",
+    "frontend\\src\\styles\\global.css": "1468fb516cd065a315eb962c15ec03e80422674c7fb4da1346043a0b860592c4",
+    "frontend\\src\\styles\\tokens.css": "fe162b09f7a792ec3eb7c10811d69b62b30bb33b6583a20e82fb7f64d0139a32",
+    "frontend\\src\\types\\backend.ts": "5554c11ac9485b3225904a33439408c7a2c7ca8eaf071b3cc117567f7e291198",
+    "frontend\\src\\types\\driver.ts": "ec67aa2a996757e70fc82f48230344af953d7e82ebb9fb5b71433de92b10a5ce",
+    "frontend\\src\\types\\index.ts": "316af9ee74b0f67a2f6a47708c992d2159fa52d5baa3edd2efc1c569c104bf30",
+    "frontend\\src\\types\\order.ts": "dfba8c9c8c678789b5401926dc51a4a9be138ab83a782406407999f5620013ff",
+    "frontend\\src\\types\\route.ts": "15ddb30355ffb9494548532a00b1a7b3813fbc03f77ea86f8550335c6f8af5dd",
+    "frontend\\src\\types\\vehicle.ts": "a7703f90ab712a79ab30ac4dbfaa3fb937af14326a0999d00219ef1310377758",
+    "frontend\\src\\types.ts": "9682fc87eb109a10a6734bccf631756616665c1a572b742eb095b587d8742909",
+    "frontend\\src\\utils\\backendAdapters.ts": "de49b25826539166f39f7495ff9d36e4a716bec0f144f9c603ba5f07ff63abec",
+    "frontend\\src\\utils\\backendTime.ts": "7d5de0885f829b0357c0cbd4b82d1206b7a4d5b422aa8d9627744cbe3fc3ea9c",
+    "frontend\\src\\utils\\fileParser.ts": "a8ad3faa30bd595a7859f1cd5fb22edcc606c8480e41079eaf9049fe53b7b503",
+    "frontend\\src\\utils\\fileStore.ts": "ce9addd009d3c50e20cad2bb2043de84bb5f525b8c0a0c4e23ffc11b7eacf841",
+    "frontend\\src\\utils\\manhattan.ts": "d0688d854ef6067f062a4598c0ae157994a9274102bb6473c2ea067984bfcb16",
+    "frontend\\src\\utils\\simulation.ts": "e03ae70d3f33bb4e38c0cb5bc2b7ce221609495dbbee51e2e3eebf014d9fc332",
+    "frontend\\src\\utils\\vehicleStatus.tsx": "41c661b54a6bf07297c0ff774a9e3ba8479c9cabe469995aa7b0d18000c75e38"
+  },
+  "pruebas": [
+    {
+      "caso": "CPA-001",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Pedido válido cargado con todos los datos esperados."
+    },
+    {
+      "caso": "CPA-002",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Archivo incompleto rechazado con HTTP 400 INVALID_ARGUMENT, sin insertar pedidos."
+    },
+    {
+      "caso": "CPA-003",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Cliente vacío rechazado; HTTP 400 INVALID_ARGUMENT y ningún pedido insertado.",
+      "evidencias": [
+        "CPA-003-pantalla.png",
+        "CPA-003-respuesta.json",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "caso": "CPA-004",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Cantidad no numérica rechazada; HTTP 400 INVALID_ARGUMENT y ningún pedido insertado.",
+      "evidencias": [
+        "CPA-004-pantalla.png",
+        "CPA-004-respuesta.json",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "caso": "CPA-005",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Fecha de venta imposible rechazada; HTTP 400 INVALID_ARGUMENT y ningún pedido insertado.",
+      "evidencias": [
+        "CPA-005-pantalla.png",
+        "CPA-005-respuesta.json",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "caso": "CPA-006",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Archivo mixto rechazado completo, sin guardar la línea válida; HTTP 400 INVALID_ARGUMENT y ningún pedido insertado.",
+      "evidencias": [
+        "CPA-006-pantalla.png",
+        "CPA-006-respuesta.json",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "caso": "CPA-007",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Comentario y línea vacía ignorados; se incorpora exactamente un pedido válido.",
+      "evidencias": [
+        "CPA-007-pantalla.png",
+        "CPA-007-respuesta.json"
+      ]
+    },
+    {
+      "caso": "CPA-008",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Nombre de archivo desconocido rechazado; HTTP 400 INVALID_ARGUMENT y ningún pedido insertado.",
+      "evidencias": [
+        "CPA-008-pantalla.png",
+        "CPA-008-respuesta.json",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "caso": "CPA-009",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Bloqueo correctamente importado. Vigencia falsa/verdadera/falsa antes, durante y después; una ruta con entrega evita los nodos bloqueados.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-009-api-01.json",
+        "CPA-009-api-02.json",
+        "CPA-009-api-03.json",
+        "CPA-009-api-04.json",
+        "CPA-009-api-05.json",
+        "CPA-009-api-06.json",
+        "CPA-009-api-07.json",
+        "CPA-009-api-08.json",
+        "CPA-009-api-09.json",
+        "CPA-009-api-10.json",
+        "CPA-009-api-11.json",
+        "CPA-009-api-12.json",
+        "CPA-009-api-13.json",
+        "CPA-009-api-14.json",
+        "CPA-009-api-15.json",
+        "CPA-009-api-16.json",
+        "CPA-009-api-17.json",
+        "CPA-009-api-18.json",
+        "CPA-009-api-19.json",
+        "CPA-009-api-20.json",
+        "CPA-009-api-21.json",
+        "CPA-009-api-22.json",
+        "CPA-009-api-23.json",
+        "CPA-009-api-24.json"
+      ],
+      "desviacion": "Tres inicios aislados para verificar los lados del intervalo. En cada uno se usa un pedido cuya fecha de ingreso coincide con el inicio, pues el sistema excluye pedidos históricos de los archivos automáticos. La primera tentativa sin demanda vigente fue inconclusa y se conserva como evidencia de preparación."
+    },
+    {
+      "caso": "CPA-010",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Poligonal incompleta rechazada; HTTP 400 INVALID_ARGUMENT y ningún pedido insertado.",
+      "evidencias": [
+        "CPA-010-pantalla.png",
+        "CPA-010-respuesta.json",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "caso": "CPA-011",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "El bloqueo se interpreta del 30/09 23:00 al 01/10 01:00; no hay duración negativa.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-011-api-01.json",
+        "CPA-011-api-02.json",
+        "CPA-011-api-03.json"
+      ],
+      "alcance": "Fechas e inicio vigente verificados por API; pendiente observar las transiciones de vigencia durante el cambio de mes."
+    },
+    {
+      "caso": "CPA-012",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "TA01 entra EN_MANTENIMIENTO y no recibe rutas con pedidos en el lote observado.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-012-api-01.json",
+        "CPA-012-api-02.json",
+        "CPA-012-api-03.json"
+      ]
+    },
+    {
+      "caso": "CPA-013",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Fecha imposible de mantenimiento rechazada; HTTP 400 INVALID_ARGUMENT y ningún pedido insertado.",
+      "evidencias": [
+        "CPA-013-pantalla.png",
+        "CPA-013-respuesta.json",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "caso": "CPA-014",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "DIA_A_DIA creado con identificador y fecha solicitada.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-014-api-01.json"
+      ]
+    },
+    {
+      "caso": "CPA-015",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "CINCO_DIAS creado con fecha solicitada y k=150. No se certifica duración total ni punto de colapso.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-015-api-01.json"
+      ]
+    },
+    {
+      "caso": "CPA-016",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "COLAPSO_LOGISTICO creado con fecha solicitada y k=10. No se certifica duración total ni punto de colapso.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-016-api-01.json"
+      ]
+    },
+    {
+      "caso": "CPA-017",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Tipo ausente rechazado con 400 VALIDATION_ERROR; no se crea ejecución.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-017-api-01.json",
+        "CPA-017-api-02.json"
+      ]
+    },
+    {
+      "caso": "CPA-018",
+      "estado": "Aprobado",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "Una segunda solicitud de otro escenario devuelve la ejecución activa original; misma fecha, tipo e id.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-018-api-01.json"
+      ],
+      "alcance": "Dos solicitudes API independientes y recarga de dos pestañas que se unen a la ejecución pausada; capturas CPA-019-pantalla.png y CPA-018-segunda-sesion.png."
+    },
+    {
+      "caso": "CPA-019",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "PAUSADA; reloj y estado conservados durante más de un intervalo de lote (21 s).",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-019-api-01.json",
+        "CPA-019-api-02.json",
+        "CPA-019-api-03.json",
+        "CPA-019-api-04.json"
+      ]
+    },
+    {
+      "caso": "CPA-020",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Reanudación conserva el id, cambia a EN_CURSO y el reloj avanza.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-020-api-01.json",
+        "CPA-020-api-02.json",
+        "CPA-020-api-03.json",
+        "CPA-020-api-04.json",
+        "CPA-020-api-05.json",
+        "CPA-020-api-06.json",
+        "CPA-020-api-07.json",
+        "CPA-020-api-08.json",
+        "CPA-020-api-09.json",
+        "CPA-020-api-10.json",
+        "CPA-020-api-11.json",
+        "CPA-020-api-12.json"
+      ]
+    },
+    {
+      "caso": "CPA-021",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Detención FINALIZADA; instantánea operativa idéntica tras 21 s y último estado consultable.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-021-api-01.json",
+        "CPA-021-api-02.json",
+        "CPA-021-api-03.json",
+        "CPA-021-api-04.json"
+      ]
+    },
+    {
+      "caso": "CPA-022",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Reanudar una ejecución terminada devuelve 409 INVALID_STATE y conserva FINALIZADA.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-022-api-01.json",
+        "CPA-022-api-02.json"
+      ]
+    },
+    {
+      "caso": "CPA-023",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Identificador inexistente devuelve 400 INVALID_ARGUMENT.",
+      "verificaciones": [
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-023-api-01.json"
+      ]
+    },
+    {
+      "caso": "CPA-024",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "El filtro pendiente en minúsculas devuelve el único pedido PENDIENTE y coincide con la consulta sin filtro.",
+      "evidencias": [
+        "CPA-024-respuesta.json",
+        "CPA-007-respuesta.json"
+      ]
+    },
+    {
+      "caso": "CPA-025",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "El filtro NO_EXISTE devuelve HTTP 200 y lista vacía.",
+      "evidencias": [
+        "CPA-025-respuesta.json",
+        "CPA-007-respuesta.json"
+      ]
+    },
+    {
+      "caso": "CPA-026",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Entidad vacía rechazada con 400 VALIDATION_ERROR; velocidad original conservada.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-026-api-01.json",
+        "CPA-026-api-02.json",
+        "CPA-026-api-03.json"
+      ]
+    },
+    {
+      "caso": "CPA-027",
+      "estado": "Fallido",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "La API sí aplica el cambio, pero Guardar Parámetros en la interfaz confirma velocidad 35 y el servidor conserva 40.0.",
+      "verificaciones": [
+        false
+      ],
+      "evidencias": [
+        "CPA-027-api-01.json",
+        "CPA-027-api-02.json",
+        "CPA-027-api-03.json",
+        "CPA-027-api-04.json",
+        "CPA-027-api-05.json",
+        "CPA-027-api-06.json",
+        "CPA-027-api-07.json",
+        "CPA-027-api-08.json",
+        "CPA-027-api-09.json",
+        "CPA-027-api-10.json",
+        "CPA-027-api-11.json",
+        "CPA-027-api-12.json",
+        "CPA-027-api-13.json",
+        "CPA-027-api-14.json",
+        "CPA-027-api-15.json"
+      ],
+      "incidencia": "INT-001",
+      "verificacion_api_previa": "Aprobada: AUTO a 35, MOTO conserva 25.",
+      "evidencias_interfaz": [
+        "UI-002-valores-solicitados.png",
+        "UI-002-confirmacion-repeticion.png"
+      ]
+    },
+    {
+      "caso": "CPA-028",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Capacidad MOTO cambiada a 10 antes de la llegada de un pedido de 9; se verifica la asignación posterior y la carga real.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-028-api-01.json",
+        "CPA-028-api-02.json",
+        "CPA-028-api-03.json",
+        "CPA-028-api-04.json",
+        "CPA-028-api-05.json",
+        "CPA-028-api-06.json",
+        "CPA-028-api-07.json",
+        "CPA-028-api-08.json",
+        "CPA-028-api-09.json",
+        "CPA-028-api-10.json",
+        "CPA-028-api-11.json",
+        "CPA-028-api-12.json",
+        "CPA-028-api-13.json",
+        "CPA-028-api-14.json",
+        "CPA-028-api-15.json",
+        "CPA-028-api-16.json",
+        "CPA-028-api-17.json",
+        "CPA-028-api-18.json",
+        "CPA-028-api-19.json",
+        "CPA-028-api-20.json",
+        "CPA-028-api-21.json",
+        "CPA-028-api-22.json",
+        "CPA-028-api-23.json",
+        "CPA-028-api-24.json",
+        "CPA-028-api-25.json",
+        "CPA-028-api-26.json",
+        "CPA-028-api-27.json",
+        "CPA-028-api-28.json",
+        "CPA-028-api-29.json",
+        "CPA-028-api-30.json",
+        "CPA-028-api-31.json",
+        "CPA-028-api-32.json",
+        "CPA-028-api-33.json",
+        "CPA-028-api-34.json",
+        "CPA-028-api-35.json",
+        "CPA-028-api-36.json",
+        "CPA-028-api-37.json",
+        "CPA-028-api-38.json",
+        "CPA-028-api-39.json",
+        "CPA-028-api-40.json",
+        "CPA-028-api-41.json"
+      ],
+      "desviacion": "Flota AUTO y BICI a cero mediante ajustes iniciales para aislar las asignaciones de MOTO."
+    },
+    {
+      "caso": "CPA-029",
+      "estado": "Fallido",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "La API sí amplía a 17, pero Guardar Parámetros en pantalla confirma 17 MOTO y el servidor mantiene 15.",
+      "verificaciones": [
+        false
+      ],
+      "evidencias": [
+        "CPA-029-api-01.json",
+        "CPA-029-api-02.json",
+        "CPA-029-api-03.json",
+        "CPA-029-api-04.json",
+        "CPA-029-api-05.json",
+        "CPA-029-api-06.json",
+        "CPA-029-api-07.json",
+        "CPA-029-api-08.json",
+        "CPA-029-api-09.json",
+        "CPA-029-api-10.json",
+        "CPA-029-api-11.json",
+        "CPA-029-api-12.json",
+        "CPA-029-api-13.json",
+        "CPA-029-api-14.json",
+        "CPA-029-api-15.json"
+      ],
+      "incidencia": "INT-001",
+      "verificacion_api_previa": "Aprobada: 17 MOTO con ids únicos."
+    },
+    {
+      "caso": "CPA-030",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Solicitud de total 3 conserva las cinco MOTO que ya estaban en ruta y retira las diez libres.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-030-api-01.json",
+        "CPA-030-api-02.json",
+        "CPA-030-api-03.json",
+        "CPA-030-api-04.json",
+        "CPA-030-api-05.json",
+        "CPA-030-api-06.json",
+        "CPA-030-api-07.json",
+        "CPA-030-api-08.json",
+        "CPA-030-api-09.json",
+        "CPA-030-api-10.json",
+        "CPA-030-api-11.json",
+        "CPA-030-api-12.json",
+        "CPA-030-api-13.json",
+        "CPA-030-api-14.json",
+        "CPA-030-api-15.json"
+      ]
+    },
+    {
+      "caso": "CPA-031",
+      "estado": "Fallido",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "La API sí actualiza capacidad, pero Guardar Parámetros en pantalla confirma 1200 y Nor-Oeste sigue con 1000. Central también aparece editable.",
+      "verificaciones": [
+        false
+      ],
+      "evidencias": [
+        "CPA-031-api-01.json",
+        "CPA-031-api-02.json",
+        "CPA-031-api-03.json",
+        "CPA-031-api-04.json",
+        "CPA-031-api-05.json",
+        "CPA-031-api-06.json",
+        "CPA-031-api-07.json",
+        "CPA-031-api-08.json",
+        "CPA-031-api-09.json",
+        "CPA-031-api-10.json",
+        "CPA-031-api-11.json",
+        "CPA-031-api-12.json",
+        "CPA-031-api-13.json",
+        "CPA-031-api-14.json",
+        "CPA-031-api-15.json"
+      ],
+      "incidencia": "INT-001",
+      "verificacion_api_previa": "Aprobada: capacidad 1200 sin recargar stock."
+    },
+    {
+      "caso": "CPA-032",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Este se mueve a (56,27) dentro de ciudad y la ejecución continúa.",
+      "verificaciones": [
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-032-api-01.json",
+        "CPA-032-api-02.json",
+        "CPA-032-api-03.json",
+        "CPA-032-api-04.json",
+        "CPA-032-api-05.json",
+        "CPA-032-api-06.json",
+        "CPA-032-api-07.json",
+        "CPA-032-api-08.json",
+        "CPA-032-api-09.json",
+        "CPA-032-api-10.json",
+        "CPA-032-api-11.json",
+        "CPA-032-api-12.json",
+        "CPA-032-api-13.json",
+        "CPA-032-api-14.json",
+        "CPA-032-api-15.json"
+      ],
+      "desviacion": "Escenario compartido de cambios con datos vacíos; se documenta la acumulación de parámetros."
+    },
+    {
+      "caso": "CPA-033",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "La posición (999,999) es descartada; conserva la posición válida previa (56,27), sin detener el reloj.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-033-api-01.json",
+        "CPA-033-api-02.json",
+        "CPA-033-api-03.json",
+        "CPA-033-api-04.json",
+        "CPA-033-api-05.json",
+        "CPA-033-api-06.json",
+        "CPA-033-api-07.json",
+        "CPA-033-api-08.json",
+        "CPA-033-api-09.json",
+        "CPA-033-api-10.json",
+        "CPA-033-api-11.json",
+        "CPA-033-api-12.json",
+        "CPA-033-api-13.json"
+      ],
+      "desviacion": "Baseline (56,27) proveniente de CPA-032; el catálogo usa inicialmente (57,27). Se verifica la misma invariante de conservación."
+    },
+    {
+      "caso": "CPA-034",
+      "estado": "Fallido",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "La recarga de 12 h funciona por API frente al control de 24 h, pero la interfaz actual no ofrece el control Frecuencia recarga requerido por el caso.",
+      "verificaciones": [
+        true
+      ],
+      "evidencias": [
+        "CPA-034-api-01.json",
+        "CPA-034-api-02.json",
+        "CPA-034-api-03.json",
+        "CPA-034-api-04.json",
+        "CPA-034-api-05.json",
+        "CPA-034-api-06.json",
+        "CPA-034-api-07.json",
+        "CPA-034-api-08.json",
+        "CPA-034-api-09.json",
+        "CPA-034-api-10.json",
+        "CPA-034-api-11.json",
+        "CPA-034-api-12.json",
+        "CPA-034-api-13.json",
+        "CPA-034-api-14.json",
+        "CPA-034-api-15.json",
+        "CPA-034-api-16.json",
+        "CPA-034-api-17.json",
+        "CPA-034-api-18.json",
+        "CPA-034-api-19.json",
+        "CPA-034-api-20.json",
+        "CPA-034-api-21.json",
+        "CPA-034-api-22.json",
+        "CPA-034-api-23.json",
+        "CPA-034-api-24.json",
+        "CPA-034-api-25.json",
+        "CPA-034-api-26.json",
+        "CPA-034-api-27.json",
+        "CPA-034-api-28.json",
+        "CPA-034-api-29.json",
+        "CPA-034-api-30.json"
+      ],
+      "desviacion": "Inicio a las 11:59:20 y capacidad previa 1200 con stock 1000 para observar una recarga real en el límite de ciclo. Verificación API; falta el selector de frecuencia en la interfaz realmente renderizada.",
+      "verificacion_api_previa": "Control con frecuencia 24 h conserva stock 1000 al mediodía; cambio a 12 h recarga a 1200 al cruzar las 12:00.",
+      "incidencia": "FUN-001",
+      "evidencias_interfaz": [
+        "CPA-034-controles-interfaz.txt",
+        "CPA-034-controles-interfaz.png"
+      ]
+    },
+    {
+      "caso": "CPA-035",
+      "estado": "Aprobado",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Cambio de ciudad en caliente rechazado con 400; ancho permanece 70.",
+      "verificaciones": [
+        true,
+        true,
+        true
+      ],
+      "evidencias": [
+        "CPA-035-api-01.json",
+        "CPA-035-api-02.json",
+        "CPA-035-api-03.json"
+      ]
+    },
+    {
+      "caso": "CPA-036",
+      "estado": "Fallido",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "TA01 sigue AVERIADO a las 13:40 después de una avería programada a las 07:50 con duración prevista de 2 h. Aplicación, posición y contador correctos; recuperación no observada tras el plazo.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "evidencias": [
+        "CPA-036-api-01.json",
+        "CPA-036-api-02.json",
+        "CPA-036-api-03.json",
+        "CPA-036-api-04.json",
+        "CPA-036-api-05.json",
+        "CPA-036-api-06.json",
+        "CPA-036-api-07.json",
+        "CPA-036-api-08.json",
+        "CPA-036-api-09.json",
+        "CPA-036-api-10.json",
+        "CPA-036-api-11.json",
+        "CPA-036-api-12.json",
+        "CPA-036-api-13.json",
+        "CPA-036-api-14.json",
+        "CPA-036-api-15.json",
+        "CPA-036-api-16.json",
+        "CPA-036-api-17.json",
+        "CPA-036-api-18.json",
+        "CPA-036-api-19.json",
+        "CPA-036-api-20.json",
+        "CPA-036-api-21.json",
+        "CPA-036-api-22.json",
+        "CPA-036-api-23.json",
+        "CPA-036-api-24.json",
+        "CPA-036-api-25.json",
+        "CPA-036-api-26.json",
+        "CPA-036-api-27.json",
+        "CPA-036-api-28.json",
+        "CPA-036-api-29.json",
+        "CPA-036-api-30.json",
+        "CPA-036-api-31.json",
+        "CPA-036-api-32.json",
+        "CPA-036-api-33.json",
+        "CPA-036-api-34.json",
+        "CPA-036-api-35.json",
+        "CPA-036-api-36.json",
+        "CPA-036-api-37.json",
+        "CPA-036-api-38.json",
+        "CPA-036-api-39.json",
+        "CPA-036-api-40.json",
+        "CPA-036-api-41.json",
+        "CPA-036-api-42.json",
+        "CPA-036-api-43.json",
+        "CPA-036-api-44.json",
+        "CPA-036-api-45.json",
+        "CPA-036-api-46.json",
+        "CPA-036-api-47.json",
+        "CPA-036-api-48.json",
+        "CPA-036-api-49.json",
+        "CPA-036-api-50.json",
+        "CPA-036-api-51.json",
+        "CPA-036-api-52.json",
+        "CPA-036-api-53.json",
+        "CPA-036-api-54.json",
+        "CPA-036-api-55.json",
+        "CPA-036-api-56.json",
+        "CPA-036-api-57.json",
+        "CPA-036-api-58.json",
+        "CPA-036-api-59.json"
+      ],
+      "desviacion": "Se usa CINCO_DIAS con k=150 para observar la duración sin esperar horas reales; flota AUTO ampliada y velocidad 400 para preparar una unidad en ruta fuera del Central. No se certifica el estado interno REASIGNADA de cada parada porque no se expone por API.",
+      "limite_observabilidad": "No se certifican los estados internos REEMPLAZADA y REASIGNADA de cada parada; se verifica que la ruta anterior no siga en ejecución. Ensayo acelerado, sin repetir aún la duración real en DIA_A_DIA.",
+      "incidencia": "SIM-001"
+    },
+    {
+      "caso": "CPA-037",
+      "estado": "Fallido",
+      "canales": [
+        "Interfaz",
+        "API"
+      ],
+      "resultado": "TA01 sigue AVERIADO a las 13:40 después de una avería programada a las 07:50 con duración prevista de 4 h. Aplicación, posición y contador correctos; recuperación no observada tras el plazo.",
+      "verificaciones": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        false
+      ],
+      "evidencias": [
+        "CPA-037-api-01.json",
+        "CPA-037-api-02.json",
+        "CPA-037-api-03.json",
+        "CPA-037-api-04.json",
+        "CPA-037-api-05.json",
+        "CPA-037-api-06.json",
+        "CPA-037-api-07.json",
+        "CPA-037-api-08.json",
+        "CPA-037-api-09.json",
+        "CPA-037-api-10.json",
+        "CPA-037-api-11.json",
+        "CPA-037-api-12.json",
+        "CPA-037-api-13.json",
+        "CPA-037-api-14.json",
+        "CPA-037-api-15.json",
+        "CPA-037-api-16.json",
+        "CPA-037-api-17.json",
+        "CPA-037-api-18.json",
+        "CPA-037-api-19.json",
+        "CPA-037-api-20.json",
+        "CPA-037-api-21.json",
+        "CPA-037-api-22.json",
+        "CPA-037-api-23.json",
+        "CPA-037-api-24.json",
+        "CPA-037-api-25.json",
+        "CPA-037-api-26.json",
+        "CPA-037-api-27.json",
+        "CPA-037-api-28.json",
+        "CPA-037-api-29.json",
+        "CPA-037-api-30.json",
+        "CPA-037-api-31.json",
+        "CPA-037-api-32.json",
+        "CPA-037-api-33.json",
+        "CPA-037-api-34.json",
+        "CPA-037-api-35.json",
+        "CPA-037-api-36.json",
+        "CPA-037-api-37.json",
+        "CPA-037-api-38.json",
+        "CPA-037-api-39.json",
+        "CPA-037-api-40.json",
+        "CPA-037-api-41.json",
+        "CPA-037-api-42.json",
+        "CPA-037-api-43.json",
+        "CPA-037-api-44.json",
+        "CPA-037-api-45.json",
+        "CPA-037-api-46.json",
+        "CPA-037-api-47.json",
+        "CPA-037-api-48.json",
+        "CPA-037-api-49.json",
+        "CPA-037-api-50.json",
+        "CPA-037-api-51.json",
+        "CPA-037-api-52.json",
+        "CPA-037-api-53.json",
+        "CPA-037-api-54.json",
+        "CPA-037-api-55.json",
+        "CPA-037-api-56.json",
+        "CPA-037-api-57.json",
+        "CPA-037-api-58.json",
+        "CPA-037-api-59.json"
+      ],
+      "desviacion": "Se usa CINCO_DIAS con k=150 para observar la duración sin esperar horas reales; flota AUTO ampliada y velocidad 400 para preparar una unidad en ruta fuera del Central. No se certifica el estado interno REASIGNADA de cada parada porque no se expone por API.",
+      "limite_observabilidad": "No se certifican los estados internos REEMPLAZADA y REASIGNADA de cada parada; se verifica que la ruta anterior no siga en ejecución. Ensayo acelerado, sin repetir aún la duración real en DIA_A_DIA.",
+      "incidencia": "SIM-001"
+    },
+    {
+      "caso": "CPA-038",
+      "estado": "Fallido",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Criterio propuesto incumplido: valor -5 recibió HTTP 200; velocidad AUTO observada -5.0.",
+      "verificaciones": [
+        false,
+        false
+      ],
+      "evidencias": [
+        "CPA-038-api-01.json",
+        "CPA-038-api-02.json",
+        "CPA-038-api-03.json",
+        "CPA-038-api-04.json",
+        "CPA-038-api-05.json",
+        "CPA-038-api-06.json",
+        "CPA-038-api-07.json",
+        "CPA-038-api-08.json",
+        "CPA-038-api-09.json",
+        "CPA-038-api-10.json",
+        "CPA-038-api-11.json",
+        "CPA-038-api-12.json",
+        "CPA-038-api-13.json",
+        "CPA-038-api-14.json",
+        "CPA-038-api-15.json",
+        "CPA-038-api-16.json",
+        "CPA-038-api-17.json",
+        "CPA-038-api-18.json",
+        "CPA-038-api-19.json",
+        "CPA-038-api-20.json",
+        "CPA-038-api-21.json",
+        "CPA-038-api-22.json",
+        "CPA-038-api-23.json",
+        "CPA-038-api-24.json",
+        "CPA-038-api-25.json",
+        "CPA-038-api-26.json",
+        "CPA-038-api-27.json",
+        "CPA-038-api-28.json",
+        "CPA-038-api-29.json",
+        "CPA-038-api-30.json"
+      ],
+      "criterio": "Propuesto; pendiente de ratificación funcional",
+      "representantes": "Se probaron 0 y -5 por separado y se conservaron sus respuestas.",
+      "incidencia": "VAL-001"
+    },
+    {
+      "caso": "CPA-039",
+      "estado": "Fallido",
+      "canales": [
+        "API"
+      ],
+      "resultado": "Criterio propuesto incumplido: cantidad -1 aceptada con HTTP 200; pedido almacenado con esa cantidad.",
+      "verificaciones": [
+        false,
+        false
+      ],
+      "evidencias": [
+        "CPA-039-api-01.json",
+        "CPA-039-api-02.json",
+        "CPA-039-api-03.json",
+        "CPA-039-api-04.json"
+      ],
+      "criterio": "Propuesto; pendiente de ratificación funcional",
+      "representantes": "0 y -1 en backend limpio por separado.",
+      "incidencia": "VAL-002"
+    },
+    {
+      "caso": "CPA-040",
+      "estado": "Bloqueado",
+      "canales": [
+        "Interfaz",
+        "API",
+        "Inspección de código"
+      ],
+      "resultado": "La pantalla muestra flota-invalida.json como activo sin error. No se observa importación al backend. Falta un esquema aprobado para preparar y ejecutar el representante válido; caso completo no certificable.",
+      "criterio": "Propuesto; pendiente de ratificación funcional",
+      "evidencias": [
+        "CPA-040-pantalla.png",
+        "CPA-040-api-01.json",
+        "CPA-040-api-02.json"
+      ],
+      "incidencia": "IMP-001"
+    }
+  ],
+  "incidencias": [
+    {
+      "id": "UI-001",
+      "caso": "CPA-002",
+      "severidad": "Media",
+      "estado": "Abierta",
+      "detalle": "Aviso de error con icono verde de éxito. Los archivos rechazados figuran como activos; en CPA-003 a CPA-006 y CPA-013 la vista cuenta registros que no fueron guardados en el backend.",
+      "evidencia": "CPA-002-pantalla.png",
+      "evidencias": [
+        "CPA-002-pantalla.png",
+        "CPA-003-pantalla.png",
+        "CPA-006-pantalla.png",
+        "CPA-013-pantalla.png",
+        "lote-rechazos-despues-interfaz.json"
+      ]
+    },
+    {
+      "id": "INT-001",
+      "severidad": "Alta",
+      "estado": "Abierta",
+      "casos": [
+        "CPA-027",
+        "CPA-029",
+        "CPA-031"
+      ],
+      "detalle": "Guardar Parámetros solo conserva valores en el navegador. Tras pedir AUTO 35, MOTO 17 y Nor-Oeste 1200, el servidor mantiene 40, 15 y 1000 después de otro lote. La API sí aplica los mismos tipos de cambio. El Central aparece editable.",
+      "evidencias": [
+        "UI-002-valores-solicitados.png",
+        "UI-002-confirmacion-repeticion.png",
+        "UI-002-REPETICION-api-*.json"
+      ]
+    },
+    {
+      "id": "FUN-001",
+      "severidad": "Alta",
+      "estado": "Abierta",
+      "casos": [
+        "CPA-034"
+      ],
+      "detalle": "La interfaz renderizada no incluye el control Frecuencia recarga. La comprobación API con un límite de ciclo al mediodía sí verifica recarga cada 12 h.",
+      "evidencias": [
+        "CPA-034-controles-interfaz.txt",
+        "CPA-034-controles-interfaz.png",
+        "CPA-034-api-*.json"
+      ]
+    },
+    {
+      "id": "SIM-001",
+      "severidad": "Alta",
+      "estado": "Abierta",
+      "casos": [
+        "CPA-036",
+        "CPA-037"
+      ],
+      "detalle": "TA01 sigue AVERIADO después de los plazos previstos de 2 h y 4 h. Inyección a las 07:50 y último estado observado a las 13:40 en CINCO_DIAS con k=150. El tipo 1 conserva posición y el tipo 2 llega al Central, pero ninguno se reincorpora durante el seguimiento.",
+      "evidencias": [
+        "CPA-036-api-*.json",
+        "CPA-037-api-*.json",
+        "CPA-036-despues-del-plazo.png",
+        "CPA-037-despues-del-plazo.png"
+      ]
+    },
+    {
+      "id": "VAL-001",
+      "severidad": "Alta",
+      "estado": "Abierta",
+      "casos": [
+        "CPA-038"
+      ],
+      "detalle": "La API acepta y aplica velocidad AUTO 0 y -5. Fallo contra el criterio propuesto de velocidad positiva; requiere ratificación funcional.",
+      "evidencias": [
+        "CPA-038-api-*.json"
+      ]
+    },
+    {
+      "id": "VAL-002",
+      "severidad": "Alta",
+      "estado": "Abierta",
+      "casos": [
+        "CPA-039"
+      ],
+      "detalle": "La carga acepta pedidos con cantidad 0 y -1, en dos backend limpios independientes. Fallo contra el criterio propuesto de cantidad positiva; requiere ratificación funcional.",
+      "evidencias": [
+        "CPA-039-api-*.json"
+      ]
+    },
+    {
+      "id": "IMP-001",
+      "severidad": "Media",
+      "estado": "Pendiente de definición",
+      "casos": [
+        "CPA-040"
+      ],
+      "detalle": "La carga de flota muestra el nombre del archivo sin validación ni llamada de importación. Se requiere definir un esquema válido y completar el flujo antes de certificar el caso.",
+      "evidencias": [
+        "CPA-040-pantalla.png"
+      ]
+    }
+  ],
+  "fuentes_sin_cambios": true,
+  "resumen": {
+    "Aprobado": 31,
+    "Fallido": 8,
+    "Bloqueado": 1
+  }
+}

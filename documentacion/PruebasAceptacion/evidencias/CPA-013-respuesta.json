@@ -1,0 +1,27 @@
+{
+  "caso": "CPA-013",
+  "metodo": "API",
+  "url": "http://127.0.0.1:8080/api/files/maintenance",
+  "fecha": "2026-10-21T12:05:14.5477347-05:00",
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "INVALID_ARGUMENT",
+      "message": "El archivo mant.preventivo.09.10.txt tiene 1 línea(s) inválida(s): mant.preventivo.09.10.txt:1: fecha inválida",
+      "details": null
+    }
+  },
+  "antes": {
+    "data": [],
+    "meta": {
+      "timestamp": "2026-10-21T17:05:14.529492900Z"
+    }
+  },
+  "despues": {
+    "data": [],
+    "meta": {
+      "timestamp": "2026-10-21T17:05:14.545983800Z"
+    }
+  },
+  "verificacion": true
+}

@@ -1,0 +1,25 @@
+{
+  "caso": "PRE-CAMBIOS",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios",
+  "peticion": {
+    "tipo": "DIA_A_DIA",
+    "fechaInicioSimulada": "2026-09-01T07:00:00Z"
+  },
+  "status": 201,
+  "body": {
+    "data": {
+      "idEjecucion": "cdd8eb90-fe76-4fc7-8071-935660e1ea5c",
+      "tipoEscenario": "DIA_A_DIA",
+      "estado": "EN_CURSO",
+      "fechaInicio": "2026-10-21T12:10:56.549276Z",
+      "fechaInicioSimulada": "2026-09-01T07:00:00Z",
+      "sa": 0.33333334,
+      "k": 1.0
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:10:56.550283Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:10:56Z"
+}

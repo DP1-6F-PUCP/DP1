@@ -1,0 +1,22 @@
+{
+  "caso": "CPA-020",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/escenarios/41925c3c-7c6f-46ae-983d-ae1810511410",
+  "peticion": null,
+  "status": 200,
+  "body": {
+    "data": {
+      "idEjecucion": "41925c3c-7c6f-46ae-983d-ae1810511410",
+      "tipoEscenario": "DIA_A_DIA",
+      "estado": "EN_CURSO",
+      "fechaInicio": "2026-10-21T12:09:01.797553400Z",
+      "fechaInicioSimulada": "2026-09-01T07:00:00Z",
+      "sa": 0.33333334,
+      "k": 1.0
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:09:43.024854900Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:09:43Z"
+}

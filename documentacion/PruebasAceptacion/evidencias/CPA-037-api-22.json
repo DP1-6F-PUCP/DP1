@@ -1,0 +1,3584 @@
+{
+  "caso": "CPA-037",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/estado-operacion",
+  "peticion": null,
+  "status": 200,
+  "body": {
+    "data": {
+      "marcaTiempoActual": "2026-09-01T09:30:00",
+      "rutas": [
+        {
+          "idRuta": "TA02-20260901075000-r1",
+          "vehiculoId": "TA02",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-8",
+            "SINT-6"
+          ],
+          "costoEstimado": 408.0,
+          "duracionEstimadaHoras": 2.1275,
+          "geometria": [
+            "64,28"
+          ]
+        },
+        {
+          "idRuta": "TA03-20260901075000-r1",
+          "vehiculoId": "TA03",
+          "tipoVehiculo": "AUTO",
+          "estado": "FINALIZADA",
+          "secuenciaEntrega": [
+            "SINT-9"
+          ],
+          "costoEstimado": 200.0,
+          "duracionEstimadaHoras": 1.0625,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA04-20260901075000-r1",
+          "vehiculoId": "TA04",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-3",
+            "SINT-1"
+          ],
+          "costoEstimado": 368.0,
+          "duracionEstimadaHoras": 2.115,
+          "geometria": [
+            "18,45"
+          ]
+        },
+        {
+          "idRuta": "TA05-20260901075000-r1",
+          "vehiculoId": "TA05",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-2",
+            "SINT-5"
+          ],
+          "costoEstimado": 416.0,
+          "duracionEstimadaHoras": 2.13,
+          "geometria": [
+            "5,42"
+          ]
+        },
+        {
+          "idRuta": "TA06-20260901075000-r1",
+          "vehiculoId": "TA06",
+          "tipoVehiculo": "AUTO",
+          "estado": "FINALIZADA",
+          "secuenciaEntrega": [
+            "SINT-7"
+          ],
+          "costoEstimado": 96.0,
+          "duracionEstimadaHoras": 1.03,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "TA07-20260901075000-r1",
+          "vehiculoId": "TA07",
+          "tipoVehiculo": "AUTO",
+          "estado": "FINALIZADA",
+          "secuenciaEntrega": [
+            "PED-2026-09-0001"
+          ],
+          "costoEstimado": 472.0,
+          "duracionEstimadaHoras": 1.1475,
+          "geometria": [
+            "57,27"
+          ]
+        },
+        {
+          "idRuta": "TA09-20260901075000-r1",
+          "vehiculoId": "TA09",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-10",
+            "SINT-4"
+          ],
+          "costoEstimado": 432.0,
+          "duracionEstimadaHoras": 2.135,
+          "geometria": [
+            "47,48"
+          ]
+        },
+        {
+          "idRuta": "TA08-20260901084000-r1",
+          "vehiculoId": "TA08",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-12",
+            "SINT-16"
+          ],
+          "costoEstimado": 424.0,
+          "duracionEstimadaHoras": 2.1325,
+          "geometria": [
+            "8,27",
+            "7,27",
+            "6,27",
+            "5,27",
+            "4,27",
+            "3,27",
+            "2,27",
+            "1,27",
+            "1,28",
+            "1,29",
+            "1,30",
+            "1,31",
+            "1,32",
+            "1,33",
+            "1,34",
+            "1,35",
+            "1,36",
+            "1,37",
+            "1,38",
+            "1,39",
+            "1,40",
+            "1,41"
+          ]
+        },
+        {
+          "idRuta": "TA10-20260901084000-r1",
+          "vehiculoId": "TA10",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-11",
+            "SINT-13"
+          ],
+          "costoEstimado": 528.0,
+          "duracionEstimadaHoras": 2.165,
+          "geometria": [
+            "56,31",
+            "57,31",
+            "58,31",
+            "59,31",
+            "60,31",
+            "61,31",
+            "62,31",
+            "63,31",
+            "64,31",
+            "64,32",
+            "64,33",
+            "64,34",
+            "64,35",
+            "64,36",
+            "64,37",
+            "64,38",
+            "64,39",
+            "64,40",
+            "64,41",
+            "64,42",
+            "64,43"
+          ]
+        },
+        {
+          "idRuta": "AUTO-11-20260901084000-r1",
+          "vehiculoId": "AUTO-11",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-14",
+            "SINT-19"
+          ],
+          "costoEstimado": 312.0,
+          "duracionEstimadaHoras": 2.0975,
+          "geometria": [
+            "39,31",
+            "38,31",
+            "37,31",
+            "36,31",
+            "35,31",
+            "35,32",
+            "35,33",
+            "35,34",
+            "35,35",
+            "35,36",
+            "35,37"
+          ]
+        },
+        {
+          "idRuta": "AUTO-12-20260901084000-r1",
+          "vehiculoId": "AUTO-12",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-18",
+            "SINT-15"
+          ],
+          "costoEstimado": 192.0,
+          "duracionEstimadaHoras": 2.06,
+          "geometria": [
+            "36,3",
+            "37,3",
+            "38,3",
+            "38,2",
+            "38,1"
+          ]
+        },
+        {
+          "idRuta": "AUTO-13-20260901084000-r1",
+          "vehiculoId": "AUTO-13",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-20",
+            "SINT-17"
+          ],
+          "costoEstimado": 336.0,
+          "duracionEstimadaHoras": 2.105,
+          "geometria": [
+            "40,22",
+            "39,22",
+            "39,21",
+            "39,20",
+            "39,19",
+            "39,18",
+            "39,17",
+            "39,16",
+            "39,15",
+            "39,14",
+            "39,13",
+            "39,12",
+            "39,11",
+            "39,10",
+            "39,9",
+            "39,8",
+            "39,7",
+            "39,6",
+            "39,5",
+            "39,4",
+            "39,3",
+            "39,2"
+          ]
+        },
+        {
+          "idRuta": "AUTO-14-20260901084000-r1",
+          "vehiculoId": "AUTO-14",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-15-20260901084000-r1",
+          "vehiculoId": "AUTO-15",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-16-20260901084000-r1",
+          "vehiculoId": "AUTO-16",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-17-20260901084000-r1",
+          "vehiculoId": "AUTO-17",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-18-20260901084000-r1",
+          "vehiculoId": "AUTO-18",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-19-20260901084000-r1",
+          "vehiculoId": "AUTO-19",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-20-20260901084000-r1",
+          "vehiculoId": "AUTO-20",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-21-20260901084000-r1",
+          "vehiculoId": "AUTO-21",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-22-20260901084000-r1",
+          "vehiculoId": "AUTO-22",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-23-20260901084000-r1",
+          "vehiculoId": "AUTO-23",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-24-20260901084000-r1",
+          "vehiculoId": "AUTO-24",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-25-20260901084000-r1",
+          "vehiculoId": "AUTO-25",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-26-20260901084000-r1",
+          "vehiculoId": "AUTO-26",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-27-20260901084000-r1",
+          "vehiculoId": "AUTO-27",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-28-20260901084000-r1",
+          "vehiculoId": "AUTO-28",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-29-20260901084000-r1",
+          "vehiculoId": "AUTO-29",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-30-20260901084000-r1",
+          "vehiculoId": "AUTO-30",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        }
+      ],
+      "vehiculos": [
+        {
+          "idUnidad": "TA01",
+          "tipo": "AUTO",
+          "estado": "AVERIADO",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA02",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 64,
+          "posYActual": 28,
+          "cargaActual": 3,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:57:39"
+        },
+        {
+          "idUnidad": "TA03",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA04",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 18,
+          "posYActual": 45,
+          "cargaActual": 1,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:56:54"
+        },
+        {
+          "idUnidad": "TA05",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 5,
+          "posYActual": 42,
+          "cargaActual": 2,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:57:48"
+        },
+        {
+          "idUnidad": "TA06",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA07",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 57,
+          "posYActual": 27,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA08",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 8,
+          "posYActual": 27,
+          "cargaActual": 5,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:44:48"
+        },
+        {
+          "idUnidad": "TA09",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 47,
+          "posYActual": 48,
+          "cargaActual": 3,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:58:06"
+        },
+        {
+          "idUnidad": "TA10",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 56,
+          "posYActual": 31,
+          "cargaActual": 5,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:46:54"
+        },
+        {
+          "idUnidad": "AUTO-11",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 39,
+          "posYActual": 31,
+          "cargaActual": 5,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:44:21"
+        },
+        {
+          "idUnidad": "AUTO-12",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 36,
+          "posYActual": 3,
+          "cargaActual": 3,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:43:00"
+        },
+        {
+          "idUnidad": "AUTO-13",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 40,
+          "posYActual": 22,
+          "cargaActual": 6,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": "2026-09-01T08:43:09"
+        },
+        {
+          "idUnidad": "AUTO-14",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-15",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-16",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-17",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-18",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-19",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-20",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-21",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-22",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-23",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-24",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-25",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-26",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-27",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-28",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-29",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-30",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        }
+      ],
+      "almacenes": [
+        {
+          "nombre": "Central",
+          "esCentral": true,
+          "posX": 27,
+          "posY": 14,
+          "stockActual": 0,
+          "capacidadMaxima": 0,
+          "nivelOcupacion": 0.0
+        },
+        {
+          "nombre": "Nor-Oeste",
+          "esCentral": false,
+          "posX": 12,
+          "posY": 38,
+          "stockActual": 1000,
+          "capacidadMaxima": 1000,
+          "nivelOcupacion": 100.0
+        },
+        {
+          "nombre": "Este",
+          "esCentral": false,
+          "posX": 57,
+          "posY": 27,
+          "stockActual": 1000,
+          "capacidadMaxima": 1000,
+          "nivelOcupacion": 100.0
+        }
+      ],
+      "bloqueos": [],
+      "eventos": [
+        {
+          "instante": "2026-09-01T08:40:00",
+          "tipo": "PLANIFICACION_RUTAS",
+          "vehiculoId": null,
+          "x": -1,
+          "y": -1,
+          "pedidoId": null,
+          "descripcion": "Rutas planificadas activadas (29 vehículos, 21 pedidos asignados)"
+        },
+        {
+          "instante": "2026-09-01T08:40:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "TA08",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T08:40:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "TA10",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T08:40:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "AUTO-11",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T08:40:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "AUTO-12",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T08:40:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "AUTO-13",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T08:40:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 26,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (27, 14) -> (26, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 28,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (27, 14) -> (28, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 28,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (27, 14) -> (28, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 28,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (27, 14) -> (28, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 28,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (27, 14) -> (28, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 25,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (26, 14) -> (25, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 29,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (28, 14) -> (29, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 29,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (28, 14) -> (29, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 29,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (28, 14) -> (29, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 29,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (28, 14) -> (29, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 24,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (25, 14) -> (24, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 30,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (29, 14) -> (30, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 30,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (29, 14) -> (30, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 30,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (29, 14) -> (30, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 30,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (29, 14) -> (30, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 23,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (24, 14) -> (23, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 31,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (30, 14) -> (31, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 31,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (30, 14) -> (31, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 31,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (30, 14) -> (31, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 31,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (30, 14) -> (31, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 22,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (23, 14) -> (22, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 32,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (31, 14) -> (32, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 32,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (31, 14) -> (32, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 32,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (31, 14) -> (32, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 32,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (31, 14) -> (32, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 21,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (22, 14) -> (21, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 33,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (32, 14) -> (33, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 33,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (32, 14) -> (33, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 33,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (32, 14) -> (33, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:40:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 33,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (32, 14) -> (33, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 20,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (21, 14) -> (20, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 34,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (33, 14) -> (34, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 34,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (33, 14) -> (34, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 34,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (33, 14) -> (34, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 34,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (33, 14) -> (34, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 19,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (20, 14) -> (19, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 35,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (34, 14) -> (35, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 35,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (34, 14) -> (35, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 35,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (34, 14) -> (35, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 35,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (34, 14) -> (35, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 18,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (19, 14) -> (18, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 36,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (35, 14) -> (36, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 36,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (35, 14) -> (36, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 14,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (35, 14) -> (36, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 36,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (35, 14) -> (36, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 17,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (18, 14) -> (17, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 37,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (36, 14) -> (37, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 37,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (36, 14) -> (37, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 13,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 14) -> (36, 13)"
+        },
+        {
+          "instante": "2026-09-01T08:41:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 37,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (36, 14) -> (37, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 16,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (17, 14) -> (16, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 38,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (37, 14) -> (38, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 38,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (37, 14) -> (38, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 12,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 13) -> (36, 12)"
+        },
+        {
+          "instante": "2026-09-01T08:41:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 38,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (37, 14) -> (38, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 15,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (16, 14) -> (15, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 39,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (38, 14) -> (39, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 14,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (38, 14) -> (39, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 11,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 12) -> (36, 11)"
+        },
+        {
+          "instante": "2026-09-01T08:41:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 39,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (38, 14) -> (39, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 14,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (15, 14) -> (14, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 40,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (39, 14) -> (40, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:41:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 15,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 14) -> (39, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:41:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 10,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 11) -> (36, 10)"
+        },
+        {
+          "instante": "2026-09-01T08:41:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 14,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (39, 14) -> (40, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 13,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (14, 14) -> (13, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 41,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (40, 14) -> (41, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 16,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 15) -> (39, 16)"
+        },
+        {
+          "instante": "2026-09-01T08:42:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 9,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 10) -> (36, 9)"
+        },
+        {
+          "instante": "2026-09-01T08:42:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 15,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 14) -> (40, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:42:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 12,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (13, 14) -> (12, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 42,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (41, 14) -> (42, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 17,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 16) -> (39, 17)"
+        },
+        {
+          "instante": "2026-09-01T08:42:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 8,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 9) -> (36, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:42:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 16,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 15) -> (40, 16)"
+        },
+        {
+          "instante": "2026-09-01T08:42:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 11,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (12, 14) -> (11, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 43,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (42, 14) -> (43, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 18,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 17) -> (39, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:42:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 7,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 8) -> (36, 7)"
+        },
+        {
+          "instante": "2026-09-01T08:42:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 17,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 16) -> (40, 17)"
+        },
+        {
+          "instante": "2026-09-01T08:42:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 10,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (11, 14) -> (10, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 44,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (43, 14) -> (44, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 19,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 18) -> (39, 19)"
+        },
+        {
+          "instante": "2026-09-01T08:42:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 6,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 7) -> (36, 6)"
+        },
+        {
+          "instante": "2026-09-01T08:42:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 18,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 17) -> (40, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:42:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 9,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (10, 14) -> (9, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 45,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (44, 14) -> (45, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 20,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 19) -> (39, 20)"
+        },
+        {
+          "instante": "2026-09-01T08:42:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 5,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 6) -> (36, 5)"
+        },
+        {
+          "instante": "2026-09-01T08:42:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 19,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 18) -> (40, 19)"
+        },
+        {
+          "instante": "2026-09-01T08:42:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 14,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (9, 14) -> (8, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 46,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (45, 14) -> (46, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:42:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 21,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 20) -> (39, 21)"
+        },
+        {
+          "instante": "2026-09-01T08:42:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 4,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 5) -> (36, 4)"
+        },
+        {
+          "instante": "2026-09-01T08:42:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 20,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 19) -> (40, 20)"
+        },
+        {
+          "instante": "2026-09-01T08:43:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 15,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 14) -> (8, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:43:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 47,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (46, 14) -> (47, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:43:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 22,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 21) -> (39, 22)"
+        },
+        {
+          "instante": "2026-09-01T08:43:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 3,
+          "pedidoId": "SINT-18",
+          "descripcion": "Tránsito tramo (36, 4) -> (36, 3)"
+        },
+        {
+          "instante": "2026-09-01T08:43:00",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 3,
+          "pedidoId": "SINT-18",
+          "descripcion": "Arribo a destino de cliente (36, 3)"
+        },
+        {
+          "instante": "2026-09-01T08:43:00",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "AUTO-12",
+          "x": 36,
+          "y": 3,
+          "pedidoId": "SINT-18",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-18"
+        },
+        {
+          "instante": "2026-09-01T08:43:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 21,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 20) -> (40, 21)"
+        },
+        {
+          "instante": "2026-09-01T08:43:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 16,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 15) -> (8, 16)"
+        },
+        {
+          "instante": "2026-09-01T08:43:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 48,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (47, 14) -> (48, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:43:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 23,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 22) -> (39, 23)"
+        },
+        {
+          "instante": "2026-09-01T08:43:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 22,
+          "pedidoId": "SINT-20",
+          "descripcion": "Tránsito tramo (40, 21) -> (40, 22)"
+        },
+        {
+          "instante": "2026-09-01T08:43:09",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 22,
+          "pedidoId": "SINT-20",
+          "descripcion": "Arribo a destino de cliente (40, 22)"
+        },
+        {
+          "instante": "2026-09-01T08:43:09",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "AUTO-13",
+          "x": 40,
+          "y": 22,
+          "pedidoId": "SINT-20",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-20"
+        },
+        {
+          "instante": "2026-09-01T08:43:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 17,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 16) -> (8, 17)"
+        },
+        {
+          "instante": "2026-09-01T08:43:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 49,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (48, 14) -> (49, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:43:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 24,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 23) -> (39, 24)"
+        },
+        {
+          "instante": "2026-09-01T08:43:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 18,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 17) -> (8, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:43:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 50,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (49, 14) -> (50, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:43:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 25,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 24) -> (39, 25)"
+        },
+        {
+          "instante": "2026-09-01T08:43:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 19,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 18) -> (8, 19)"
+        },
+        {
+          "instante": "2026-09-01T08:43:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 51,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (50, 14) -> (51, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:43:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 26,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 25) -> (39, 26)"
+        },
+        {
+          "instante": "2026-09-01T08:43:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 20,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 19) -> (8, 20)"
+        },
+        {
+          "instante": "2026-09-01T08:43:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 52,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (51, 14) -> (52, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:43:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 27,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 26) -> (39, 27)"
+        },
+        {
+          "instante": "2026-09-01T08:43:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 21,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 20) -> (8, 21)"
+        },
+        {
+          "instante": "2026-09-01T08:43:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 53,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (52, 14) -> (53, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:43:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 28,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 27) -> (39, 28)"
+        },
+        {
+          "instante": "2026-09-01T08:44:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 22,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 21) -> (8, 22)"
+        },
+        {
+          "instante": "2026-09-01T08:44:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 54,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (53, 14) -> (54, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:44:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 29,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 28) -> (39, 29)"
+        },
+        {
+          "instante": "2026-09-01T08:44:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 23,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 22) -> (8, 23)"
+        },
+        {
+          "instante": "2026-09-01T08:44:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 55,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (54, 14) -> (55, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:44:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 30,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 29) -> (39, 30)"
+        },
+        {
+          "instante": "2026-09-01T08:44:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 24,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 23) -> (8, 24)"
+        },
+        {
+          "instante": "2026-09-01T08:44:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 14,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (55, 14) -> (56, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:44:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 31,
+          "pedidoId": "SINT-14",
+          "descripcion": "Tránsito tramo (39, 30) -> (39, 31)"
+        },
+        {
+          "instante": "2026-09-01T08:44:21",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 31,
+          "pedidoId": "SINT-14",
+          "descripcion": "Arribo a destino de cliente (39, 31)"
+        },
+        {
+          "instante": "2026-09-01T08:44:21",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "AUTO-11",
+          "x": 39,
+          "y": 31,
+          "pedidoId": "SINT-14",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-14"
+        },
+        {
+          "instante": "2026-09-01T08:44:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 25,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 24) -> (8, 25)"
+        },
+        {
+          "instante": "2026-09-01T08:44:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 15,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 14) -> (56, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:44:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 26,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 25) -> (8, 26)"
+        },
+        {
+          "instante": "2026-09-01T08:44:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 16,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 15) -> (56, 16)"
+        },
+        {
+          "instante": "2026-09-01T08:44:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 27,
+          "pedidoId": "SINT-12",
+          "descripcion": "Tránsito tramo (8, 26) -> (8, 27)"
+        },
+        {
+          "instante": "2026-09-01T08:44:48",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 27,
+          "pedidoId": "SINT-12",
+          "descripcion": "Arribo a destino de cliente (8, 27)"
+        },
+        {
+          "instante": "2026-09-01T08:44:48",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "TA08",
+          "x": 8,
+          "y": 27,
+          "pedidoId": "SINT-12",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-12"
+        },
+        {
+          "instante": "2026-09-01T08:44:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 17,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 16) -> (56, 17)"
+        },
+        {
+          "instante": "2026-09-01T08:44:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 18,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 17) -> (56, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:45:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 19,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 18) -> (56, 19)"
+        },
+        {
+          "instante": "2026-09-01T08:45:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 20,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 19) -> (56, 20)"
+        },
+        {
+          "instante": "2026-09-01T08:45:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 21,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 20) -> (56, 21)"
+        },
+        {
+          "instante": "2026-09-01T08:45:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 22,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 21) -> (56, 22)"
+        },
+        {
+          "instante": "2026-09-01T08:45:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 23,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 22) -> (56, 23)"
+        },
+        {
+          "instante": "2026-09-01T08:45:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 24,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 23) -> (56, 24)"
+        },
+        {
+          "instante": "2026-09-01T08:46:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 25,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 24) -> (56, 25)"
+        },
+        {
+          "instante": "2026-09-01T08:46:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 26,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 25) -> (56, 26)"
+        },
+        {
+          "instante": "2026-09-01T08:46:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 27,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 26) -> (56, 27)"
+        },
+        {
+          "instante": "2026-09-01T08:46:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 28,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 27) -> (56, 28)"
+        },
+        {
+          "instante": "2026-09-01T08:46:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 29,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 28) -> (56, 29)"
+        },
+        {
+          "instante": "2026-09-01T08:46:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 30,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 29) -> (56, 30)"
+        },
+        {
+          "instante": "2026-09-01T08:46:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 31,
+          "pedidoId": "SINT-11",
+          "descripcion": "Tránsito tramo (56, 30) -> (56, 31)"
+        },
+        {
+          "instante": "2026-09-01T08:46:54",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 31,
+          "pedidoId": "SINT-11",
+          "descripcion": "Arribo a destino de cliente (56, 31)"
+        },
+        {
+          "instante": "2026-09-01T08:46:54",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "TA10",
+          "x": 56,
+          "y": 31,
+          "pedidoId": "SINT-11",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-11"
+        },
+        {
+          "instante": "2026-09-01T08:51:48",
+          "tipo": "FIN_SERVICIO_ENTREGA",
+          "vehiculoId": "TA06",
+          "x": 35,
+          "y": 18,
+          "pedidoId": "SINT-7",
+          "descripcion": "Finalizó entrega de SINT-7 | Estado: A TIEMPO (CUMPLE) (Plazo límite: 17.2h, Margen: +17.97h)"
+        },
+        {
+          "instante": "2026-09-01T08:51:48",
+          "tipo": "RETORNO_ALMACEN",
+          "vehiculoId": "TA06",
+          "x": 35,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Iniciando retorno hacia almacén (27, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:51:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 34,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (35, 18) -> (34, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:52:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 33,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (34, 18) -> (33, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:52:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 32,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (33, 18) -> (32, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:52:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 31,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (32, 18) -> (31, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:52:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 30,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (31, 18) -> (30, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:52:42",
+          "tipo": "FIN_SERVICIO_ENTREGA",
+          "vehiculoId": "TA02",
+          "x": 44,
+          "y": 15,
+          "pedidoId": "SINT-8",
+          "descripcion": "Finalizó entrega de SINT-8 | Estado: A TIEMPO (CUMPLE) (Plazo límite: 7.2h, Margen: +7.96h)"
+        },
+        {
+          "instante": "2026-09-01T08:52:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 29,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (30, 18) -> (29, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:52:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 45,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (44, 15) -> (45, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:52:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 28,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (29, 18) -> (28, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:53:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 46,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (45, 15) -> (46, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:53:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 27,
+          "y": 18,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (28, 18) -> (27, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:53:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 47,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (46, 15) -> (47, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:53:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 27,
+          "y": 17,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 18) -> (27, 17)"
+        },
+        {
+          "instante": "2026-09-01T08:53:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 48,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (47, 15) -> (48, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:53:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 27,
+          "y": 16,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 17) -> (27, 16)"
+        },
+        {
+          "instante": "2026-09-01T08:53:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 49,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (48, 15) -> (49, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:53:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 27,
+          "y": 15,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 16) -> (27, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:53:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 50,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (49, 15) -> (50, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:53:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA06",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 15) -> (27, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:53:36",
+          "tipo": "LLEGADA_ALMACEN",
+          "vehiculoId": "TA06",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo TA06 arribó exitosamente a su almacén de retorno"
+        },
+        {
+          "instante": "2026-09-01T08:53:45",
+          "tipo": "FIN_SERVICIO_ENTREGA",
+          "vehiculoId": "TA03",
+          "x": 8,
+          "y": 8,
+          "pedidoId": "SINT-9",
+          "descripcion": "Finalizó entrega de SINT-9 | Estado: A TIEMPO (CUMPLE) (Plazo límite: 11.2h, Margen: +11.94h)"
+        },
+        {
+          "instante": "2026-09-01T08:53:45",
+          "tipo": "RETORNO_ALMACEN",
+          "vehiculoId": "TA03",
+          "x": 8,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Iniciando retorno hacia almacén (27, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:53:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 51,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (50, 15) -> (51, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:53:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 9,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (8, 8) -> (9, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:53:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 52,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (51, 15) -> (52, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:54:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 10,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (9, 8) -> (10, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:54:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 53,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (52, 15) -> (53, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:54:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 11,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (10, 8) -> (11, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:54:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 54,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (53, 15) -> (54, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:54:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 12,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (11, 8) -> (12, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:54:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 55,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (54, 15) -> (55, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:54:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 13,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (12, 8) -> (13, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:54:30",
+          "tipo": "FIN_SERVICIO_ENTREGA",
+          "vehiculoId": "TA04",
+          "x": 30,
+          "y": 41,
+          "pedidoId": "SINT-3",
+          "descripcion": "Finalizó entrega de SINT-3 | Estado: A TIEMPO (CUMPLE) (Plazo límite: 11.2h, Margen: +11.93h)"
+        },
+        {
+          "instante": "2026-09-01T08:54:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 56,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (55, 15) -> (56, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:54:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 14,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (13, 8) -> (14, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:54:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 29,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (30, 41) -> (29, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:54:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 57,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (56, 15) -> (57, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:54:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 15,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (14, 8) -> (15, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:54:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 28,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (29, 41) -> (28, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:54:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 58,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (57, 15) -> (58, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:54:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 16,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (15, 8) -> (16, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:54:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 27,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (28, 41) -> (27, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:54:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 59,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (58, 15) -> (59, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:55:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 17,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (16, 8) -> (17, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:55:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 26,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (27, 41) -> (26, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:55:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 60,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (59, 15) -> (60, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:55:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 18,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (17, 8) -> (18, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:55:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 25,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (26, 41) -> (25, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:55:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 61,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (60, 15) -> (61, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:55:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 19,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (18, 8) -> (19, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:55:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 24,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (25, 41) -> (24, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:55:24",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 62,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (61, 15) -> (62, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:55:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 20,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (19, 8) -> (20, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:55:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 23,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (24, 41) -> (23, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:55:33",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 63,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (62, 15) -> (63, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:55:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 21,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (20, 8) -> (21, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:55:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 22,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (23, 41) -> (22, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:55:42",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 15,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (63, 15) -> (64, 15)"
+        },
+        {
+          "instante": "2026-09-01T08:55:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 22,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (21, 8) -> (22, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:55:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 21,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (22, 41) -> (21, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:55:51",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 16,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 15) -> (64, 16)"
+        },
+        {
+          "instante": "2026-09-01T08:56:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 23,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (22, 8) -> (23, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:56:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 20,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (21, 41) -> (20, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:56:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 17,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 16) -> (64, 17)"
+        },
+        {
+          "instante": "2026-09-01T08:56:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 24,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (23, 8) -> (24, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:56:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 19,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (20, 41) -> (19, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:56:09",
+          "tipo": "FIN_SERVICIO_ENTREGA",
+          "vehiculoId": "TA05",
+          "x": 15,
+          "y": 43,
+          "pedidoId": "SINT-2",
+          "descripcion": "Finalizó entrega de SINT-2 | Estado: A TIEMPO (CUMPLE) (Plazo límite: 17.2h, Margen: +17.90h)"
+        },
+        {
+          "instante": "2026-09-01T08:56:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 18,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 17) -> (64, 18)"
+        },
+        {
+          "instante": "2026-09-01T08:56:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 25,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (24, 8) -> (25, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:56:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 18,
+          "y": 41,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (19, 41) -> (18, 41)"
+        },
+        {
+          "instante": "2026-09-01T08:56:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 14,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (15, 43) -> (14, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:56:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 19,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 18) -> (64, 19)"
+        },
+        {
+          "instante": "2026-09-01T08:56:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 26,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (25, 8) -> (26, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:56:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 18,
+          "y": 42,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (18, 41) -> (18, 42)"
+        },
+        {
+          "instante": "2026-09-01T08:56:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 13,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (14, 43) -> (13, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:56:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 20,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 19) -> (64, 20)"
+        },
+        {
+          "instante": "2026-09-01T08:56:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 8,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (26, 8) -> (27, 8)"
+        },
+        {
+          "instante": "2026-09-01T08:56:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 18,
+          "y": 43,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (18, 42) -> (18, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:56:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 12,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (13, 43) -> (12, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:56:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 21,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 20) -> (64, 21)"
+        },
+        {
+          "instante": "2026-09-01T08:56:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 9,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 8) -> (27, 9)"
+        },
+        {
+          "instante": "2026-09-01T08:56:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 18,
+          "y": 44,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (18, 43) -> (18, 44)"
+        },
+        {
+          "instante": "2026-09-01T08:56:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 11,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (12, 43) -> (11, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:56:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 22,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 21) -> (64, 22)"
+        },
+        {
+          "instante": "2026-09-01T08:56:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 10,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 9) -> (27, 10)"
+        },
+        {
+          "instante": "2026-09-01T08:56:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA04",
+          "x": 18,
+          "y": 45,
+          "pedidoId": "SINT-1",
+          "descripcion": "Tránsito tramo (18, 44) -> (18, 45)"
+        },
+        {
+          "instante": "2026-09-01T08:56:54",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "TA04",
+          "x": 18,
+          "y": 45,
+          "pedidoId": "SINT-1",
+          "descripcion": "Arribo a destino de cliente (18, 45)"
+        },
+        {
+          "instante": "2026-09-01T08:56:54",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "TA04",
+          "x": 18,
+          "y": 45,
+          "pedidoId": "SINT-1",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-1"
+        },
+        {
+          "instante": "2026-09-01T08:56:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 10,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (11, 43) -> (10, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:56:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 23,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 22) -> (64, 23)"
+        },
+        {
+          "instante": "2026-09-01T08:57:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 11,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 10) -> (27, 11)"
+        },
+        {
+          "instante": "2026-09-01T08:57:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 9,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (10, 43) -> (9, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:57:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 24,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 23) -> (64, 24)"
+        },
+        {
+          "instante": "2026-09-01T08:57:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 12,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 11) -> (27, 12)"
+        },
+        {
+          "instante": "2026-09-01T08:57:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 8,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (9, 43) -> (8, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:57:12",
+          "tipo": "FIN_SERVICIO_ENTREGA",
+          "vehiculoId": "TA09",
+          "x": 46,
+          "y": 43,
+          "pedidoId": "SINT-10",
+          "descripcion": "Finalizó entrega de SINT-10 | Estado: A TIEMPO (CUMPLE) (Plazo límite: 35.2h, Margen: +35.88h)"
+        },
+        {
+          "instante": "2026-09-01T08:57:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 25,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 24) -> (64, 25)"
+        },
+        {
+          "instante": "2026-09-01T08:57:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 13,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 12) -> (27, 13)"
+        },
+        {
+          "instante": "2026-09-01T08:57:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 7,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (8, 43) -> (7, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:57:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 43,
+          "pedidoId": "SINT-4",
+          "descripcion": "Tránsito tramo (46, 43) -> (47, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:57:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 26,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 25) -> (64, 26)"
+        },
+        {
+          "instante": "2026-09-01T08:57:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (27, 13) -> (27, 14)"
+        },
+        {
+          "instante": "2026-09-01T08:57:30",
+          "tipo": "LLEGADA_ALMACEN",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo TA03 arribó exitosamente a su almacén de retorno"
+        },
+        {
+          "instante": "2026-09-01T08:57:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 6,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (7, 43) -> (6, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:57:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 44,
+          "pedidoId": "SINT-4",
+          "descripcion": "Tránsito tramo (47, 43) -> (47, 44)"
+        },
+        {
+          "instante": "2026-09-01T08:57:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 27,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 26) -> (64, 27)"
+        },
+        {
+          "instante": "2026-09-01T08:57:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 5,
+          "y": 43,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (6, 43) -> (5, 43)"
+        },
+        {
+          "instante": "2026-09-01T08:57:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 45,
+          "pedidoId": "SINT-4",
+          "descripcion": "Tránsito tramo (47, 44) -> (47, 45)"
+        },
+        {
+          "instante": "2026-09-01T08:57:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 28,
+          "pedidoId": "SINT-6",
+          "descripcion": "Tránsito tramo (64, 27) -> (64, 28)"
+        },
+        {
+          "instante": "2026-09-01T08:57:39",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 28,
+          "pedidoId": "SINT-6",
+          "descripcion": "Arribo a destino de cliente (64, 28)"
+        },
+        {
+          "instante": "2026-09-01T08:57:39",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "TA02",
+          "x": 64,
+          "y": 28,
+          "pedidoId": "SINT-6",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-6"
+        },
+        {
+          "instante": "2026-09-01T08:57:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA05",
+          "x": 5,
+          "y": 42,
+          "pedidoId": "SINT-5",
+          "descripcion": "Tránsito tramo (5, 43) -> (5, 42)"
+        },
+        {
+          "instante": "2026-09-01T08:57:48",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "TA05",
+          "x": 5,
+          "y": 42,
+          "pedidoId": "SINT-5",
+          "descripcion": "Arribo a destino de cliente (5, 42)"
+        },
+        {
+          "instante": "2026-09-01T08:57:48",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "TA05",
+          "x": 5,
+          "y": 42,
+          "pedidoId": "SINT-5",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-5"
+        },
+        {
+          "instante": "2026-09-01T08:57:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 46,
+          "pedidoId": "SINT-4",
+          "descripcion": "Tránsito tramo (47, 45) -> (47, 46)"
+        },
+        {
+          "instante": "2026-09-01T08:57:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 47,
+          "pedidoId": "SINT-4",
+          "descripcion": "Tránsito tramo (47, 46) -> (47, 47)"
+        },
+        {
+          "instante": "2026-09-01T08:58:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 48,
+          "pedidoId": "SINT-4",
+          "descripcion": "Tránsito tramo (47, 47) -> (47, 48)"
+        },
+        {
+          "instante": "2026-09-01T08:58:06",
+          "tipo": "LLEGADA_A_DESTINO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 48,
+          "pedidoId": "SINT-4",
+          "descripcion": "Arribo a destino de cliente (47, 48)"
+        },
+        {
+          "instante": "2026-09-01T08:58:06",
+          "tipo": "INICIO_SERVICIO",
+          "vehiculoId": "TA09",
+          "x": 47,
+          "y": 48,
+          "pedidoId": "SINT-4",
+          "descripcion": "Inicia entrega y descarga de pedido SINT-4"
+        },
+        {
+          "instante": "2026-09-01T08:58:51",
+          "tipo": "FIN_SERVICIO_ENTREGA",
+          "vehiculoId": "TA07",
+          "x": 60,
+          "y": 40,
+          "pedidoId": "PED-2026-09-0001",
+          "descripcion": "Finalizó entrega de PED-2026-09-0001 | Estado: A TIEMPO (CUMPLE) (Plazo límite: 46.3h, Margen: +47.02h)"
+        },
+        {
+          "instante": "2026-09-01T08:58:51",
+          "tipo": "RETORNO_ALMACEN",
+          "vehiculoId": "TA07",
+          "x": 60,
+          "y": 40,
+          "pedidoId": null,
+          "descripcion": "Iniciando retorno hacia almacén (57, 27)"
+        },
+        {
+          "instante": "2026-09-01T08:59:00",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 59,
+          "y": 40,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (60, 40) -> (59, 40)"
+        },
+        {
+          "instante": "2026-09-01T08:59:09",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 58,
+          "y": 40,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (59, 40) -> (58, 40)"
+        },
+        {
+          "instante": "2026-09-01T08:59:18",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 40,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (58, 40) -> (57, 40)"
+        },
+        {
+          "instante": "2026-09-01T08:59:27",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 39,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 40) -> (57, 39)"
+        },
+        {
+          "instante": "2026-09-01T08:59:36",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 38,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 39) -> (57, 38)"
+        },
+        {
+          "instante": "2026-09-01T08:59:45",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 37,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 38) -> (57, 37)"
+        },
+        {
+          "instante": "2026-09-01T08:59:54",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 36,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 37) -> (57, 36)"
+        },
+        {
+          "instante": "2026-09-01T09:00:03",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 35,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 36) -> (57, 35)"
+        },
+        {
+          "instante": "2026-09-01T09:00:12",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 34,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 35) -> (57, 34)"
+        },
+        {
+          "instante": "2026-09-01T09:00:21",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 33,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 34) -> (57, 33)"
+        },
+        {
+          "instante": "2026-09-01T09:00:30",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 32,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 33) -> (57, 32)"
+        },
+        {
+          "instante": "2026-09-01T09:00:39",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 31,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 32) -> (57, 31)"
+        },
+        {
+          "instante": "2026-09-01T09:00:48",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 30,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 31) -> (57, 30)"
+        },
+        {
+          "instante": "2026-09-01T09:00:57",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 29,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 30) -> (57, 29)"
+        },
+        {
+          "instante": "2026-09-01T09:01:06",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 28,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 29) -> (57, 28)"
+        },
+        {
+          "instante": "2026-09-01T09:01:15",
+          "tipo": "MOVIMIENTO_TRAMO",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 27,
+          "pedidoId": null,
+          "descripcion": "Tránsito tramo (57, 28) -> (57, 27)"
+        },
+        {
+          "instante": "2026-09-01T09:01:15",
+          "tipo": "LLEGADA_ALMACEN",
+          "vehiculoId": "TA07",
+          "x": 57,
+          "y": 27,
+          "pedidoId": null,
+          "descripcion": "Vehículo TA07 arribó exitosamente a su almacén de retorno"
+        }
+      ],
+      "metricas": {
+        "costoTotalAcumulado": 4656.0,
+        "porcentajeEntregasATiempo": 100.0,
+        "contadorEntregados": 7,
+        "contadorIncumplidos": 0,
+        "contadorParadasReasignadas": 0,
+        "contadorAverias": 1,
+        "contadorInterferenciasBloqueo": 0
+      }
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:22:47.869566900Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:22:47Z"
+}

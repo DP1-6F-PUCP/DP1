@@ -1,0 +1,19 @@
+{
+  "caso": "CPA-034",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios/6efef124-6c97-46a5-b768-8171651d34b4/solicitudes",
+  "peticion": {
+    "tiempoSimulado": "2026-09-01T11:59:40Z",
+    "tipoSolicitud": "CAMBIO_FRECUENCIA_RECARGA",
+    "entidadObjetivo": "Nor-Oeste",
+    "valorNuevo": "12"
+  },
+  "status": 200,
+  "body": {
+    "data": null,
+    "meta": {
+      "timestamp": "2026-10-21T17:25:20.678333400Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:25:20Z"
+}

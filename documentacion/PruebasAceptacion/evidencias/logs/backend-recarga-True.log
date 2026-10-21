@@ -1,0 +1,47 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-21T12:25:17.382-05:00  INFO 30484 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.8 with PID 30484 (C:\Users\alvar\OneDrive\Desktop\DP1_Sem9\DP1-main\backend\target\paqrap-backend-0.0.1-SNAPSHOT.jar started by alvar in C:\Users\alvar\.codex\.chatgpt-projects\g-p-6aad4edbbf7c8191b1639606d966e518\tmp\pruebas-runtime)
+2026-10-21T12:25:17.386-05:00  INFO 30484 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-21T12:25:18.540-05:00  INFO 30484 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-21T12:25:18.553-05:00  INFO 30484 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-21T12:25:18.553-05:00  INFO 30484 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-21T12:25:18.585-05:00  INFO 30484 --- [paqrap-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-21T12:25:18.586-05:00  INFO 30484 --- [paqrap-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1156 ms
+2026-10-21T12:25:19.086-05:00  INFO 30484 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T12:25:19.103-05:00  INFO 30484 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Started BackendApplication in 2.098 seconds (process running for 2.583)
+2026-10-21T12:25:19.243-05:00  INFO 30484 --- [paqrap-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T12:25:19.243-05:00  INFO 30484 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-21T12:25:19.244-05:00  INFO 30484 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-21T12:25:19.625-05:00  INFO 30484 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.controller.SimulacionController    : Escenario iniciado/unido: id=6efef124-6c97-46a5-b768-8171651d34b4 tipo=DIA_A_DIA fechaInicioSimulada=2026-09-01T11:59:20 (solicitado: tipo=DIA_A_DIA)
+2026-10-21T12:25:19.629-05:00  WARN 30484 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : No se pudieron cargar los bloqueos oficiales de 2026-10: data\bloqueos\bloqueo.2610.txt
+2026-10-21T12:25:19.642-05:00  INFO 30484 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 37 rutas nuevas, 0.010s de computo
+2026-10-21T12:25:19.648-05:00  INFO 30484 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=4ms solicitudes=0ms planificar=10ms simular=4ms cierre=0ms TOTAL=22ms (0 rutas en curso, 37 rutas nuevas)
+2026-10-21T12:25:19.778-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:20.678-05:00  INFO 30484 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario 6efef124-6c97-46a5-b768-8171651d34b4: CAMBIO_FRECUENCIA_RECARGA -> Nor-Oeste (12)
+2026-10-21T12:25:20.790-05:00  WARN 30484 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:21.507-05:00  INFO 30484 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 3abe77ae-8f3c-7049-bb80-e91e6c3b0239 (1 activas)
+2026-10-21T12:25:23.797-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:24.805-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:27.813-05:00  WARN 30484 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:28.822-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:31.830-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:32.838-05:00  WARN 30484 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:35.845-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:36.853-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:39.631-05:00  INFO 30484 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 37 rutas nuevas, 0.002s de computo
+2026-10-21T12:25:39.632-05:00  INFO 30484 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=3ms planificar=2ms simular=0ms cierre=1ms TOTAL=7ms (0 rutas en curso, 37 rutas nuevas)
+2026-10-21T12:25:39.862-05:00  WARN 30484 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:40.845-05:00  INFO 30484 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.controller.SimulacionController    : Ejecución 6efef124-6c97-46a5-b768-8171651d34b4 detenida
+2026-10-21T12:25:40.869-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:43.878-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:44.886-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:47.896-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3
+2026-10-21T12:25:48.903-05:00  WARN 30484 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 9b90ebee-ee30-4acf-b3ae-e24df5f170b3

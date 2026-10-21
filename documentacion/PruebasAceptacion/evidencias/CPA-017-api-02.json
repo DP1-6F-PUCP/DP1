@@ -1,0 +1,14 @@
+{
+  "caso": "CPA-017",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/escenarios/activa",
+  "peticion": null,
+  "status": 200,
+  "body": {
+    "data": null,
+    "meta": {
+      "timestamp": "2026-10-21T17:09:01.752020200Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:09:01Z"
+}

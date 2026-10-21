@@ -1,0 +1,14 @@
+{
+  "caso": "CPA-009",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios/9fde4427-3a5b-4cb7-a41a-e3060d215640/detener",
+  "peticion": {},
+  "status": 200,
+  "body": {
+    "data": null,
+    "meta": {
+      "timestamp": "2026-10-21T17:15:02.131589300Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:15:02Z"
+}

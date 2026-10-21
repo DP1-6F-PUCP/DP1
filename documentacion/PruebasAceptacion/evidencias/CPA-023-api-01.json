@@ -1,0 +1,15 @@
+{
+  "caso": "CPA-023",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/escenarios/NO-EXISTE",
+  "peticion": null,
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "INVALID_ARGUMENT",
+      "message": "No hay una ejecución activa con id NO-EXISTE",
+      "details": null
+    }
+  },
+  "horaUTC": "2026-10-21T17:09:01Z"
+}

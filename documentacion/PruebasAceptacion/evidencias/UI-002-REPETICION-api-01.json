@@ -1,0 +1,25 @@
+{
+  "caso": "UI-002-REPETICION",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios",
+  "peticion": {
+    "tipo": "DIA_A_DIA",
+    "fechaInicioSimulada": "2026-09-01T07:00:00Z"
+  },
+  "status": 201,
+  "body": {
+    "data": {
+      "idEjecucion": "454c2a6e-3b63-49df-a54d-b70712c395a4",
+      "tipoEscenario": "DIA_A_DIA",
+      "estado": "EN_CURSO",
+      "fechaInicio": "2026-10-21T12:25:54.032442900Z",
+      "fechaInicioSimulada": "2026-09-01T07:00:00Z",
+      "sa": 0.33333334,
+      "k": 1.0
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:25:54.036444100Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:25:54Z"
+}

@@ -1,0 +1,25 @@
+{
+  "caso": "CPA-011",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios",
+  "peticion": {
+    "tipo": "DIA_A_DIA",
+    "fechaInicioSimulada": "2026-09-30T23:00:00Z"
+  },
+  "status": 201,
+  "body": {
+    "data": {
+      "idEjecucion": "6ad135c0-8d06-4e33-abbc-ace8cab5af21",
+      "tipoEscenario": "DIA_A_DIA",
+      "estado": "EN_CURSO",
+      "fechaInicio": "2026-10-21T12:15:05.851818700Z",
+      "fechaInicioSimulada": "2026-09-30T23:00:00Z",
+      "sa": 0.33333334,
+      "k": 1.0
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:15:05.854820900Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:15:05Z"
+}

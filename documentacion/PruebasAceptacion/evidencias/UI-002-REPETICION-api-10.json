@@ -1,0 +1,14 @@
+{
+  "caso": "UI-002-REPETICION",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios/454c2a6e-3b63-49df-a54d-b70712c395a4/detener",
+  "peticion": {},
+  "status": 200,
+  "body": {
+    "data": null,
+    "meta": {
+      "timestamp": "2026-10-21T17:26:56.040709900Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:26:56Z"
+}

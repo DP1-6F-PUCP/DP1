@@ -1,0 +1,19 @@
+{
+  "caso": "RESTAURAR",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios/cdd8eb90-fe76-4fc7-8071-935660e1ea5c/solicitudes",
+  "peticion": {
+    "tiempoSimulado": "2026-09-01T07:03:20Z",
+    "tipoSolicitud": "CAMBIO_VELOCIDAD",
+    "entidadObjetivo": "AUTO",
+    "valorNuevo": "35"
+  },
+  "status": 200,
+  "body": {
+    "data": null,
+    "meta": {
+      "timestamp": "2026-10-21T17:13:57.152312600Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:13:57Z"
+}

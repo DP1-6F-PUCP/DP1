@@ -1,0 +1,1193 @@
+{
+  "caso": "CPA-037",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/estado-operacion",
+  "peticion": null,
+  "status": 200,
+  "body": {
+    "data": {
+      "marcaTiempoActual": "2026-09-01T12:00:00",
+      "rutas": [
+        {
+          "idRuta": "TA02-20260901102000-r1",
+          "vehiculoId": "TA02",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-36",
+            "SINT-33"
+          ],
+          "costoEstimado": 168.0,
+          "duracionEstimadaHoras": 2.0525,
+          "geometria": [
+            "61,23",
+            "60,23",
+            "59,23",
+            "58,23",
+            "58,22",
+            "58,21",
+            "58,20",
+            "58,19",
+            "58,18",
+            "58,17",
+            "58,16",
+            "58,15",
+            "58,14",
+            "58,13"
+          ]
+        },
+        {
+          "idRuta": "TA06-20260901093000-r1",
+          "vehiculoId": "TA06",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-28",
+            "SINT-29"
+          ],
+          "costoEstimado": 288.0,
+          "duracionEstimadaHoras": 2.09,
+          "geometria": [
+            "6,1"
+          ]
+        },
+        {
+          "idRuta": "TA07-20260901093000-r1",
+          "vehiculoId": "TA07",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-23",
+            "SINT-25"
+          ],
+          "costoEstimado": 208.0,
+          "duracionEstimadaHoras": 2.065,
+          "geometria": [
+            "62,48"
+          ]
+        },
+        {
+          "idRuta": "TA09-20260901102000-r1",
+          "vehiculoId": "TA09",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-37",
+            "SINT-40"
+          ],
+          "costoEstimado": 304.0,
+          "duracionEstimadaHoras": 2.095,
+          "geometria": [
+            "55,50",
+            "56,50",
+            "57,50",
+            "58,50",
+            "59,50",
+            "60,50",
+            "61,50",
+            "62,50",
+            "63,50",
+            "64,50",
+            "65,50",
+            "66,50",
+            "67,50",
+            "68,50"
+          ]
+        },
+        {
+          "idRuta": "AUTO-15-20260901093000-r1",
+          "vehiculoId": "AUTO-15",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-24",
+            "SINT-26"
+          ],
+          "costoEstimado": 376.0,
+          "duracionEstimadaHoras": 2.1175,
+          "geometria": [
+            "5,31"
+          ]
+        },
+        {
+          "idRuta": "AUTO-16-20260901093000-r1",
+          "vehiculoId": "AUTO-16",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-22",
+            "SINT-30"
+          ],
+          "costoEstimado": 440.0,
+          "duracionEstimadaHoras": 2.1375,
+          "geometria": [
+            "14,46"
+          ]
+        },
+        {
+          "idRuta": "AUTO-17-20260901102000-r1",
+          "vehiculoId": "AUTO-17",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-35",
+            "SINT-38"
+          ],
+          "costoEstimado": 352.0,
+          "duracionEstimadaHoras": 2.11,
+          "geometria": [
+            "50,23",
+            "50,24",
+            "50,25",
+            "50,26",
+            "50,27",
+            "50,28",
+            "50,29",
+            "50,30",
+            "50,31",
+            "50,32",
+            "50,33",
+            "50,34",
+            "50,35"
+          ]
+        },
+        {
+          "idRuta": "AUTO-19-20260901102000-r1",
+          "vehiculoId": "AUTO-19",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-34"
+          ],
+          "costoEstimado": 192.0,
+          "duracionEstimadaHoras": 1.06,
+          "geometria": [
+            "5,16"
+          ]
+        },
+        {
+          "idRuta": "AUTO-21-20260901102000-r1",
+          "vehiculoId": "AUTO-21",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-39"
+          ],
+          "costoEstimado": 48.0,
+          "duracionEstimadaHoras": 1.015,
+          "geometria": [
+            "31,12"
+          ]
+        },
+        {
+          "idRuta": "AUTO-27-20260901102000-r1",
+          "vehiculoId": "AUTO-27",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-32",
+            "SINT-31"
+          ],
+          "costoEstimado": 128.0,
+          "duracionEstimadaHoras": 2.04,
+          "geometria": [
+            "29,24",
+            "28,24",
+            "28,25",
+            "28,26",
+            "28,27"
+          ]
+        },
+        {
+          "idRuta": "TA03-20260901111000-r1",
+          "vehiculoId": "TA03",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-42",
+            "SINT-48"
+          ],
+          "costoEstimado": 304.0,
+          "duracionEstimadaHoras": 2.095,
+          "geometria": [
+            "27,14",
+            "26,14",
+            "25,14",
+            "24,14",
+            "23,14",
+            "22,14",
+            "21,14",
+            "20,14",
+            "19,14",
+            "18,14",
+            "17,14",
+            "16,14",
+            "15,14",
+            "14,14",
+            "14,13",
+            "14,12",
+            "14,11",
+            "14,10",
+            "14,9",
+            "13,9",
+            "12,9",
+            "11,9",
+            "10,9",
+            "9,9",
+            "8,9",
+            "7,9",
+            "6,9",
+            "6,10",
+            "6,11",
+            "6,12",
+            "6,13",
+            "6,14",
+            "6,15",
+            "6,16",
+            "6,17",
+            "6,18",
+            "6,19",
+            "6,20",
+            "6,21"
+          ]
+        },
+        {
+          "idRuta": "TA04-20260901111000-r1",
+          "vehiculoId": "TA04",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-47",
+            "SINT-41"
+          ],
+          "costoEstimado": 288.0,
+          "duracionEstimadaHoras": 2.09,
+          "geometria": [
+            "12,38",
+            "13,38",
+            "14,38",
+            "15,38",
+            "16,38",
+            "17,38",
+            "18,38",
+            "19,38",
+            "20,38",
+            "21,38",
+            "22,38",
+            "23,38",
+            "24,38",
+            "25,38",
+            "26,38",
+            "27,38",
+            "28,38",
+            "29,38",
+            "30,38",
+            "31,38",
+            "32,38",
+            "33,38",
+            "34,38",
+            "35,38",
+            "36,38",
+            "36,39",
+            "36,40",
+            "36,41",
+            "37,41",
+            "38,41",
+            "39,41",
+            "40,41",
+            "41,41",
+            "42,41",
+            "43,41",
+            "44,41",
+            "44,42"
+          ]
+        },
+        {
+          "idRuta": "TA05-20260901111000-r1",
+          "vehiculoId": "TA05",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "12,38"
+          ]
+        },
+        {
+          "idRuta": "TA08-20260901111000-r1",
+          "vehiculoId": "TA08",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "12,38"
+          ]
+        },
+        {
+          "idRuta": "TA10-20260901111000-r1",
+          "vehiculoId": "TA10",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-44",
+            "SINT-50"
+          ],
+          "costoEstimado": 216.0,
+          "duracionEstimadaHoras": 2.0675,
+          "geometria": [
+            "57,27",
+            "58,27",
+            "59,27",
+            "60,27",
+            "61,27",
+            "62,27",
+            "63,27",
+            "64,27",
+            "64,26",
+            "64,25",
+            "64,24",
+            "65,24",
+            "66,24",
+            "67,24",
+            "68,24",
+            "68,23",
+            "68,22",
+            "68,21",
+            "68,20",
+            "68,19",
+            "68,18",
+            "68,17",
+            "68,16",
+            "68,15",
+            "68,14",
+            "68,13",
+            "68,12",
+            "68,11"
+          ]
+        },
+        {
+          "idRuta": "AUTO-11-20260901111000-r1",
+          "vehiculoId": "AUTO-11",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "12,38"
+          ]
+        },
+        {
+          "idRuta": "AUTO-12-20260901111000-r1",
+          "vehiculoId": "AUTO-12",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-43"
+          ],
+          "costoEstimado": 24.0,
+          "duracionEstimadaHoras": 1.0075,
+          "geometria": [
+            "27,14",
+            "26,14",
+            "26,15",
+            "26,16"
+          ]
+        },
+        {
+          "idRuta": "AUTO-13-20260901111000-r1",
+          "vehiculoId": "AUTO-13",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-49",
+            "SINT-46"
+          ],
+          "costoEstimado": 256.0,
+          "duracionEstimadaHoras": 2.08,
+          "geometria": [
+            "27,14",
+            "28,14",
+            "29,14",
+            "30,14",
+            "31,14",
+            "32,14",
+            "33,14",
+            "34,14",
+            "35,14",
+            "36,14",
+            "37,14",
+            "38,14",
+            "39,14",
+            "40,14",
+            "41,14",
+            "42,14",
+            "43,14",
+            "44,14",
+            "45,14",
+            "46,14",
+            "47,14",
+            "48,14",
+            "49,14",
+            "50,14",
+            "51,14",
+            "52,14",
+            "53,14",
+            "54,14",
+            "55,14",
+            "56,14",
+            "56,13",
+            "57,13",
+            "58,13"
+          ]
+        },
+        {
+          "idRuta": "AUTO-14-20260901111000-r1",
+          "vehiculoId": "AUTO-14",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-18-20260901111000-r1",
+          "vehiculoId": "AUTO-18",
+          "tipoVehiculo": "AUTO",
+          "estado": "EN_EJECUCION",
+          "secuenciaEntrega": [
+            "SINT-45"
+          ],
+          "costoEstimado": 200.0,
+          "duracionEstimadaHoras": 1.0625,
+          "geometria": [
+            "57,27",
+            "58,27",
+            "59,27",
+            "60,27",
+            "61,27",
+            "62,27",
+            "63,27",
+            "64,27",
+            "65,27",
+            "66,27",
+            "67,27",
+            "67,28",
+            "67,29",
+            "67,30",
+            "67,31",
+            "67,32",
+            "67,33",
+            "67,34",
+            "67,35",
+            "67,36",
+            "67,37",
+            "67,38",
+            "67,39",
+            "67,40",
+            "67,41",
+            "67,42"
+          ]
+        },
+        {
+          "idRuta": "AUTO-20-20260901111000-r1",
+          "vehiculoId": "AUTO-20",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-22-20260901111000-r1",
+          "vehiculoId": "AUTO-22",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-23-20260901111000-r1",
+          "vehiculoId": "AUTO-23",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-24-20260901111000-r1",
+          "vehiculoId": "AUTO-24",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-25-20260901111000-r1",
+          "vehiculoId": "AUTO-25",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-26-20260901111000-r1",
+          "vehiculoId": "AUTO-26",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-28-20260901111000-r1",
+          "vehiculoId": "AUTO-28",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-29-20260901111000-r1",
+          "vehiculoId": "AUTO-29",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        },
+        {
+          "idRuta": "AUTO-30-20260901111000-r1",
+          "vehiculoId": "AUTO-30",
+          "tipoVehiculo": "AUTO",
+          "estado": "PLANIFICADA",
+          "secuenciaEntrega": [],
+          "costoEstimado": 0.0,
+          "duracionEstimadaHoras": 0.0,
+          "geometria": [
+            "27,14"
+          ]
+        }
+      ],
+      "vehiculos": [
+        {
+          "idUnidad": "TA01",
+          "tipo": "AUTO",
+          "estado": "AVERIADO",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "ENTREGANDO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA02",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 61,
+          "posYActual": 23,
+          "cargaActual": 4,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "TA03",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 6,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "TA04",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 12,
+          "posYActual": 38,
+          "cargaActual": 4,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "TA05",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 12,
+          "posYActual": 38,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA06",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 6,
+          "posYActual": 1,
+          "cargaActual": 1,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "TA07",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 62,
+          "posYActual": 48,
+          "cargaActual": 3,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "TA08",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 12,
+          "posYActual": 38,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "TA09",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 55,
+          "posYActual": 50,
+          "cargaActual": 4,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "TA10",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 57,
+          "posYActual": 27,
+          "cargaActual": 4,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-11",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 12,
+          "posYActual": 38,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-12",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 3,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-13",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 4,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-14",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-15",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 5,
+          "posYActual": 31,
+          "cargaActual": 1,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-16",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 14,
+          "posYActual": 46,
+          "cargaActual": 3,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-17",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 50,
+          "posYActual": 23,
+          "cargaActual": 5,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-18",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 57,
+          "posYActual": 27,
+          "cargaActual": 2,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-19",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 5,
+          "posYActual": 16,
+          "cargaActual": 1,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-20",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-21",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 31,
+          "posYActual": 12,
+          "cargaActual": 2,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-22",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-23",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-24",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-25",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-26",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-27",
+          "tipo": "AUTO",
+          "estado": "EN_RUTA",
+          "posXActual": 29,
+          "posYActual": 24,
+          "cargaActual": 5,
+          "geometriaRetorno": [],
+          "actividad": "EN_REFRIGERIO",
+          "actividadDesde": "2026-09-01T11:10:00"
+        },
+        {
+          "idUnidad": "AUTO-28",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-29",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        },
+        {
+          "idUnidad": "AUTO-30",
+          "tipo": "AUTO",
+          "estado": "DISPONIBLE",
+          "posXActual": 27,
+          "posYActual": 14,
+          "cargaActual": 0,
+          "geometriaRetorno": [],
+          "actividad": "INACTIVO",
+          "actividadDesde": null
+        }
+      ],
+      "almacenes": [
+        {
+          "nombre": "Central",
+          "esCentral": true,
+          "posX": 27,
+          "posY": 14,
+          "stockActual": 0,
+          "capacidadMaxima": 0,
+          "nivelOcupacion": 0.0
+        },
+        {
+          "nombre": "Nor-Oeste",
+          "esCentral": false,
+          "posX": 12,
+          "posY": 38,
+          "stockActual": 996,
+          "capacidadMaxima": 1000,
+          "nivelOcupacion": 99.6
+        },
+        {
+          "nombre": "Este",
+          "esCentral": false,
+          "posX": 57,
+          "posY": 27,
+          "stockActual": 982,
+          "capacidadMaxima": 1000,
+          "nivelOcupacion": 98.2
+        }
+      ],
+      "bloqueos": [],
+      "eventos": [
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "PLANIFICACION_RUTAS",
+          "vehiculoId": null,
+          "x": -1,
+          "y": -1,
+          "pedidoId": null,
+          "descripcion": "Rutas planificadas activadas (29 vehículos, 28 pedidos asignados)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "TA02",
+          "x": 61,
+          "y": 23,
+          "pedidoId": null,
+          "descripcion": "Conductor de TA02 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "TA06",
+          "x": 6,
+          "y": 1,
+          "pedidoId": null,
+          "descripcion": "Conductor de TA06 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "TA07",
+          "x": 62,
+          "y": 48,
+          "pedidoId": null,
+          "descripcion": "Conductor de TA07 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "TA09",
+          "x": 55,
+          "y": 50,
+          "pedidoId": null,
+          "descripcion": "Conductor de TA09 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-15",
+          "x": 5,
+          "y": 31,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-15 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-16",
+          "x": 14,
+          "y": 46,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-16 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-17",
+          "x": 50,
+          "y": 23,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-17 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-19",
+          "x": 5,
+          "y": 16,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-19 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-21",
+          "x": 31,
+          "y": 12,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-21 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-27",
+          "x": 29,
+          "y": 24,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-27 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "TA03",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Conductor de TA03 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "TA04",
+          "x": 12,
+          "y": 38,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (12, 38) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "TA04",
+          "x": 12,
+          "y": 38,
+          "pedidoId": null,
+          "descripcion": "Conductor de TA04 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "TA10",
+          "x": 57,
+          "y": 27,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (57, 27) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "TA10",
+          "x": 57,
+          "y": 27,
+          "pedidoId": null,
+          "descripcion": "Conductor de TA10 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "AUTO-12",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 1 pedidos"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-12",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-12 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "AUTO-13",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (27, 14) con 2 pedidos"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-13",
+          "x": 27,
+          "y": 14,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-13 inicia pausa obligatoria de refrigerio (1.0h)"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "DESPACHO_VEHICULO",
+          "vehiculoId": "AUTO-18",
+          "x": 57,
+          "y": 27,
+          "pedidoId": null,
+          "descripcion": "Vehículo despachado desde (57, 27) con 1 pedidos"
+        },
+        {
+          "instante": "2026-09-01T11:10:00",
+          "tipo": "INICIO_REFRIGERIO",
+          "vehiculoId": "AUTO-18",
+          "x": 57,
+          "y": 27,
+          "pedidoId": null,
+          "descripcion": "Conductor de AUTO-18 inicia pausa obligatoria de refrigerio (1.0h)"
+        }
+      ],
+      "metricas": {
+        "costoTotalAcumulado": 8888.0,
+        "porcentajeEntregasATiempo": 100.0,
+        "contadorEntregados": 27,
+        "contadorIncumplidos": 0,
+        "contadorParadasReasignadas": 0,
+        "contadorAverias": 1,
+        "contadorInterferenciasBloqueo": 0
+      }
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:23:54.136827600Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:23:54Z"
+}

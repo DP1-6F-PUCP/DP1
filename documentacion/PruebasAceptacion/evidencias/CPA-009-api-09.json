@@ -1,0 +1,16 @@
+{
+  "caso": "CPA-009",
+  "metodo": "POST multipart",
+  "archivo": "bloqueo.2609.txt",
+  "contenido": "01d08h00m-01d09h00m:28,14,28,15\n",
+  "url": "http://127.0.0.1:8080/api/files/blocked-streets",
+  "status": 200,
+  "body": {
+    "data": {
+      "nombreArchivo": "bloqueo.2609.txt"
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:15:00.427728600Z"
+    }
+  }
+}

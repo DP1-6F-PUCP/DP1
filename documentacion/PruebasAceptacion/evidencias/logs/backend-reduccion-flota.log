@@ -1,0 +1,68 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-21T12:18:05.657-05:00  INFO 10572 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.8 with PID 10572 (C:\Users\alvar\OneDrive\Desktop\DP1_Sem9\DP1-main\backend\target\paqrap-backend-0.0.1-SNAPSHOT.jar started by alvar in C:\Users\alvar\.codex\.chatgpt-projects\g-p-6aad4edbbf7c8191b1639606d966e518\tmp\pruebas-runtime)
+2026-10-21T12:18:05.662-05:00  INFO 10572 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-21T12:18:06.855-05:00  INFO 10572 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-21T12:18:06.870-05:00  INFO 10572 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-21T12:18:06.870-05:00  INFO 10572 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-21T12:18:06.904-05:00  INFO 10572 --- [paqrap-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-21T12:18:06.905-05:00  INFO 10572 --- [paqrap-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1193 ms
+2026-10-21T12:18:07.458-05:00  INFO 10572 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T12:18:07.489-05:00  INFO 10572 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Started BackendApplication in 2.241 seconds (process running for 2.753)
+2026-10-21T12:18:07.545-05:00  INFO 10572 --- [paqrap-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T12:18:07.545-05:00  INFO 10572 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-21T12:18:07.546-05:00  INFO 10572 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-21T12:18:07.596-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:07.882-05:00  INFO 10572 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Escenario iniciado/unido: id=6b1a4e5d-2e65-498e-8dff-b20eb4cf5dff tipo=DIA_A_DIA fechaInicioSimulada=2026-09-01T07:00 (solicitado: tipo=DIA_A_DIA)
+2026-10-21T12:18:07.892-05:00  WARN 10572 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : No se pudieron cargar los bloqueos oficiales de 2026-10: data\bloqueos\bloqueo.2610.txt
+2026-10-21T12:18:08.091-05:00  INFO 10572 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 5 pedidos ofrecidos, 15 rutas nuevas, 0.192s de computo
+2026-10-21T12:18:08.106-05:00  INFO 10572 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=12ms solicitudes=0ms planificar=192ms simular=12ms cierre=2ms TOTAL=224ms (0 rutas en curso, 15 rutas nuevas)
+2026-10-21T12:18:08.655-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:09.424-05:00  INFO 10572 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario 6b1a4e5d-2e65-498e-8dff-b20eb4cf5dff: CAMBIO_CANTIDAD_VEHICULOS -> MOTO (3)
+2026-10-21T12:18:09.723-05:00  INFO 10572 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 4df03d5b-c7d9-9e71-08f3-231b121dc59f (1 activas)
+2026-10-21T12:18:11.662-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:12.670-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:15.678-05:00  WARN 10572 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:16.685-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:19.693-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:20.702-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:23.710-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:24.719-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:27.728-05:00  WARN 10572 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:27.883-05:00  WARN 10572 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Se pidieron retirar 12 unidades de tipo MOTO, pero solo 10 están disponibles sin abandonar una entrega
+2026-10-21T12:18:27.885-05:00  INFO 10572 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 0 rutas nuevas, 0.000s de computo
+2026-10-21T12:18:27.886-05:00  INFO 10572 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=3ms planificar=0ms simular=0ms cierre=0ms TOTAL=4ms (5 rutas en curso, 0 rutas nuevas)
+2026-10-21T12:18:28.736-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:29.542-05:00  INFO 10572 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Ejecución 6b1a4e5d-2e65-498e-8dff-b20eb4cf5dff detenida
+2026-10-21T12:18:31.744-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:32.751-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:35.760-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:36.767-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:39.776-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:40.784-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:43.791-05:00  WARN 10572 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:44.799-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:47.808-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:48.816-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:51.824-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:52.832-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:55.839-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:56.846-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:18:59.854-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:00.862-05:00  WARN 10572 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:03.869-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:04.877-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:07.885-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:08.893-05:00  WARN 10572 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:11.901-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:12.908-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:15.915-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:19:16.924-05:00  WARN 10572 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c

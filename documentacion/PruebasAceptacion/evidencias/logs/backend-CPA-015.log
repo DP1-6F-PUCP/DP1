@@ -1,0 +1,27 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-21T12:10:06.482-05:00  INFO 15060 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.8 with PID 15060 (C:\Users\alvar\OneDrive\Desktop\DP1_Sem9\DP1-main\backend\target\paqrap-backend-0.0.1-SNAPSHOT.jar started by alvar in C:\Users\alvar\.codex\.chatgpt-projects\g-p-6aad4edbbf7c8191b1639606d966e518\tmp\pruebas-runtime)
+2026-10-21T12:10:06.485-05:00  INFO 15060 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-21T12:10:07.619-05:00  INFO 15060 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-21T12:10:07.633-05:00  INFO 15060 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-21T12:10:07.633-05:00  INFO 15060 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-21T12:10:07.669-05:00  INFO 15060 --- [paqrap-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-21T12:10:07.670-05:00  INFO 15060 --- [paqrap-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1140 ms
+2026-10-21T12:10:08.212-05:00  INFO 15060 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T12:10:08.237-05:00  INFO 15060 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Started BackendApplication in 2.133 seconds (process running for 2.634)
+2026-10-21T12:10:08.631-05:00  INFO 15060 --- [paqrap-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T12:10:08.631-05:00  INFO 15060 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-21T12:10:08.631-05:00  INFO 15060 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-10-21T12:10:08.834-05:00  INFO 15060 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.controller.SimulacionController    : Escenario iniciado/unido: id=1d9a5fa9-9058-4ecf-a95e-c2c91468db41 tipo=CINCO_DIAS fechaInicioSimulada=2026-09-01T07:00 (solicitado: tipo=CINCO_DIAS)
+2026-10-21T12:10:08.840-05:00  WARN 15060 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : No se pudieron cargar los bloqueos oficiales de 2026-10: data\bloqueos\bloqueo.2610.txt
+2026-10-21T12:10:08.859-05:00  INFO 15060 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 37 rutas nuevas, 0.013s de computo
+2026-10-21T12:10:08.866-05:00  INFO 15060 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.controller.SimulacionController    : Ejecución 1d9a5fa9-9058-4ecf-a95e-c2c91468db41 detenida
+2026-10-21T12:10:08.872-05:00  INFO 15060 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=7ms solicitudes=0ms planificar=13ms simular=8ms cierre=4ms TOTAL=37ms (0 rutas en curso, 37 rutas nuevas)

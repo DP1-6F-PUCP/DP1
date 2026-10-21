@@ -1,0 +1,74 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-21T12:10:54.336-05:00  INFO 30228 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.8 with PID 30228 (C:\Users\alvar\OneDrive\Desktop\DP1_Sem9\DP1-main\backend\target\paqrap-backend-0.0.1-SNAPSHOT.jar started by alvar in C:\Users\alvar\.codex\.chatgpt-projects\g-p-6aad4edbbf7c8191b1639606d966e518\tmp\pruebas-runtime)
+2026-10-21T12:10:54.339-05:00  INFO 30228 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-21T12:10:55.425-05:00  INFO 30228 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-21T12:10:55.438-05:00  INFO 30228 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-21T12:10:55.439-05:00  INFO 30228 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-21T12:10:55.472-05:00  INFO 30228 --- [paqrap-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-21T12:10:55.473-05:00  INFO 30228 --- [paqrap-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1081 ms
+2026-10-21T12:10:56.005-05:00  INFO 30228 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T12:10:56.028-05:00  INFO 30228 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Started BackendApplication in 2.101 seconds (process running for 2.594)
+2026-10-21T12:10:56.116-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T12:10:56.116-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-21T12:10:56.117-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-21T12:10:56.154-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:10:56.549-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.controller.SimulacionController    : Escenario iniciado/unido: id=cdd8eb90-fe76-4fc7-8071-935660e1ea5c tipo=DIA_A_DIA fechaInicioSimulada=2026-09-01T07:00 (solicitado: tipo=DIA_A_DIA)
+2026-10-21T12:10:56.553-05:00  WARN 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : No se pudieron cargar los bloqueos oficiales de 2026-10: data\bloqueos\bloqueo.2610.txt
+2026-10-21T12:10:56.565-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 37 rutas nuevas, 0.009s de computo
+2026-10-21T12:10:56.570-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=4ms solicitudes=1ms planificar=9ms simular=4ms cierre=0ms TOTAL=21ms (0 rutas en curso, 37 rutas nuevas)
+2026-10-21T12:10:57.624-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: La configuración de ciudad no se puede cambiar una vez iniciada la ejecución; fíjala antes de iniciar el escenario.
+2026-10-21T12:10:57.687-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_VELOCIDAD -> AUTO (35)
+2026-10-21T12:10:58.418-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 177ce892-82ad-86b0-0c12-b41020e0706e (1 activas)
+2026-10-21T12:10:59.204-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:11:00.212-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:11:03.221-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:11:04.229-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:11:07.238-05:00  WARN 30228 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:11:08.248-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:11:11.257-05:00  WARN 30228 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id 41925c3c-7c6f-46ae-983d-ae1810511410
+2026-10-21T12:11:11.343-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket cerrada: 177ce892-82ad-86b0-0c12-b41020e0706e (0 activas)
+2026-10-21T12:11:11.533-05:00  INFO 30228 --- [paqrap-backend] [io-8080-exec-10] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 11586448-0e9d-3894-f659-d279e92e1b15 (1 activas)
+2026-10-21T12:11:11.550-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 617d531f-6cee-5a34-cfe0-757a77c521ee (1 activas)
+2026-10-21T12:11:11.550-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket cerrada: 11586448-0e9d-3894-f659-d279e92e1b15 (0 activas)
+2026-10-21T12:11:11.551-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket cerrada: 617d531f-6cee-5a34-cfe0-757a77c521ee (0 activas)
+2026-10-21T12:11:16.554-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 37 rutas nuevas, 0.003s de computo
+2026-10-21T12:11:16.555-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=2ms planificar=3ms simular=0ms cierre=0ms TOTAL=6ms (0 rutas en curso, 37 rutas nuevas)
+2026-10-21T12:11:16.556-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 1559b5b9-0115-93dd-cd7b-bab63b700a12 (1 activas)
+2026-10-21T12:11:17.858-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_CAPACIDAD -> MOTO (10)
+2026-10-21T12:11:36.553-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 37 rutas nuevas, 0.002s de computo
+2026-10-21T12:11:36.553-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=2ms simular=0ms cierre=0ms TOTAL=2ms (0 rutas en curso, 37 rutas nuevas)
+2026-10-21T12:11:38.024-05:00  INFO 30228 --- [paqrap-backend] [io-8080-exec-10] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_CANTIDAD_VEHICULOS -> MOTO (17)
+2026-10-21T12:11:56.552-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.002s de computo
+2026-10-21T12:11:56.552-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=2ms simular=0ms cierre=0ms TOTAL=2ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:11:58.218-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-1] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_CAPACIDAD_ALMACEN -> Nor-Oeste (1200)
+2026-10-21T12:12:16.555-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.004s de computo
+2026-10-21T12:12:16.555-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=4ms simular=0ms cierre=0ms TOTAL=4ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:12:18.389-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_POSICION_ALMACEN -> Este (56,27)
+2026-10-21T12:12:36.552-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.001s de computo
+2026-10-21T12:12:36.553-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=1ms simular=0ms cierre=0ms TOTAL=2ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:12:38.572-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_POSICION_ALMACEN -> Este (999,999)
+2026-10-21T12:12:56.551-05:00  WARN 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Posición (999, 999) fuera de los límites de la ciudad; se descarta el cambio de posición del almacén Este
+2026-10-21T12:12:56.552-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.001s de computo
+2026-10-21T12:12:56.553-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=1ms simular=0ms cierre=0ms TOTAL=2ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:12:56.710-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_VELOCIDAD -> AUTO (0)
+2026-10-21T12:13:16.552-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.001s de computo
+2026-10-21T12:13:16.553-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=1ms simular=1ms cierre=0ms TOTAL=2ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:13:16.845-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_VELOCIDAD -> AUTO (35)
+2026-10-21T12:13:36.551-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.001s de computo
+2026-10-21T12:13:36.551-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=1ms simular=0ms cierre=0ms TOTAL=1ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:13:36.981-05:00  INFO 30228 --- [paqrap-backend] [io-8080-exec-10] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_VELOCIDAD -> AUTO (-5)
+2026-10-21T12:13:56.551-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.001s de computo
+2026-10-21T12:13:56.552-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=1ms simular=1ms cierre=0ms TOTAL=2ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:13:57.152-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.controller.SimulacionController    : Solicitud programada sobre escenario cdd8eb90-fe76-4fc7-8071-935660e1ea5c: CAMBIO_VELOCIDAD -> AUTO (35)
+2026-10-21T12:14:16.551-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 39 rutas nuevas, 0.001s de computo
+2026-10-21T12:14:16.552-05:00  INFO 30228 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=0ms solicitudes=0ms planificar=1ms simular=0ms cierre=0ms TOTAL=2ms (0 rutas en curso, 39 rutas nuevas)
+2026-10-21T12:14:17.294-05:00  INFO 30228 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Ejecución cdd8eb90-fe76-4fc7-8071-935660e1ea5c detenida

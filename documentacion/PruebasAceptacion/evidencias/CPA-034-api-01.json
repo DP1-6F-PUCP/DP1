@@ -1,0 +1,32 @@
+{
+  "caso": "CPA-034",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios",
+  "peticion": {
+    "tipo": "DIA_A_DIA",
+    "fechaInicioSimulada": "2026-09-01T11:59:20Z",
+    "ajustesIniciales": [
+      {
+        "tipoSolicitud": "CAMBIO_CAPACIDAD_ALMACEN",
+        "entidadObjetivo": "Nor-Oeste",
+        "valorNuevo": "1200"
+      }
+    ]
+  },
+  "status": 201,
+  "body": {
+    "data": {
+      "idEjecucion": "aa072aa5-52e2-44f8-902a-239f9574e458",
+      "tipoEscenario": "DIA_A_DIA",
+      "estado": "EN_CURSO",
+      "fechaInicio": "2026-10-21T12:24:54.854611800Z",
+      "fechaInicioSimulada": "2026-09-01T11:59:20Z",
+      "sa": 0.33333334,
+      "k": 1.0
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:24:54.859614Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:24:54Z"
+}

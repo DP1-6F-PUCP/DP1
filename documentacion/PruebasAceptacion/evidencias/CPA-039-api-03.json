@@ -1,0 +1,16 @@
+{
+  "caso": "CPA-039",
+  "metodo": "POST multipart",
+  "archivo": "ventas.202609.txt",
+  "contenido": "01d07h00m:28,14,CLI001,-1,8\n",
+  "url": "http://127.0.0.1:8080/api/files/orders",
+  "status": 200,
+  "body": {
+    "data": {
+      "nombreArchivo": "ventas.202609.txt"
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:14:46.259861400Z"
+    }
+  }
+}

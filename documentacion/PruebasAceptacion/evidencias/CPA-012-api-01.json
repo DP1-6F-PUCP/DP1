@@ -1,0 +1,16 @@
+{
+  "caso": "CPA-012",
+  "metodo": "POST multipart",
+  "archivo": "mant.preventivo.09.10.txt",
+  "contenido": "20260901:TA01\n",
+  "url": "http://127.0.0.1:8080/api/files/maintenance",
+  "status": 200,
+  "body": {
+    "data": {
+      "nombreArchivo": "mant.preventivo.09.10.txt"
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:15:10.525799500Z"
+    }
+  }
+}

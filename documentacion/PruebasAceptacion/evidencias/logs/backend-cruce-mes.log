@@ -1,0 +1,29 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-21T12:15:03.471-05:00  INFO 35920 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.8 with PID 35920 (C:\Users\alvar\OneDrive\Desktop\DP1_Sem9\DP1-main\backend\target\paqrap-backend-0.0.1-SNAPSHOT.jar started by alvar in C:\Users\alvar\.codex\.chatgpt-projects\g-p-6aad4edbbf7c8191b1639606d966e518\tmp\pruebas-runtime)
+2026-10-21T12:15:03.474-05:00  INFO 35920 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-21T12:15:04.588-05:00  INFO 35920 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-21T12:15:04.614-05:00  INFO 35920 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-21T12:15:04.614-05:00  INFO 35920 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-21T12:15:04.649-05:00  INFO 35920 --- [paqrap-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-21T12:15:04.650-05:00  INFO 35920 --- [paqrap-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1132 ms
+2026-10-21T12:15:05.263-05:00  INFO 35920 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T12:15:05.280-05:00  INFO 35920 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Started BackendApplication in 2.187 seconds (process running for 2.657)
+2026-10-21T12:15:05.575-05:00  INFO 35920 --- [paqrap-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T12:15:05.575-05:00  INFO 35920 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-21T12:15:05.576-05:00  INFO 35920 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-21T12:15:05.712-05:00  INFO 35920 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.controller.IngestaController       : Archivo ingerido: bloqueo.2609.txt
+2026-10-21T12:15:05.852-05:00  INFO 35920 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.controller.SimulacionController    : Escenario iniciado/unido: id=6ad135c0-8d06-4e33-abbc-ace8cab5af21 tipo=DIA_A_DIA fechaInicioSimulada=2026-09-30T23:00 (solicitado: tipo=DIA_A_DIA)
+2026-10-21T12:15:05.857-05:00  WARN 35920 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : No se pudieron cargar los bloqueos oficiales de 2026-10: data\bloqueos\bloqueo.2610.txt
+2026-10-21T12:15:05.876-05:00  INFO 35920 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Lote planificado: 0 pedidos ofrecidos, 37 rutas nuevas, 0.013s de computo
+2026-10-21T12:15:05.885-05:00  INFO 35920 --- [paqrap-backend] [pool-1-thread-1] c.paqrap.simulador.OrquestadorOperacion  : Desglose de lote: carga=7ms solicitudes=0ms planificar=13ms simular=7ms cierre=1ms TOTAL=33ms (0 rutas en curso, 37 rutas nuevas)
+2026-10-21T12:15:06.412-05:00  WARN 35920 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No hay una ejecución activa con id cdd8eb90-fe76-4fc7-8071-935660e1ea5c
+2026-10-21T12:15:06.902-05:00  INFO 35920 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.controller.SimulacionController    : Ejecución 6ad135c0-8d06-4e33-abbc-ace8cab5af21 detenida

@@ -1,0 +1,15 @@
+{
+  "caso": "CPA-022",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios/41925c3c-7c6f-46ae-983d-ae1810511410/reanudar",
+  "peticion": {},
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "INVALID_STATE",
+      "message": "No hay una ejecución en curso para reanudar",
+      "details": null
+    }
+  },
+  "horaUTC": "2026-10-21T17:10:05Z"
+}

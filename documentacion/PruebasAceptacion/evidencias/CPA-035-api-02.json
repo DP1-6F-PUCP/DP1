@@ -1,0 +1,20 @@
+{
+  "caso": "CPA-035",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios/cdd8eb90-fe76-4fc7-8071-935660e1ea5c/solicitudes",
+  "peticion": {
+    "tiempoSimulado": "2026-09-01T07:00:20Z",
+    "tipoSolicitud": "CAMBIO_CONFIGURACION_CIUDAD",
+    "entidadObjetivo": "ancho",
+    "valorNuevo": "60"
+  },
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "INVALID_ARGUMENT",
+      "message": "La configuración de ciudad no se puede cambiar una vez iniciada la ejecución; fíjala antes de iniciar el escenario.",
+      "details": null
+    }
+  },
+  "horaUTC": "2026-10-21T17:10:57Z"
+}

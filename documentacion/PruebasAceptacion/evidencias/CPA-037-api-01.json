@@ -1,0 +1,47 @@
+{
+  "caso": "CPA-037",
+  "metodo": "POST",
+  "url": "http://127.0.0.1:8080/api/escenarios",
+  "peticion": {
+    "tipo": "CINCO_DIAS",
+    "fechaInicioSimulada": "2026-09-01T07:00:00Z",
+    "ajustesIniciales": [
+      {
+        "tipoSolicitud": "CAMBIO_VELOCIDAD",
+        "entidadObjetivo": "AUTO",
+        "valorNuevo": "400"
+      },
+      {
+        "tipoSolicitud": "CAMBIO_CANTIDAD_VEHICULOS",
+        "entidadObjetivo": "AUTO",
+        "valorNuevo": "30"
+      },
+      {
+        "tipoSolicitud": "CAMBIO_CANTIDAD_VEHICULOS",
+        "entidadObjetivo": "MOTO",
+        "valorNuevo": "0"
+      },
+      {
+        "tipoSolicitud": "CAMBIO_CANTIDAD_VEHICULOS",
+        "entidadObjetivo": "BICI",
+        "valorNuevo": "0"
+      }
+    ]
+  },
+  "status": 201,
+  "body": {
+    "data": {
+      "idEjecucion": "9b90ebee-ee30-4acf-b3ae-e24df5f170b3",
+      "tipoEscenario": "CINCO_DIAS",
+      "estado": "EN_CURSO",
+      "fechaInicio": "2026-10-21T12:22:05.054520400Z",
+      "fechaInicioSimulada": "2026-09-01T07:00:00Z",
+      "sa": 0.33333334,
+      "k": 150.0
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:22:05.059521Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:22:05Z"
+}

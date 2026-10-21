@@ -1,0 +1,10 @@
+{
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "INVALID_ARGUMENT",
+      "message": "El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: cantidad de campos inválida",
+      "details": null
+    }
+  }
+}

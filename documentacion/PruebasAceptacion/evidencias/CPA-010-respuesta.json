@@ -1,0 +1,27 @@
+{
+  "caso": "CPA-010",
+  "metodo": "API",
+  "url": "http://127.0.0.1:8080/api/files/blocked-streets",
+  "fecha": "2026-10-21T12:05:14.5256006-05:00",
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "INVALID_ARGUMENT",
+      "message": "El archivo bloqueo.2609.txt tiene 1 línea(s) inválida(s): bloqueo.2609.txt:1: la poligonal debe tener pares x,y",
+      "details": null
+    }
+  },
+  "antes": {
+    "data": [],
+    "meta": {
+      "timestamp": "2026-10-21T17:05:14.507464700Z"
+    }
+  },
+  "despues": {
+    "data": [],
+    "meta": {
+      "timestamp": "2026-10-21T17:05:14.524470800Z"
+    }
+  },
+  "verificacion": true
+}

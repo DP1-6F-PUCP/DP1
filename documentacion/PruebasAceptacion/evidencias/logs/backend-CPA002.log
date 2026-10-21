@@ -1,0 +1,48 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-21T12:01:01.831-05:00  INFO 8188 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Starting BackendApplication v0.0.1-SNAPSHOT using Java 21.0.8 with PID 8188 (C:\Users\alvar\OneDrive\Desktop\DP1_Sem9\DP1-main\backend\target\paqrap-backend-0.0.1-SNAPSHOT.jar started by alvar in C:\Users\alvar\.codex\.chatgpt-projects\g-p-6aad4edbbf7c8191b1639606d966e518\tmp\pruebas-runtime)
+2026-10-21T12:01:01.836-05:00  INFO 8188 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : No active profile set, falling back to 1 default profile: "default"
+2026-10-21T12:01:03.262-05:00  INFO 8188 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-10-21T12:01:03.279-05:00  INFO 8188 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-10-21T12:01:03.279-05:00  INFO 8188 --- [paqrap-backend] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.30]
+2026-10-21T12:01:03.324-05:00  INFO 8188 --- [paqrap-backend] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-10-21T12:01:03.325-05:00  INFO 8188 --- [paqrap-backend] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1431 ms
+2026-10-21T12:01:03.894-05:00  INFO 8188 --- [paqrap-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T12:01:03.912-05:00  INFO 8188 --- [paqrap-backend] [           main] com.paqrap.backend.BackendApplication    : Started BackendApplication in 2.588 seconds (process running for 3.128)
+2026-10-21T12:01:04.680-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T12:01:04.681-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-21T12:01:04.682-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-10-21T12:01:05.738-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: edc74fa5-12fc-b143-4afa-c3816df61a3f (1 activas)
+2026-10-21T12:01:06.910-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket cerrada: edc74fa5-12fc-b143-4afa-c3816df61a3f (0 activas)
+2026-10-21T12:01:08.951-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: a66a7cf9-6e37-bd4c-0e97-a87d8658b1ab (1 activas)
+2026-10-21T12:01:08.953-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket cerrada: a66a7cf9-6e37-bd4c-0e97-a87d8658b1ab (0 activas)
+2026-10-21T12:01:13.949-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-2] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: 823de5b9-ee6f-6d20-192f-3361aff8c6ff (1 activas)
+2026-10-21T12:01:29.021-05:00  WARN 8188 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: cantidad de campos inválida
+2026-10-21T12:01:51.448-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-9] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: cantidad de campos inválida
+2026-10-21T12:05:14.375-05:00  WARN 8188 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: el identificador del cliente está vacío
+2026-10-21T12:05:14.429-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: cantidad inválido
+2026-10-21T12:05:14.453-05:00  WARN 8188 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: hora de venta inválida
+2026-10-21T12:05:14.476-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:2: cantidad de campos inválida
+2026-10-21T12:05:14.498-05:00  WARN 8188 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No se pudo inferir el tipo de archivo a partir del nombre: datos.202609.txt
+2026-10-21T12:05:14.520-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo bloqueo.2609.txt tiene 1 línea(s) inválida(s): bloqueo.2609.txt:1: la poligonal debe tener pares x,y
+2026-10-21T12:05:14.542-05:00  WARN 8188 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo mant.preventivo.09.10.txt tiene 1 línea(s) inválida(s): mant.preventivo.09.10.txt:1: fecha inválida
+2026-10-21T12:05:23.425-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: el identificador del cliente está vacío
+2026-10-21T12:05:23.959-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-7] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: cantidad inválido
+2026-10-21T12:05:24.478-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: hora de venta inválida
+2026-10-21T12:05:24.971-05:00  WARN 8188 --- [paqrap-backend] [io-8080-exec-10] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:2: cantidad de campos inválida
+2026-10-21T12:05:34.835-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-3] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: No se pudo inferir el tipo de archivo a partir del nombre: datos.202609.txt
+2026-10-21T12:05:35.396-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo bloqueo.2609.txt tiene 1 línea(s) inválida(s): bloqueo.2609.txt:1: la poligonal debe tener pares x,y
+2026-10-21T12:05:35.932-05:00  WARN 8188 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.exception.GlobalExceptionHandler   : Argumento inválido: El archivo mant.preventivo.09.10.txt tiene 1 línea(s) inválida(s): mant.preventivo.09.10.txt:1: fecha inválida
+2026-10-21T12:05:53.555-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-6] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket cerrada: 823de5b9-ee6f-6d20-192f-3361aff8c6ff (0 activas)
+2026-10-21T12:05:53.923-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: eb812fa3-de78-d750-242a-2f6e48ea2e22 (1 activas)
+2026-10-21T12:05:53.926-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-4] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket cerrada: eb812fa3-de78-d750-242a-2f6e48ea2e22 (0 activas)
+2026-10-21T12:05:58.921-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-5] c.p.b.ws.SimulationWebSocketHandler      : Sesión WebSocket conectada: ea7c0720-1d77-6323-f5c3-44ff658b1051 (1 activas)
+2026-10-21T12:06:05.767-05:00  INFO 8188 --- [paqrap-backend] [nio-8080-exec-8] c.p.b.controller.IngestaController       : Archivo ingerido: ventas.202609.txt

@@ -1,0 +1,85 @@
+{
+  "caso": "CPA-038",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/configuracion",
+  "peticion": null,
+  "status": 200,
+  "body": {
+    "data": {
+      "ciudad": {
+        "ancho": 70,
+        "alto": 50,
+        "distanciaEntreNodos": 1,
+        "callesDobleSentido": true,
+        "origenX": 0,
+        "origenY": 0
+      },
+      "operacion": {
+        "duracionTurnoHoras": 8.0,
+        "horaInicioTurno": 7.0,
+        "tiempoServicioClienteHoras": 1.0,
+        "duracionRefrigerioHoras": 1.0,
+        "tiempoTrasvaseHoras": 0.5,
+        "margenRefrigerioHoras": 1.0,
+        "tiempoCargaAlmacenHoras": 0.0,
+        "maxParadasPorRuta": 2
+      },
+      "tiposVehiculo": [
+        {
+          "id": "AUTO",
+          "nombre": "Auto",
+          "capacidad": 24,
+          "velocidadKmH": 0.0,
+          "costoPorKm": 8.0
+        },
+        {
+          "id": "MOTO",
+          "nombre": "Moto",
+          "capacidad": 10,
+          "velocidadKmH": 25.0,
+          "costoPorKm": 6.0
+        },
+        {
+          "id": "BICI",
+          "nombre": "Bicicleta",
+          "capacidad": 4,
+          "velocidadKmH": 12.0,
+          "costoPorKm": 3.0
+        }
+      ],
+      "almacenes": [
+        {
+          "nombre": "Central",
+          "esCentral": true,
+          "posX": 27,
+          "posY": 14,
+          "stockActual": 0,
+          "capacidadMaxima": 0,
+          "nivelOcupacion": 0.0
+        },
+        {
+          "nombre": "Nor-Oeste",
+          "esCentral": false,
+          "posX": 12,
+          "posY": 38,
+          "stockActual": 1000,
+          "capacidadMaxima": 1200,
+          "nivelOcupacion": 83.333336
+        },
+        {
+          "nombre": "Este",
+          "esCentral": false,
+          "posX": 56,
+          "posY": 27,
+          "stockActual": 1000,
+          "capacidadMaxima": 1000,
+          "nivelOcupacion": 100.0
+        }
+      ]
+    },
+    "meta": {
+      "timestamp": "2026-10-21T17:13:16.827861200Z"
+    }
+  },
+  "horaUTC": "2026-10-21T17:13:16Z"
+}

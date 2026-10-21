@@ -1,0 +1,12 @@
+{
+  "caso": "CPA-025",
+  "metodo": "GET",
+  "url": "http://127.0.0.1:8080/api/pedidos?estado=NO_EXISTE",
+  "status": 200,
+  "body": {
+    "data": [],
+    "meta": {
+      "timestamp": "2026-10-21T17:06:25.199266Z"
+    }
+  }
+}

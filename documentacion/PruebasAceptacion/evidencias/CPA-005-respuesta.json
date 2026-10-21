@@ -1,0 +1,27 @@
+{
+  "caso": "CPA-005",
+  "metodo": "API",
+  "url": "http://127.0.0.1:8080/api/files/orders",
+  "fecha": "2026-10-21T12:05:14.4585946-05:00",
+  "status": 400,
+  "body": {
+    "error": {
+      "code": "INVALID_ARGUMENT",
+      "message": "El archivo ventas.202609.txt tiene 1 línea(s) inválida(s): ventas.202609.txt:1: hora de venta inválida",
+      "details": null
+    }
+  },
+  "antes": {
+    "data": [],
+    "meta": {
+      "timestamp": "2026-10-21T17:05:14.439466200Z"
+    }
+  },
+  "despues": {
+    "data": [],
+    "meta": {
+      "timestamp": "2026-10-21T17:05:14.456463700Z"
+    }
+  },
+  "verificacion": true
+}
