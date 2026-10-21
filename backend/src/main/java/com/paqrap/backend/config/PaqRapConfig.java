@@ -111,7 +111,22 @@ public class PaqRapConfig {
             List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
             CargadorRecursos cargadorRecursos) {
         return new ServicioPlanificacionImpl(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota,
-                TipoAlgoritmo.ALNS, configAlgoritmoAlns(), "logs", cargadorRecursos);
+                TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargadorRecursos);
+    }
+
+    /**
+     * Hiperparámetros de IPSO -- defaults de {@link com.paqrap.ipso.nucleo.IPSOConfig} (ver
+     * [[project-paqrap-experimentacion]]: ningún factor tuvo efecto significativo en la
+     * experimentación de afinamiento, no hay configuración "ganadora" que preferir sobre estos).
+     * El salto real de calidad no viene de aquí, sino de {@code ClusterizadorPedidos}, que ya no
+     * fuerza despachos tarde (ver su Javadoc).
+     */
+    private Map<String, Object> configAlgoritmoIpso() {
+        return Map.ofEntries(
+                Map.entry("tamanoPoblacionN", 40), Map.entry("iteracionesMaximasT", 300),
+                Map.entry("c1", 1.5), Map.entry("c2", 1.5), Map.entry("tasaCruceP_c", 0.30),
+                Map.entry("inercia", 0.35), Map.entry("umbralEstancamiento", 0.0001),
+                Map.entry("semillaAleatoria", 42.0));
     }
 
     /**

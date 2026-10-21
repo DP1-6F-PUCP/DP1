@@ -293,6 +293,6 @@ public class BusquedaLocalRVND {
 
     private boolean esFactible(Ruta ruta, ContextoProblema contexto) {
         return VerificadorRestricciones.esRutaFactible(ruta, contexto.ciudad(), contexto.bloqueos(),
-                contexto.configuracionOperacion());
+                contexto.configuracionOperacion(), contexto.mantenimientos());
     }
 }

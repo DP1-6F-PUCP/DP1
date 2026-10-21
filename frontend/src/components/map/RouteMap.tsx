@@ -12,6 +12,9 @@ export interface RouteMapProps {
   /** Geometria real de cada ruta -- usada por la linea de ruta del vehiculo seleccionado (ver
    * LeafletManhattanMap), no por la animacion (eso vive en el motor de simulacion). */
   routes?: Route[];
+  /** Minutos simulados desde el inicio, en el instante visible -- para el semáforo de los
+   * marcadores (antes nunca se pasaba y el mapa evaluaba todo contra el minuto 0). */
+  simMinutes?: number;
   onSelectVehicle?: (vehicle: Vehicle) => void;
   onSelectWarehouse?: (warehouse: Warehouse) => void;
   isDarkTheme?: boolean;
@@ -23,6 +26,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   blockedStreets = [],
   orders = [],
   routes = [],
+  simMinutes = 0,
   onSelectVehicle,
   onSelectWarehouse,
   isDarkTheme = true,
@@ -61,6 +65,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         blockedStreets={blockedStreets}
         orders={orders}
         routes={routes}
+        simMinutes={simMinutes}
         selectedVehicleId={selectedVehicleId}
         selectedWarehouseId={selectedWarehouseId}
         onSelectVehicle={handleVehicleClick}

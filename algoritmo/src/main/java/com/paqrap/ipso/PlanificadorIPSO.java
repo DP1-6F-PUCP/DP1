@@ -57,20 +57,21 @@ public class PlanificadorIPSO implements Planificador {
         }
 
         List<Ruta> nuevasRutas = new ArrayList<>();
-        if (pedidosPendientes.isEmpty()) {
-            return nuevasRutas;
+        List<ClusterizadorPedidos.LoteVehiculo> lotes = List.of();
+        if (!pedidosPendientes.isEmpty()) {
+            ClusterizadorPedidos clusterizador = new ClusterizadorPedidos();
+            lotes = clusterizador.clusterizar(pedidosPendientes, contexto.vehiculos(), contexto.almacenes(),
+                    contexto.marcaTiempoActual(), contexto.configuracionOperacion().maxParadasPorRuta(),
+                    contexto.configuracionOperacion(), contexto.ciudad(), contexto.bloqueos(),
+                    contexto.mantenimientos());
         }
-
-        ClusterizadorPedidos clusterizador = new ClusterizadorPedidos();
-        List<ClusterizadorPedidos.LoteVehiculo> lotes = clusterizador.clusterizar(pedidosPendientes,
-                contexto.vehiculos(), contexto.almacenes(), contexto.marcaTiempoActual(),
-                contexto.configuracionOperacion().maxParadasPorRuta(),
-                contexto.configuracionOperacion().tiempoServicioClienteHoras(), contexto.ciudad(), contexto.bloqueos());
 
         int contadorRutas = 0;
         long sumaIteracionMejora = 0;
         for (ClusterizadorPedidos.LoteVehiculo lote : lotes) {
-            IPSOOptimizador ipso = new IPSOOptimizador(lote.pedidos, lote.almacen.getPosicion(), lote.unidad,
+            // Desde la posición REAL del vehículo (antes: desde el almacén del lote), que es desde
+            // donde de verdad arranca la ruta (ver asignarParadasConLlegadas / MotorSimulacion).
+            IPSOOptimizador ipso = new IPSOOptimizador(lote.pedidos, lote.unidad.getPosicion(), lote.unidad,
                     contexto.ciudad(), contexto.bloqueos(), config, contexto.marcaTiempoActual(),
                     contexto.configuracionOperacion());
             ResultadoIPSO resultado = ipso.ejecutar();
@@ -82,10 +83,35 @@ public class PlanificadorIPSO implements Planificador {
             ruta.setDuracionEstimada(resultado.duracionTotalHoras());
             ruta.setEstado(EstadoRuta.PLANIFICADA);
 
-            asignarParadasConLlegadas(ruta, resultado.secuenciaOptima(), lote.unidad.getTipoVehiculo().getVelocidadKmH(),
-                    contexto);
+            // IPSO solo PENALIZA el retraso en su función de costo (300/h), así que puede preferir
+            // un orden más corto que llega tarde a alguna parada. El orden del agrupamiento
+            // (por urgencia) es puntual por construcción: si el del PSO no lo es, se usa ese.
+            List<Pedido> secuencia = resultado.secuenciaOptima();
+            if (!esPuntual(lote.unidad, secuencia, contexto)) {
+                secuencia = lote.pedidos;
+            }
+            asignarParadasConLlegadas(ruta, secuencia, lote.unidad.getTipoVehiculo().getVelocidadKmH(), contexto);
 
             nuevasRutas.add(ruta);
+        }
+
+        // Bug real corregido (expuesto al poner IPSO en producción): a diferencia de ALNS
+        // (SolucionadorALNS.construirSolucionInicial crea una Ruta vacía placeholder para TODO
+        // vehículo disponible, tenga o no pedidos), IPSO solo generaba Ruta para las unidades que
+        // ClusterizadorPedidos sí alcanzó a llenar -- una unidad disponible sin pedidos asignables
+        // (sea porque no quedaban pedidos, o porque ninguno le quedaba factible por plazo tras el
+        // fix de "mejor tarde que nunca") no recibía NINGÚN objeto Ruta este lote. Sin una Ruta
+        // (ni vacía), MotorSimulacion.manejarVehiculoSinParadas nunca corre para ella: no vuelve al
+        // almacén ni resetea su actividad, queda congelada donde esté para siempre. Mismo
+        // mecanismo que ALNS: toda unidad disponible recibe una Ruta, vacía si no le tocó nada.
+        var unidadesConRuta = nuevasRutas.stream().map(Ruta::getUnidadTransporte).collect(java.util.stream.Collectors.toSet());
+        for (UnidadTransporte unidad : contexto.vehiculos()) {
+            if (unidad.estaDisponibleParaRuta(contexto.marcaTiempoActual()) && !unidadesConRuta.contains(unidad)) {
+                Ruta vacia = new Ruta(Ruta.generarId(unidad.getIdUnidad(), contexto.marcaTiempoActual(), "vacia"),
+                        contexto.marcaTiempoActual(), unidad);
+                vacia.setEstado(EstadoRuta.PLANIFICADA);
+                nuevasRutas.add(vacia);
+            }
         }
 
         promedioIteracionMejora = lotes.isEmpty() ? 0.0 : (double) sumaIteracionMejora / lotes.size();
@@ -108,15 +134,52 @@ public class PlanificadorIPSO implements Planificador {
      */
     private void asignarParadasConLlegadas(Ruta ruta, List<Pedido> secuencia, double velocidadKmH,
             ContextoProblema contexto) {
-        UnidadTransporte unidad = ruta.getUnidadTransporte();
-        LocalDateTime tiempoActual = ruta.getHoraInicioPlanificada();
+        List<LocalDateTime> llegadas = llegadasEstimadas(ruta.getUnidadTransporte(), ruta.getHoraInicioPlanificada(),
+                secuencia, velocidadKmH, contexto);
+        for (int i = 0; i < secuencia.size(); i++) {
+            Pedido pedido = secuencia.get(i);
+            ParadaPlanificada parada = new ParadaPlanificada(pedido, pedido.getCantidadSolicitada());
+            parada.setFechaEntregada(llegadas.get(i));
+            ruta.getSecuenciaParadas().add(parada);
+        }
+    }
+
+    /** true si recorriendo {@code secuencia} en ese orden se llega a cada pedido antes de su plazo. */
+    private boolean esPuntual(UnidadTransporte unidad, List<Pedido> secuencia, ContextoProblema contexto) {
+        List<LocalDateTime> llegadas = llegadasEstimadas(unidad, contexto.marcaTiempoActual(), secuencia,
+                unidad.getTipoVehiculo().getVelocidadKmH(), contexto);
+        for (int i = 0; i < secuencia.size(); i++) {
+            if (llegadas.get(i).isAfter(secuencia.get(i).getFechaLimite())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Llegada estimada a cada pedido de {@code secuencia}, en orden, desde la posición actual. */
+    private List<LocalDateTime> llegadasEstimadas(UnidadTransporte unidad, LocalDateTime inicio, List<Pedido> secuencia,
+            double velocidadKmH, ContextoProblema contexto) {
+        List<LocalDateTime> llegadas = new ArrayList<>();
+        LocalDateTime tiempoActual = inicio;
         Nodo posicionActual = unidad.getPosicion();
+        long servicioSeg = Math.round(contexto.configuracionOperacion().tiempoServicioClienteHoras() * 3600.0);
 
         double duracionRefrigerioHoras = contexto.configuracionOperacion().duracionRefrigerioHoras();
-        double duracionTurnoHoras = contexto.configuracionOperacion().duracionTurnoHoras();
-        LocalDateTime inicioRefrigerioIdeal = ruta.getHoraInicioPlanificada()
-                .plusSeconds(Math.round(duracionTurnoHoras / 2.0 * 3600.0));
-        boolean refrigerioTomado = unidad.isRefrigerioTomado();
+        // Bug real corregido (mismo que en ALNS, ver VerificadorRestricciones/EvaluadorCostos): el
+        // punto medio del refrigerio debe anclarse al turno REAL (07:00/15:00/23:00), no a
+        // ruta.getHoraInicioPlanificada() -- si la ruta arranca a media jornada, el punto medio
+        // calculado desde el inicio de ruta no coincide con el que MotorSimulacion usará de verdad.
+        LocalDateTime inicioTurno = contexto.configuracionOperacion().inicioTurnoQueContiene(inicio);
+        LocalDateTime inicioRefrigerioIdeal = contexto.configuracionOperacion().inicioRefrigerioMasTardio(inicioTurno);
+        boolean refrigerioTomado = inicioTurno.equals(unidad.getTiempoInicioTurnoActual()) && unidad.isRefrigerioTomado();
+        LocalDateTime refrigerioEnCurso = unidad.getHoraRefrigerioProgramada();
+        if (refrigerioEnCurso != null) {
+            LocalDateTime fin = refrigerioEnCurso.plusSeconds(Math.round(duracionRefrigerioHoras * 3600.0));
+            if (fin.isAfter(tiempoActual)) {
+                tiempoActual = fin;
+            }
+            refrigerioTomado = true;
+        }
 
         for (Pedido pedido : secuencia) {
             LocalDateTime liberacion = pedido.getFechaIngreso();
@@ -133,13 +196,18 @@ public class PlanificadorIPSO implements Planificador {
                     posicionActual, pedido.getDestino());
             double horasViaje = distanciaKm / velocidadKmH;
             LocalDateTime llegada = tiempoActual.plusSeconds(Math.round(horasViaje * 3600.0));
+            // Refrigerio tomado en el camino si el viaje cruza su último inicio permitido (ver
+            // MotorSimulacion.recorrerCamino).
+            if (!refrigerioTomado && llegada.isAfter(inicioRefrigerioIdeal)) {
+                llegada = llegada.plusSeconds(Math.round(duracionRefrigerioHoras * 3600.0));
+                refrigerioTomado = true;
+            }
+            llegadas.add(llegada);
 
-            ParadaPlanificada parada = new ParadaPlanificada(pedido, pedido.getCantidadSolicitada());
-            parada.setFechaEntregada(llegada);
-            ruta.getSecuenciaParadas().add(parada);
-
-            tiempoActual = llegada.plusHours(1);
+            // Antes estaba fijo en 1h (llegada.plusHours(1)) en vez de leer la configuración.
+            tiempoActual = llegada.plusSeconds(servicioSeg);
             posicionActual = pedido.getDestino();
         }
+        return llegadas;
     }
 }

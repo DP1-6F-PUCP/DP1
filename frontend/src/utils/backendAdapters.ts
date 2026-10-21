@@ -190,6 +190,7 @@ export function adaptVehiculo(
     returnPath: normalizeManhattanPath(dto.geometriaRetorno.map(parseNodo)),
     activityRemainingMinutes,
     activitySince: dto.actividadDesde ?? undefined,
+    trajectory: (dto.trayectoria ?? []).map((p) => ({ x: p.x, y: p.y, t: Date.parse(p.instante), act: p.actividad })),
     historyPath: [], // no expuesto por el backend
     assignedOrderIds: rutaActiva?.secuenciaEntrega ?? [],
     totalDelivered: 0, // no expuesto por el backend (no hay contador por vehiculo)

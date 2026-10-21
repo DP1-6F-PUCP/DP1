@@ -20,6 +20,14 @@ export interface BreakdownInfo {
   untransferredPackagesToCentral?: number;
 }
 
+/** Desde `t` y hasta el punto siguiente, el vehiculo hace `act` (ActividadVehiculo). */
+export interface TrajectoryPoint {
+  x: number;
+  y: number;
+  t: number;
+  act: 'INACTIVO' | 'VIAJANDO' | 'ENTREGANDO' | 'EN_REFRIGERIO';
+}
+
 export interface Vehicle {
   id: string;
   code: string; // Formato TTNN (ej. TA01, TB03, TM02)
@@ -42,6 +50,9 @@ export interface Vehicle {
    * entregar dentro del MISMO lote, esto permite saber que fraccion de ese lote fue viaje real
    * vs. espera ya detenido, en vez de estirar la animacion de viaje a lo largo de todo el lote. */
   activitySince?: string;
+  /** VehiculoDTO.trayectoria con el instante ya convertido a ms (misma convención que
+   * Date.parse(marcaTiempoActual)) -- la reproduce engine/simulationEngine. */
+  trajectory: TrajectoryPoint[];
   historyPath: Point[];
   assignedOrderIds: string[];
   batteryFuel?: number; // 0 - 100%

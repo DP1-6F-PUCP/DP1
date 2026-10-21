@@ -1,6 +1,7 @@
 import React from 'react';
 import { Circle, AlertTriangle, AlertOctagon, MinusCircle } from 'lucide-react';
-import { Vehicle, Order, SystemConfig } from '../types';
+import { Vehicle, Order } from '../types';
+import { UMBRALES_SEMAFORO_DEFAULT, UmbralesSemaforo } from '../store/semaforoStore';
 
 export type VehicleSemaforoState = 'on_time' | 'at_risk' | 'delayed' | 'inactive';
 
@@ -52,10 +53,8 @@ export function getVehicleSemaforoStatus(
   vehicle: Vehicle,
   orders: Order[],
   simMinutes: number,
-  config?: SystemConfig
+  umbrales: UmbralesSemaforo = UMBRALES_SEMAFORO_DEFAULT
 ): VehicleSemaforoConfig {
-  const warningThreshold = config?.vehicleThresholds?.warningDeviationMinutes ?? 15;
-  const dangerThreshold = config?.vehicleThresholds?.dangerDelayMinutes ?? 30;
 
   // 1. Averías o mantenimientos son incidencias críticas inmediatas -> Retrasado / incidencia (#C62828)
   if (vehicle.status === 'broken' || vehicle.status === 'maintenance') {
@@ -82,20 +81,20 @@ export function getVehicleSemaforoStatus(
     return SEMAFORO_CONFIGS.inactive;
   }
 
-  // 4. Evaluar retrasos y riesgos contra umbrales configurables
+  // 4. Evaluar la holgura frente al plazo contra los rangos configurados (store/semaforoStore).
+  //    Superar el plazo detiene la simulación, así que el rojo tiene que avisar ANTES de que ocurra.
   let hasDanger = false;
   let hasWarning = false;
 
   for (const order of activeOrders) {
-    const delayMinutes = simMinutes - order.deadlineMinute;
+    const marginMinutes = order.deadlineMinute - simMinutes;
 
-    if (order.status === 'delayed' || order.status === 'collapsed' || delayMinutes > dangerThreshold) {
+    if (order.status === 'delayed' || order.status === 'collapsed' || marginMinutes <= umbrales.retrasoMinutos) {
       hasDanger = true;
       break;
     }
 
-    const marginMinutes = order.deadlineMinute - simMinutes;
-    if (order.status === 'at_risk' || marginMinutes <= warningThreshold) {
+    if (order.status === 'at_risk' || marginMinutes <= umbrales.riesgoMinutos) {
       hasWarning = true;
     }
   }

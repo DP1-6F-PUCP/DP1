@@ -73,8 +73,13 @@ public class IPSOOptimizador {
         this.horaSalida = horaSalida;
         this.rnd = new Random(config.getSemillaAleatoria());
         this.duracionRefrigerioHoras = operacion.duracionRefrigerioHoras();
-        this.inicioRefrigerioIdeal = horaSalida.plusSeconds(Math.round(operacion.duracionTurnoHoras() / 2.0 * 3600.0));
-        this.refrigerioTomadoInicial = unidad.isRefrigerioTomado();
+        // Bug real corregido (mismo patrón que PlanificadorIPSO.asignarParadasConLlegadas y
+        // ALNS VerificadorRestricciones/EvaluadorCostos): el punto medio del refrigerio se ancla al
+        // turno REAL que contiene horaSalida, no a horaSalida en sí -- si el vehículo sale a media
+        // jornada, el punto medio ya no cae donde MotorSimulacion realmente insertará la pausa.
+        LocalDateTime inicioTurno = operacion.inicioTurnoQueContiene(horaSalida);
+        this.inicioRefrigerioIdeal = operacion.inicioRefrigerioMasTardio(inicioTurno);
+        this.refrigerioTomadoInicial = inicioTurno.equals(unidad.getTiempoInicioTurnoActual()) && unidad.isRefrigerioTomado();
     }
 
     /**

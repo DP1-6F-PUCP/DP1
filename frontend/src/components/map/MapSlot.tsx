@@ -5,20 +5,18 @@ interface MapSlotProps {
   className?: string;
 }
 
-/** Reparenta el nodo host del mapa (ver MapSlotContext) hacia este slot con appendChild nativo --
- * nunca lo clona ni lo destruye, solo lo mueve. Ver el comentario de MapSlotContext para el porque
- * de este diseño en vez de createPortal+useState. */
 export const MapSlot: React.FC<MapSlotProps> = ({ className }) => {
-  const mapHostRef = useContext(MapSlotContext);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const mapSlotContext = useContext(MapSlotContext);
+  const slotRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    const container = containerRef.current;
-    const host = mapHostRef?.current;
-    if (!container || !host) return;
-    container.appendChild(host);
-    host.classList.remove('hidden');
-  }, [mapHostRef]);
+    const slot = slotRef.current;
+    if (!mapSlotContext || !slot) return;
+    mapSlotContext.setSlot(slot);
+    return () => {
+      mapSlotContext.setSlot((currentSlot) => (currentSlot === slot ? null : currentSlot));
+    };
+  }, [mapSlotContext]);
 
-  return <div ref={containerRef} className={className} />;
+  return <div ref={slotRef} className={className} />;
 };

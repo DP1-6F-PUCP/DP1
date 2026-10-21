@@ -11,6 +11,25 @@ class SimulationSocketService {
   private ws: WebSocket | null = null;
   private listeners: Set<TickListener> = new Set();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  // Estado de conexion observable (useSocketConectado) -- con el socket abierto, el polling de
+  // useEstadoOperacion pasa a ser solo un respaldo lento en vez de duplicar cada lote.
+  private conectado = false;
+  private estadoListeners: Set<() => void> = new Set();
+
+  private setConectado(valor: boolean) {
+    if (this.conectado === valor) return;
+    this.conectado = valor;
+    this.estadoListeners.forEach((fn) => fn());
+  }
+
+  public isConectado = (): boolean => this.conectado;
+
+  public subscribeEstado = (fn: () => void): (() => void) => {
+    this.estadoListeners.add(fn);
+    return () => {
+      this.estadoListeners.delete(fn);
+    };
+  };
 
   public connect() {
     if (this.ws) return;
@@ -20,6 +39,7 @@ class SimulationSocketService {
 
     try {
       this.ws = new WebSocket(url);
+      this.ws.onopen = () => this.setConectado(true);
       this.ws.onmessage = (event) => {
         try {
           const tick = JSON.parse(event.data) as TickUpdateDTO;
@@ -30,6 +50,7 @@ class SimulationSocketService {
       };
       this.ws.onclose = () => {
         this.ws = null;
+        this.setConectado(false);
         this.scheduleReconnect();
       };
       this.ws.onerror = () => {
@@ -61,6 +82,7 @@ class SimulationSocketService {
     }
     this.ws?.close();
     this.ws = null;
+    this.setConectado(false);
   }
 }
 

@@ -32,6 +32,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -118,11 +119,31 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         }
     }
 
+    /**
+     * Instantáneas inmutables del último lote cerrado, armadas en el hilo del orquestador (ver
+     * {@link OrquestadorOperacion#setAlCerrarLote}). Las consultas las devuelven tal cual en vez de
+     * leer los objetos mutables del dominio mientras un lote está a medio calcular -- eso producía
+     * estados a medias (vehículos en ruta sin ruta activa, mitad de la flota ya movida).
+     */
+    private volatile EstadoOperacionDTO estadoPublicado;
+    private volatile List<PedidoDTO> pedidosPublicados;
+
+    private void publicarEstado(OrquestadorOperacion orquestador) {
+        ContextoProblema contexto = orquestador.getContextoProblema();
+        pedidosPublicados = contexto.pedidos().stream().map(EnsambladorRespuestas::aPedidoDTO).toList();
+        estadoPublicado = EnsambladorRespuestas.ensamblarEstado(contexto, orquestador.getUltimasRutas(),
+                orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte());
+    }
+
     @Override
     public List<RutaDTO> consultarRutasVigentes() {
         OrquestadorOperacion orquestador = ejecucionActivaOrquestador();
         if (orquestador == null) {
             return List.of();
+        }
+        EstadoOperacionDTO publicado = estadoPublicado;
+        if (publicado != null) {
+            return publicado.rutas();
         }
         ContextoProblema contexto = orquestador.getContextoProblema();
         return orquestador.getUltimasRutas().stream()
@@ -139,23 +160,50 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
             return EnsambladorRespuestas.ensamblarEstado(contextoVacio, List.of(), List.of(), LocalDateTime.now(),
                     new com.paqrap.simulador.ReporteDesempeno());
         }
+        EstadoOperacionDTO publicado = estadoPublicado;
+        if (publicado != null) {
+            return publicado;
+        }
+        // Antes de que cierre el primer lote todavía no hay instantánea publicada.
         return EnsambladorRespuestas.ensamblarEstado(orquestador.getContextoProblema(), orquestador.getUltimasRutas(),
                 orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte());
     }
 
     @Override
     public ConfiguracionActualDTO consultarConfiguracionActual() {
+        // Bug real corregido: CAMBIO_CONFIGURACION_OPERACION "en caliente" (ver
+        // OrquestadorOperacion.aplicarCambioConfiguracionOperacion) reemplaza la referencia
+        // (inmutable, record) DENTRO de contextoProblema del orquestador activo -- nunca toca este
+        // campo `configuracionOperacion`, que solo cambia vía ajustesIniciales (antes de arrancar).
+        // Sin esto, GET /configuracion seguía devolviendo el valor de ANTES del cambio en caliente
+        // mientras la ejecución seguía corriendo con el valor nuevo -- confirmado en vivo: el
+        // ConfigModal reabierto durante una ejecución mostraba el turno/refrigerio viejo, y un
+        // segundo ajuste sobre el mismo campo se calculaba como diff contra ese valor viejo.
+        OrquestadorOperacion activo = ejecucionActivaOrquestador();
+        ConfiguracionOperacion operacionVigente = activo != null
+                ? activo.getContextoProblema().configuracionOperacion()
+                : configuracionOperacion;
         return new ConfiguracionActualDTO(
                 EnsambladorRespuestas.aCiudadDTO(ciudad),
-                EnsambladorRespuestas.aConfiguracionOperacionDTO(configuracionOperacion),
-                tiposVehiculo.stream().map(EnsambladorRespuestas::aTipoVehiculoDTO).toList(),
+                EnsambladorRespuestas.aConfiguracionOperacionDTO(operacionVigente),
+                tiposVehiculo.stream()
+                        .map(tv -> EnsambladorRespuestas.aTipoVehiculoDTO(tv, (int) flota.stream()
+                                .filter(u -> u.getTipoVehiculo().getId().equalsIgnoreCase(tv.getId()))
+                                .count()))
+                        .toList(),
                 almacenes.stream().map(EnsambladorRespuestas::aAlmacenDTO).toList());
     }
 
     @Override
     public List<PedidoDTO> consultarPedidos(FiltroPedidos filtro) {
-        List<Pedido> fuente = pedidosActuales();
         String estadoFiltro = filtro != null ? filtro.estado() : null;
+        List<PedidoDTO> publicados = ejecucionActivaOrquestador() != null ? pedidosPublicados : null;
+        if (publicados != null) {
+            return publicados.stream()
+                    .filter(p -> estadoFiltro == null || p.estado().equalsIgnoreCase(estadoFiltro))
+                    .toList();
+        }
+        List<Pedido> fuente = pedidosActuales();
         return fuente.stream()
                 .filter(p -> estadoFiltro == null || p.getEstado().name().equalsIgnoreCase(estadoFiltro))
                 .map(EnsambladorRespuestas::aPedidoDTO)
@@ -190,7 +238,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
             return orquestadorActivo.getEjecucionActual();
         }
 
-        reiniciarFlotaYAlmacenes();
+        reiniciarFlotaYAlmacenes(fechaInicioSimulada);
         aplicarAjustesIniciales(ajustesIniciales, fechaInicioSimulada);
 
         List<Pedido> pedidosPendientes = pedidosRecibidos.stream()
@@ -211,7 +259,17 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         OrquestadorOperacion orquestador = new OrquestadorOperacion(planificador, gestorLog, sa, ta, k,
                 tiempoMaximoComputoSegundos, contextoInicial, cargadorRecursos);
 
+        // Se registra ANTES de iniciar el ciclo: el primer lote corre de inmediato (delay 0).
+        estadoPublicado = null;
+        pedidosPublicados = null;
+        orquestador.setAlCerrarLote(() -> publicarEstado(orquestador));
+
         EjecucionEscenario ejecucion = orquestador.iniciarCicloPeriodico(tipo);
+        // Llegar aquí implica que ninguna ejecución previa sigue activa (ver el chequeo de arriba):
+        // se descartan para no retener indefinidamente su ContextoProblema (meses de pedidos,
+        // bloqueos, historial de rutas) -- antes se acumulaban una por cada corrida del proceso.
+        ejecuciones.values().forEach(OrquestadorOperacion::detener);
+        ejecuciones.clear();
         ejecuciones.put(ejecucion.getIdEjecucion(), orquestador);
         idEjecucionActiva = ejecucion.getIdEjecucion();
         return ejecucion;
@@ -228,22 +286,18 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      * dando la falsa impresión de "siempre una posición por defecto", cuando en realidad arrastraba
      * el estado real (parcial) de la corrida anterior.
      */
-    private void reiniciarFlotaYAlmacenes() {
+    private void reiniciarFlotaYAlmacenes(LocalDateTime fechaInicioSimulada) {
         Nodo posicionCentral = almacenes.stream()
                 .filter(AlmacenCentral.class::isInstance)
                 .findFirst()
                 .map(Almacen::getPosicion)
-                .orElse(null);
-        flota.forEach(unidad -> {
-            if (posicionCentral != null) {
-                unidad.setPosicion(posicionCentral);
-            }
-            unidad.setEstado(EstadoUnidad.DISPONIBLE);
-        });
+                .orElseThrow(() -> new IllegalStateException("No hay almacén central configurado"));
+        LocalDateTime inicioTurno = configuracionOperacion.inicioTurnoQueContiene(fechaInicioSimulada);
+        flota.forEach(unidad -> unidad.reiniciarParaNuevaEjecucion(posicionCentral, inicioTurno));
         almacenes.stream()
                 .filter(AlmacenIntermedio.class::isInstance)
                 .map(AlmacenIntermedio.class::cast)
-                .forEach(almacen -> almacen.recargar(LocalDateTime.now()));
+                .forEach(almacen -> almacen.recargar(fechaInicioSimulada));
     }
 
     /**
@@ -300,11 +354,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                 .findFirst()
                 .ifPresent(unidad -> {
                     TipoAveria tipo = TipoAveria.valueOf(ajuste.valorNuevo());
-                    LocalDateTime fin = switch (tipo) {
-                        case TIPO_1 -> fechaInicioSimulada.plusHours(2);
-                        case TIPO_2 -> fechaInicioSimulada.plusHours(4);
-                        case TIPO_3 -> fechaInicioSimulada.plusDays(2);
-                    };
+                    LocalDateTime fin = configuracionOperacion.finIndisponibilidadAveria(tipo, fechaInicioSimulada);
                     unidad.setAveriaActual(new Averia(tipo, fechaInicioSimulada, fin, 0, fechaInicioSimulada));
                     unidad.setEstado(EstadoUnidad.AVERIADO);
                     if (tipo == TipoAveria.TIPO_2 || tipo == TipoAveria.TIPO_3) {
@@ -343,25 +393,50 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      */
     private void aplicarCambioCantidadVehiculosInicial(SolicitudOperacion ajuste, LocalDateTime fechaInicioSimulada) {
         int cantidadDeseada = Integer.parseInt(ajuste.valorNuevo());
-        List<UnidadTransporte> delTipo = flota.stream()
-                .filter(u -> u.getTipoVehiculo().getId().equalsIgnoreCase(ajuste.entidadObjetivo()))
-                .toList();
-        if (delTipo.isEmpty()) {
-            log.warn("No existe flota del tipo {} para ajustar su cantidad inicial", ajuste.entidadObjetivo());
+        if (cantidadDeseada < 0) {
+            log.warn("Cantidad inicial negativa ({}) para el tipo {}; se descarta", cantidadDeseada, ajuste.entidadObjetivo());
             return;
         }
+        // El tipo se busca en el catálogo, no en la flota: si una ejecución anterior dejó el tipo en
+        // 0 unidades (la flota es estado compartido entre ejecuciones), aún debe poder volver a crecer.
+        TipoVehiculo tipo = tiposVehiculo.stream()
+                .filter(tv -> tv.getId().equalsIgnoreCase(ajuste.entidadObjetivo()))
+                .findFirst()
+                .orElse(null);
+        if (tipo == null) {
+            log.warn("No existe el tipo de vehículo {} para ajustar su cantidad inicial", ajuste.entidadObjetivo());
+            return;
+        }
+        List<UnidadTransporte> delTipo = flota.stream()
+                .filter(u -> u.getTipoVehiculo().getId().equalsIgnoreCase(tipo.getId()))
+                .toList();
 
-        TipoVehiculo tipo = delTipo.get(0).getTipoVehiculo();
         int diferencia = cantidadDeseada - delTipo.size();
         if (diferencia > 0) {
-            Nodo posicionInicial = delTipo.get(0).getPosicion();
-            int siguienteCorrelativo = delTipo.size() + 1;
-            for (int i = 0; i < diferencia; i++) {
-                String nuevoId = tipo.getId() + "-" + (siguienteCorrelativo + i);
+            // Mismo formato TTNN que PaqRapConfig.flota (TA01, TM07, TB12...), correlativo a partir
+            // del mayor existente para no repetir ids si antes se retiraron unidades intermedias.
+            String prefijo = "T" + tipo.getId().charAt(0);
+            int mayorCorrelativo = delTipo.stream()
+                    .map(UnidadTransporte::getIdUnidad)
+                    .filter(id -> id.length() > 2 && id.substring(2).chars().allMatch(Character::isDigit))
+                    .mapToInt(id -> Integer.parseInt(id.substring(2)))
+                    .max()
+                    .orElse(0);
+            Nodo posicionInicial = almacenes.stream()
+                    .filter(AlmacenCentral.class::isInstance)
+                    .findFirst()
+                    .map(Almacen::getPosicion)
+                    .orElseThrow();
+            for (int i = 1; i <= diferencia; i++) {
+                String nuevoId = String.format("%s%02d", prefijo, mayorCorrelativo + i);
                 flota.add(new UnidadTransporte(nuevoId, tipo, posicionInicial, fechaInicioSimulada));
             }
         } else if (diferencia < 0) {
-            flota.removeAll(delTipo.stream().limit(-diferencia).toList());
+            // Se retiran las de correlativo más alto, para que la flota siga numerada desde 01.
+            flota.removeAll(delTipo.stream()
+                    .sorted(Comparator.comparing(UnidadTransporte::getIdUnidad).reversed())
+                    .limit(-diferencia)
+                    .toList());
         }
     }
 
@@ -610,14 +685,35 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      * vez de saltos grandes espaciados). Overridable vía
      * {@link #seleccionarEscenario(TipoEscenario, LocalDateTime, float, float, float, float)}.
      */
+    /**
+     * sa/ta/k por escenario (sa y ta en minutos reales, k = segundos simulados por segundo real).
+     *
+     * <p>sa=5s / ta=2s (antes 20s / 8s): medido en vivo con IPSO sobre datos reales del curso, el
+     * lote completo tarda en promedio 25ms (máximo 0.2s) -- con sa=20s el backend pasaba más del
+     * 99% del tiempo ocioso. Achicar sa NO acorta la corrida (la duración depende solo de k) pero
+     * sí la granularidad: cada lote avanza sa*k de tiempo simulado. En CINCO_DIAS eso pasa de 50 a
+     * 12.5 minutos simulados por lote, con tres efectos directos: (1) un pedido nuevo se planifica a
+     * lo más 12.5 min simulados después de llegar, en vez de 50 (crítico para los de 4h de plazo);
+     * (2) el visualizador interpola saltos 4 veces más chicos y con menos paradas ocultas dentro de
+     * un mismo lote; (3) el retraso de render del front (sa + margen) baja de 26s a 11s. ta tiene
+     * que seguir siendo menor que sa (OrquestadorOperacion.esConfiguracionValida); IPSO no usa ta
+     * como presupuesto, pero si se vuelve a ALNS, ta*60 es su presupuesto real por lote.
+     *
+     * <p>k: DIA_A_DIA=1 (tiempo real). CINCO_DIAS=150 -> 5 días en 48 min reales (rango pedido por
+     * el curso: 30-60 min). COLAPSO_LOGISTICO=600 (antes 10): sin demanda sintética, el colapso
+     * solo puede venir de la carga real del curso, que crece de 2026 a 2028 -- con k=10 un solo
+     * mes simulado tomaba 3 días reales, imposible de presenciar. Con k=600, 1 día simulado ≈ 2.4
+     * min reales y cada lote cubre 50 min simulados (la misma granularidad que tenía CINCO_DIAS
+     * antes de este cambio).
+     */
     private ParametrosOrquestacion defaultsPara(TipoEscenario tipo) {
-        float ta = 8f / 60f;
-        float sa = 20f / 60f;
+        float sa = 5f / 60f;
+        float ta = 2f / 60f;
         float tiempoMaximoComputoSegundos = ta * 60f;
         float k = switch (tipo) {
             case DIA_A_DIA -> 1f;
             case CINCO_DIAS -> 150f;
-            case COLAPSO_LOGISTICO -> 10f;
+            case COLAPSO_LOGISTICO -> 600f;
         };
         return new ParametrosOrquestacion(sa, ta, k, tiempoMaximoComputoSegundos);
     }

@@ -23,7 +23,11 @@ import java.util.List;
  *         {@code ConfiguracionOperacionDTO.tiempoServicioClienteHoras}/{@code duracionRefrigerioHoras}
  *         (ya expuestos, no se duplican aquí) el visualizador puede calcular cuánto lleva
  *         detenido un vehículo y cuánto le falta, en vez de solo saber que está detenido.
+ * @param trayectoria recorrido real del último lote, nodo a nodo y con instantes simulados,
+ *         incluyendo las pausas -- el visualizador lo reproduce tal cual en vez de adivinar el
+ *         camino y los tiempos entre dos posiciones finales consecutivas.
  */
 public record VehiculoDTO(String idUnidad, String tipo, String estado, int posXActual, int posYActual,
-        int cargaActual, List<String> geometriaRetorno, String actividad, LocalDateTime actividadDesde) {
+        int cargaActual, List<String> geometriaRetorno, String actividad, LocalDateTime actividadDesde,
+        List<PuntoTrayectoriaDTO> trayectoria) {
 }

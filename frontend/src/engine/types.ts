@@ -1,45 +1,41 @@
-import { Point } from '../types';
+import { BlockedStreet, Order, Point, Route, Vehicle, Warehouse } from '../types';
+import type { EstadoOperacionDTO } from '../types/backend';
+
+/** Estado completo de la operación tal como lo reportó UN lote (ya adaptado para la UI). */
+export interface FrameData {
+  vehicles: Vehicle[];
+  routes: Route[];
+  orders: Order[];
+  warehouses: Warehouse[];
+  blockedStreets: BlockedStreet[];
+  estadoRaw: EstadoOperacionDTO | undefined;
+}
 
 /**
- * Info de sincronizacion para interpolar suavemente la posicion de un vehiculo entre dos lotes
- * consecutivos -- portado tal cual desde LeafletManhattanMap (ver simulationEngine.ts para el
- * porque del traslado). Un tramo es SIEMPRE el resultado de dos snapshots reales consecutivos del
- * backend; origen/destino nunca son posiciones visuales intermedias.
+ * Lo que la UI debe mostrar AHORA, en el mismo instante retrasado en que el mapa dibuja las
+ * posiciones -- ver simulationEngine.getEstadoVisual. Antes solo la posición iba retrasada; el
+ * reloj, los badges, el semáforo, la línea de ruta y el panel usaban el dato en vivo, ~sa+margen
+ * segundos reales por delante del mapa (con k=150, casi una hora simulada).
  */
-export interface SincroVehiculo {
-  origen: Point;
-  /** Instante REAL (performance.now()) en que el lote que reporto `origen` llego al front. */
-  origenMs: number;
-  destino: Point;
-  /** Instante REAL en que el lote que reporto `destino` llego al front -- SIEMPRE posterior a
-   * origenMs por construccion (es el lote inmediatamente siguiente). */
-  destinoMs: number;
-  /** Camino para ANIMAR el tramo origen->destino -- real y a salvo de bloqueos. Vacio cuando no
-   * hay con que reconstruirlo -- en ese caso la interpolacion geometrica cae a una linea recta. */
-  waypoints: Point[];
-  /** Camino real conocido HACIA ADELANTE desde destino -- se guarda para que el PROXIMO tramo
-   * pueda reconstruirse recortando este mismo camino. */
-  caminoFuturo: Point[];
-  /** Identifica la fuente del tramo (ruta activa o "retorno") para detectar un cambio de ruta
-   * aunque la posicion reportada coincida. */
-  fuenteId: string;
+export interface EstadoVisual extends FrameData {
+  /** Instante simulado visible (ms, misma convención que Date.parse de marcaTiempoActual). */
+  marcaVisibleMs: number | null;
 }
 
 /** Snapshot que el motor entrega a cada frame (push, via subscribe) o bajo demanda (pull, via
- * getSnapshotNow) -- es la UNICA fuente de verdad de "donde esta todo ahora mismo" para toda la
- * UI (mapa, reloj, badges de actividad). */
+ * getSnapshotNow). */
 export interface EngineSnapshot {
-  /** Posicion interpolada de cada vehiculo en este instante retrasado. Un id ausente del mapa
-   * significa "todavia no hay suficiente buffer para este vehiculo" -- el consumidor no debe
-   * mover su marcador, no asumir (0,0). */
+  /** Posicion de cada vehiculo en el instante visible, sobre su trayectoria real. Un id ausente
+   * significa "todavia no hay datos para este vehiculo" -- el consumidor no debe mover su
+   * marcador. */
   vehiclePositions: Map<string, Point>;
-  /** true mientras el buffer de interpolacion no tiene su primer tramo completo (ver
-   * simulationEngine.ts) -- el consumidor (el mapa) debe tapar su contenido con un loader. */
+  /** true mientras no hay al menos dos lotes en el buffer -- el mapa tapa su contenido con un
+   * loader. */
   buffering: boolean;
-  /** Hora simulada actual, extrapolada por `k` desde el ultimo marcaTiempoActual real conocido.
+  /** Hora simulada en el MISMO instante que las posiciones: interpolada entre las marcas de los
+   * dos lotes que encierran el render (o extrapolada por `k` si todavia no llego el siguiente).
    * null si todavia no llego ningun dato. */
   nowSimMs: number | null;
-  /** Segundos reales desde que marcaTiempoActual cambio por ultima vez -- para indicadores de
-   * "actualizado hace Xs" / "estancado". */
+  /** Segundos reales desde que llego el ultimo lote -- para "actualizado hace Xs" / "estancado". */
   segundosDesdeUltimoLote: number;
 }

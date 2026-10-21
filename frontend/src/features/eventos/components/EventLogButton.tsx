@@ -3,7 +3,7 @@ import {
   Activity, Play, Route as RouteIcon, Truck, Navigation, MapPin, PackageOpen, PackageCheck,
   Coffee, Warehouse, Construction, Wrench, PackagePlus, RefreshCw, Camera, AlertTriangle, Flag,
 } from 'lucide-react';
-import { useEstadoOperacion } from '../../../hooks/useEstadoOperacion';
+import { useEstadoVisual } from '../../../engine/useEstadoVisual';
 import type { EventoDTO } from '../../../types/backend';
 
 const ICONO_POR_TIPO: Record<string, React.ElementType> = {
@@ -61,7 +61,9 @@ function formatHora(instante: string): string {
  * GET /api/alerts. Este es el primer punto de la UI que muestra la bitacora completa.
  */
 export const EventLogButton: React.FC = () => {
-  const { estadoRaw } = useEstadoOperacion();
+  // Misma linea de tiempo que el mapa: la bitacora no debe mostrar eventos que el mapa todavia no
+  // reprodujo.
+  const { estadoRaw } = useEstadoVisual();
   const [isOpen, setIsOpen] = useState(false);
 
   const eventos: EventoDTO[] = [...(estadoRaw?.eventos ?? [])].sort(
@@ -80,7 +82,10 @@ export const EventLogButton: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 max-h-[28rem] overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 shadow-xl z-50">
+        // Se abre hacia la DERECHA: el boton vive en el extremo izquierdo de la barra superior, y con
+        // right-0 el panel quedaba fuera de la pantalla, detras del sidebar. z alto para quedar sobre
+        // los paneles de Leaflet.
+        <div className="absolute left-0 top-full mt-2 w-[min(24rem,calc(100vw-6rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 shadow-xl z-2000">
           <div className="p-3 border-b border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-bold text-white">Bitácora de eventos ({eventos.length})</h3>
           </div>

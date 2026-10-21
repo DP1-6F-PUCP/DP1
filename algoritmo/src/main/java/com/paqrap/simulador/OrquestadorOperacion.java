@@ -5,7 +5,6 @@ import com.paqrap.dominio.AlmacenCentral;
 import com.paqrap.dominio.AlmacenIntermedio;
 import com.paqrap.dominio.Averia;
 import com.paqrap.dominio.Bloqueo;
-import com.paqrap.dominio.Ciudad;
 import com.paqrap.dominio.ContextoProblema;
 import com.paqrap.dominio.EstadoParada;
 import com.paqrap.dominio.EstadoPedido;
@@ -26,13 +25,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -116,14 +113,11 @@ public class OrquestadorOperacion {
     private final Planificador planificador;
     private final MotorSimulacion motorSimulacion;
     private final ReporteDesempeno reporte = new ReporteDesempeno();
-    private final Random randomEscenario = new Random(42);
 
-    private TipoEscenario tipoEscenario;
     private EjecucionEscenario ejecucionActual;
     private ScheduledExecutorService programador;
     private volatile boolean detenido = true;
     private volatile boolean pausado = false;
-    private int contadorPedidosSinteticos = 0;
 
     private volatile List<Ruta> ultimasRutas = List.of();
     private volatile List<com.paqrap.simulador.EventoSimulacion> ultimosEventos = List.of();
@@ -179,7 +173,6 @@ public class OrquestadorOperacion {
             throw new IllegalStateException("Configuración inválida: se requiere sa > ta > 0 y k > 0 (sa=" + sa
                     + ", ta=" + ta + ", k=" + k + ")");
         }
-        this.tipoEscenario = tipoEscenario;
         this.ejecucionActual = new EjecucionEscenario(UUID.randomUUID().toString(), tipoEscenario,
                 contextoProblema.marcaTiempoActual(), sa, k);
         this.ejecucionActual.iniciar();
@@ -352,20 +345,44 @@ public class OrquestadorOperacion {
         registrarBloqueosActivos();
         long tDespuesCarga = System.currentTimeMillis();
         aplicarSolicitudesVencidas();
+        liberarAveriasVencidas(contextoProblema.marcaTiempoActual());
         aplicarMantenimientos(contextoProblema.marcaTiempoActual());
         long tDespuesSolicitudes = System.currentTimeMillis();
 
-        // Rutas que ya venían EN_EJECUCION de un lote anterior (sin terminar todas sus paradas):
-        // se retoman tal cual, NO se vuelven a planificar. UnidadTransporte.estaDisponibleParaRuta
-        // ya excluye estos vehículos de una nueva asignación, y MotorSimulacion.simularUnaRuta
-        // continúa cada una desde la parada pendiente -- antes de este fix, cada lote rehacía todo
-        // desde cero según la posición actual del vehículo, así que un viaje nunca alcanzaba a
-        // completarse si tomaba más de un lote (confirmado empíricamente: 0 entregas en 4+ horas
-        // simuladas con miles de pedidos pendientes).
-        List<Ruta> rutasEnCurso = contextoProblema.vehiculos().stream()
+        // Q&A oficial del curso (fila 16, respuesta sobre CAMBIO_VELOCIDAD en caliente): "todo
+        // vehículo en el almacén o en ruta es vuelto a planificar en cada iteración, al margen que
+        // luego de la planificación mantenga la misma ruta o cambie" -- a diferencia de la versión
+        // anterior de este método (que protegía toda ruta EN_EJECUCION de principio a fin), cada
+        // lote abandona la ruta de TODO vehículo que no esté en medio de un handoff físico real
+        // (ver más abajo) y libera sus pedidos aún no entregados al mismo pool que compite el
+        // planificador; si nada cambió, lo más probable es que el planificador le devuelva la
+        // misma secuencia -- "cumple" la regla igual, sin desperdiciar cómputo artificialmente.
+        //
+        // Única excepción deliberada: un vehículo ActividadVehiculo.ENTREGANDO (ya llegó al
+        // destino y está a mitad del servicio de 1h) no se toca -- no tiene sentido de negocio
+        // "replanificar" un paquete que ya está en la puerta del cliente a mitad de entrega. Su
+        // ruta completa (incluidas las paradas aún no visitadas DESPUÉS de esta) se protege tal
+        // cual hasta que termine ese servicio; se vuelve candidata a replanificación recién en el
+        // lote donde ya no esté ENTREGANDO.
+        List<Ruta> rutasEnEjecucion = contextoProblema.vehiculos().stream()
                 .map(UnidadTransporte::rutaEnEjecucion)
                 .filter(java.util.Objects::nonNull)
                 .toList();
+        //
+        // Revisión posterior (reporte directo con capturas: "este vehículo cambiaba de ruta a cada
+        // rato", "nunca llegó al destino que me marcaba"): abandonar TODA ruta en cada lote hacía
+        // que el planificador redistribuyera la flota desde cero cada sa segundos -- con IPSO, cuyo
+        // agrupamiento depende de la posición de cada vehículo, las asignaciones se intercambiaban
+        // entre lotes y los vehículos zigzagueaban sin llegar nunca. La regla pide RE-EVALUAR a
+        // todos en cada iteración, no cambiarles la ruta siempre ("al margen que luego mantenga la
+        // misma ruta o cambie"): ahora una ruta en curso se mantiene si sigue siendo factible (ver
+        // sigueSiendoFactible) y solo se replanifica si dejó de serlo.
+        LocalDateTime instanteEvaluacion = contextoProblema.marcaTiempoActual();
+        List<Ruta> rutasEnCurso = rutasEnEjecucion.stream()
+                .filter(r -> r.getUnidadTransporte().getActividadActual() == com.paqrap.dominio.ActividadVehiculo.ENTREGANDO
+                        || sigueSiendoFactible(r, instanteEvaluacion))
+                .toList();
+        abandonarRutasParaReplanificar(rutasEnEjecucion, rutasEnCurso);
         Set<Pedido> pedidosEnRutasEnCurso = rutasEnCurso.stream()
                 .flatMap(r -> r.getSecuenciaParadas().stream())
                 .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
@@ -388,9 +405,9 @@ public class OrquestadorOperacion {
             pedidosPorIncorporar.removeAll(liberadosAhora);
         }
 
-        // Al planificador solo se le ofrecen los pedidos SIN compromiso todavía -- los que ya van
-        // camino a entregarse en una ruta en curso no se le vuelven a ofrecer (evita que se le
-        // asignen a otro vehículo mientras el primero ya viene en camino).
+        // Al planificador se le ofrecen todos los pedidos vigentes salvo los de una ruta protegida
+        // (vehículo ENTREGANDO ahora mismo, ver arriba) -- todo lo demás, incluidos los pedidos de
+        // una ruta recién abandonada por abandonarRutasParaReplanificar, SÍ vuelve a competir.
         List<Pedido> pedidosParaPlanificar = pedidosDelLote.stream()
                 .filter(p -> !pedidosEnRutasEnCurso.contains(p))
                 .toList();
@@ -465,14 +482,12 @@ public class OrquestadorOperacion {
 
         recargarAlmacenesSiCorrespondeMedianoche(instanteAnterior, nuevoInstante);
 
-        List<Pedido> pedidosVigentes = actualizarEstadosYFiltrarPendientes(pedidosDelLote, nuevoInstante);
-        pedidosVigentes.addAll(generarPedidosSinteticos(nuevoInstante));
+        List<Pedido> pedidosVigentes = actualizarEstadosYFiltrarPendientes(pedidosDelLote, nuevoInstante, todasLasRutas);
         long tFinLote = System.currentTimeMillis();
         // Desglose completo del lote -- ver el comentario de tInicioLote. "simular" es
         // MotorSimulacion.simularRutas (recorre TODAS las rutas en_curso+nuevas, llama
         // CalculadorDistancia por cada tramo -- la sospecha principal con rutasEnCurso creciendo
-        // sin tope en escenarios largos); "cierre" cubre recarga de almacenes + estados de pedidos
-        // + demanda sintetica (esta ultima crece con contadorPedidosSinteticos en COLAPSO_LOGISTICO).
+        // sin tope en escenarios largos); "cierre" cubre recarga de almacenes + estados de pedidos.
         log.info("Desglose de lote: carga={}ms solicitudes={}ms planificar={}ms simular={}ms cierre={}ms TOTAL={}ms"
                         + " ({} rutas en curso, {} rutas nuevas)",
                 tDespuesCarga - tInicioLote, tDespuesSolicitudes - tDespuesCarga, Math.round(segundosComputo * 1000),
@@ -491,10 +506,42 @@ public class OrquestadorOperacion {
             reporte.incrementarIncumplidos(1);
             ejecucionActual.setEstado(EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO);
             detener();
+            notificarCierreDeLote();
             return;
         }
 
         ejecucionActual.setEstado(EstadoEjecucion.EN_CURSO);
+        notificarCierreDeLote();
+    }
+
+    /**
+     * Callback que se invoca en ESTE hilo (el del ciclo periódico) justo al cerrar cada lote,
+     * cuando el estado ya quedó consistente -- ver {@code ServicioPlanificacionImpl}, que lo usa
+     * para publicar una instantánea inmutable del estado.
+     *
+     * <p>Bug real corregido: las consultas REST/WebSocket leían directamente los objetos mutables
+     * del dominio desde otro hilo, sin sincronización, mientras este hilo los modificaba a medio
+     * lote ({@code abandonarRutasParaReplanificar} deja vehículos {@code DISPONIBLE} y rutas
+     * {@code REEMPLAZADA} ANTES de planificar; {@code MotorSimulacion} mueve posiciones vehículo
+     * por vehículo). Una consulta que caía en ese intervalo devolvía un estado a medias -- p. ej.
+     * un vehículo en ruta sin ruta activa -- y el visualizador perdía su camino real.
+     */
+    private volatile Runnable alCerrarLote;
+
+    public void setAlCerrarLote(Runnable alCerrarLote) {
+        this.alCerrarLote = alCerrarLote;
+    }
+
+    private void notificarCierreDeLote() {
+        Runnable callback = alCerrarLote;
+        if (callback == null) {
+            return;
+        }
+        try {
+            callback.run();
+        } catch (Exception ex) {
+            log.error("Falló la publicación del estado al cerrar el lote", ex);
+        }
     }
 
     private void registrarBloqueosActivos() {
@@ -565,10 +612,26 @@ public class OrquestadorOperacion {
         return todosPedidos.stream().filter(p -> !asignados.contains(p)).toList();
     }
 
-    private List<Pedido> actualizarEstadosYFiltrarPendientes(List<Pedido> pedidos, LocalDateTime nuevoInstante) {
+    private List<Pedido> actualizarEstadosYFiltrarPendientes(List<Pedido> pedidos, LocalDateTime nuevoInstante,
+            List<Ruta> rutas) {
+        // Bug real corregido (reproducido: CINCO_DIAS desde 2027-08-01, PED-2027-08-0217): el
+        // plazo se cumple con la LLEGADA -- MotorSimulacion evalúa "a tiempo" contra
+        // horaInicioServicio, el plazo excluye la hora de entrega --, pero Pedido.actualizarEstado
+        // solo ve paradas CUMPLIDA (servicio terminado). Un vehículo que llegaba a las 14:08 con
+        // plazo 14:18 dejaba el pedido INCUMPLIDA a las 14:30, a mitad del servicio, y detenía la
+        // simulación. Un pedido con servicio iniciado dentro del plazo sigue PENDIENTE hasta que
+        // ese servicio termine.
+        Set<Pedido> llegadosATiempo = rutas.stream()
+                .filter(r -> r.getEstado() == EstadoRuta.EN_EJECUCION)
+                .flatMap(r -> r.getSecuenciaParadas().stream())
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA && p.getEstado() != EstadoParada.REASIGNADA
+                        && p.getHoraInicioServicio() != null
+                        && !p.getHoraInicioServicio().isAfter(p.getPedido().getFechaLimite()))
+                .map(ParadaPlanificada::getPedido)
+                .collect(java.util.stream.Collectors.toSet());
         List<Pedido> vigentes = new ArrayList<>();
         for (Pedido pedido : pedidos) {
-            pedido.actualizarEstado(nuevoInstante);
+            pedido.actualizarEstado(llegadosATiempo.contains(pedido) ? pedido.getFechaLimite() : nuevoInstante);
             if (pedido.getEstado() == EstadoPedido.PENDIENTE) {
                 vigentes.add(pedido);
             } else if (pedido.getEstado() == EstadoPedido.INCUMPLIDA) {
@@ -605,44 +668,6 @@ public class OrquestadorOperacion {
                 }
             }
         }
-    }
-
-    /**
-     * Genera demanda sintética según el escenario en curso. {@code DIA_A_DIA} no genera pedidos
-     * sintéticos (se asume que llegan de una fuente externa ya reflejada en el contexto);
-     * {@code CINCO_DIAS} genera una cantidad moderada y constante por ciclo;
-     * {@code COLAPSO_LOGISTICO} incrementa progresivamente la cantidad por ciclo para encontrar el
-     * punto de quiebre — esta lógica reemplaza a los antiguos {@code SimuladorCincoDias} y
-     * {@code SimuladorColapsoLogistico}, que no correspondían al diagrama canónico (vivían
-     * indebidamente acoplados a ALNS en vez de al orquestador, agnóstico al algoritmo).
-     */
-    private List<Pedido> generarPedidosSinteticos(LocalDateTime instante) {
-        if (tipoEscenario == null || tipoEscenario == TipoEscenario.DIA_A_DIA) {
-            return new ArrayList<>();
-        }
-
-        int cantidad = switch (tipoEscenario) {
-            case CINCO_DIAS -> 10;
-            case COLAPSO_LOGISTICO -> 10 + (contadorPedidosSinteticos / 5);
-            default -> 0;
-        };
-
-        Ciudad ciudad = contextoProblema.ciudad();
-        int[] slas = {4, 8, 12, 18, 36};
-        List<Pedido> generados = new ArrayList<>();
-        for (int i = 0; i < cantidad; i++) {
-            int x = randomEscenario.nextInt(ciudad.ancho() + 1);
-            int y = randomEscenario.nextInt(ciudad.alto() + 1);
-            int cantidadProducto = 1 + randomEscenario.nextInt(3);
-            int sla = slas[randomEscenario.nextInt(slas.length)];
-            String id = "SINT-" + (++contadorPedidosSinteticos);
-            Pedido pedidoSintetico = new Pedido(id, "cliente-" + id, new Nodo(x, y), cantidadProducto, sla, instante);
-            generados.add(pedidoSintetico);
-            double tiempoHoras = java.time.Duration.between(contextoProblema.marcaTiempoActual(), instante)
-                    .toSeconds() / 3600.0;
-            motorSimulacion.registrarNuevoPedido(tiempoHoras, contextoProblema, pedidoSintetico);
-        }
-        return generados;
     }
 
     /**
@@ -700,11 +725,25 @@ public class OrquestadorOperacion {
      * sobre una lista pequeña (archivo bimensual), no una consulta repetida por cálculo de distancia.
      */
     private void aplicarMantenimientos(LocalDateTime instante) {
+        // Bug real corregido (reproducido: CINCO_DIAS desde 2026-10-21, PED-2026-10-3973 incumplido
+        // con TM04 parado 7h en la puerta del cliente): la ventana se evaluaba registro por
+        // registro, y una unidad tiene VARIOS (la plantilla se repite cada bimestre). El registro
+        // de hoy la ponía EN_MANTENIMIENTO y le quitaba la ruta; el de otra fecha, fuera de
+        // ventana, la devolvía a DISPONIBLE en el mismo recorrido -- así recibía una ruta nueva
+        // cada lote, que el lote siguiente volvía a quitarle, y el servicio de 1h nunca terminaba.
+        // Ahora se decide una sola vez por unidad: en mantenimiento si CUALQUIER registro la cubre.
+        Set<UnidadTransporte> enVentana = new HashSet<>();
+        Set<UnidadTransporte> conRegistros = new java.util.LinkedHashSet<>();
         for (Mantenimiento mantenimiento : contextoProblema.mantenimientos()) {
-            UnidadTransporte unidad = mantenimiento.vehiculoAfectado();
-            boolean dentroDeVentana = !instante.isBefore(mantenimiento.fechaInicio())
-                    && instante.isBefore(mantenimiento.fechaFinCalculada());
-            if (dentroDeVentana && unidad.getEstado() != EstadoUnidad.AVERIADO) {
+            conRegistros.add(mantenimiento.vehiculoAfectado());
+            if (!instante.isBefore(mantenimiento.fechaInicio()) && instante.isBefore(mantenimiento.fechaFinCalculada())) {
+                enVentana.add(mantenimiento.vehiculoAfectado());
+            }
+        }
+        for (UnidadTransporte unidad : conRegistros) {
+            boolean dentroDeVentana = enVentana.contains(unidad);
+            if (dentroDeVentana && unidad.getEstado() != EstadoUnidad.AVERIADO
+                    && unidad.getEstado() != EstadoUnidad.EN_MANTENIMIENTO) {
                 // Igual que en aplicarAveria: si entra a mantenimiento con una ruta EN_EJECUCION,
                 // la abandona -- sus paradas pendientes quedan REASIGNADA para que otro vehículo
                 // las retome el próximo lote, en vez de dejarla EN_EJECUCION para siempre.
@@ -719,8 +758,125 @@ public class OrquestadorOperacion {
                             (int) liberadas, "mantenimiento programado");
                 }
                 unidad.setEstado(EstadoUnidad.EN_MANTENIMIENTO);
+                unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
             } else if (!dentroDeVentana && unidad.getEstado() == EstadoUnidad.EN_MANTENIMIENTO) {
                 unidad.setEstado(EstadoUnidad.DISPONIBLE);
+            }
+        }
+    }
+
+    /**
+     * Abandona toda ruta EN_EJECUCION que no esté en {@code protegidas} (ver el comentario de
+     * {@code ejecutarSiguienteLote} sobre la regla oficial de replanificación por iteración): la
+     * marca {@code REEMPLAZADA}, sus paradas aún no cumplidas quedan {@code REASIGNADA} (mismo
+     * mecanismo que ya usan {@code aplicarAveria}/{@code aplicarMantenimientos}) y la unidad vuelve
+     * a {@code DISPONIBLE} en su posición ACTUAL -- no en el almacén -- para competir de nuevo por
+     * una asignación en este mismo lote. No se emite evento de incidencia: a diferencia de una
+     * avería o un mantenimiento, esto no es un incidente que el visualizador deba alertar, ocurre
+     * en todo lote por diseño.
+     *
+     * <p>Simplificación de alcance heredada (ver {@code EvaluadorCostos}, que ya no modela un
+     * tramo de regreso al almacén): si el planificador arma una ruta NUEVA para esta unidad con
+     * pedidos distintos a los que llevaba, el dominio no exige una visita a almacén antes de
+     * "cargarlos" -- se asume disponibilidad instantánea de inventario en la posición actual del
+     * vehículo, igual que el resto del sistema asume tiempo de carga despreciable. Aceptable para
+     * el alcance simplificado del curso; si se necesita modelar la recarga física entre tramos,
+     * este es el punto a revisar.
+     */
+    private void abandonarRutasParaReplanificar(List<Ruta> rutasEnEjecucion, List<Ruta> protegidas) {
+        for (Ruta ruta : rutasEnEjecucion) {
+            if (protegidas.contains(ruta)) {
+                continue;
+            }
+            ruta.setEstado(EstadoRuta.REEMPLAZADA);
+            ruta.getSecuenciaParadas().stream()
+                    .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                    .forEach(p -> p.setEstado(EstadoParada.REASIGNADA));
+            ruta.getUnidadTransporte().setEstado(EstadoUnidad.DISPONIBLE);
+        }
+    }
+
+    /**
+     * Re-evaluación de una ruta en curso (regla del Q&A: todo vehículo se vuelve a planificar en
+     * cada iteración): sigue siendo válida si la unidad sigue operativa, existe camino transitable
+     * con los bloqueos vigentes hasta cada parada pendiente, y a la velocidad ACTUAL de su tipo
+     * (puede haber cambiado en caliente) llega a cada una antes de su plazo -- contando el servicio
+     * de las paradas previas y el refrigerio pendiente del turno. Si algo de eso falla, la ruta se
+     * abandona y sus pedidos vuelven a competir en este mismo lote.
+     */
+    private boolean sigueSiendoFactible(Ruta ruta, LocalDateTime ahora) {
+        UnidadTransporte unidad = ruta.getUnidadTransporte();
+        if (unidad.getEstado() != EstadoUnidad.EN_RUTA) {
+            return false;
+        }
+        var operacion = contextoProblema.configuracionOperacion();
+        double velocidad = unidad.getTipoVehiculo().getVelocidadKmH();
+        long servicioSeg = Math.round(operacion.tiempoServicioClienteHoras() * 3600.0);
+        long refrigerioSeg = Math.round(operacion.duracionRefrigerioHoras() * 3600.0);
+        LocalDateTime t = ahora;
+        // Mismo criterio que MotorSimulacion: el refrigerio pendiente se toma a más tardar en su
+        // último inicio permitido; uno ya en curso termina antes de seguir.
+        LocalDateTime turno = operacion.inicioTurnoQueContiene(ahora);
+        LocalDateTime refrigerioMasTardio = operacion.inicioRefrigerioMasTardio(turno);
+        boolean refrigerioPendiente = !(turno.equals(unidad.getTiempoInicioTurnoActual()) && unidad.isRefrigerioTomado());
+        if (unidad.getHoraRefrigerioProgramada() != null) {
+            LocalDateTime fin = unidad.getHoraRefrigerioProgramada().plusSeconds(refrigerioSeg);
+            t = fin.isAfter(t) ? fin : t;
+            refrigerioPendiente = false;
+        }
+        Nodo posicion = unidad.getPosicion();
+        for (ParadaPlanificada parada : ruta.getSecuenciaParadas()) {
+            if (parada.getEstado() == EstadoParada.CUMPLIDA) {
+                continue;
+            }
+            Nodo destino = parada.getPedido().getDestino();
+            if (parada.getHoraInicioServicio() != null) {
+                LocalDateTime finServicio = parada.getHoraInicioServicio().plusSeconds(servicioSeg);
+                t = finServicio.isAfter(t) ? finServicio : t;
+                posicion = destino;
+                continue;
+            }
+            if (refrigerioPendiente && !t.isBefore(refrigerioMasTardio)) {
+                t = t.plusSeconds(refrigerioSeg);
+                refrigerioPendiente = false;
+            }
+            double km;
+            try {
+                km = com.paqrap.dominio.CalculadorDistancia.distanciaKm(contextoProblema.ciudad(), todosLosBloqueos, t,
+                        posicion, destino);
+            } catch (IllegalStateException sinCamino) {
+                return false;
+            }
+            LocalDateTime llegada = t.plusSeconds(Math.round(km / velocidad * 3600.0));
+            // Refrigerio tomado en el camino si el viaje cruza su último inicio permitido (ver
+            // MotorSimulacion.recorrerCamino).
+            if (refrigerioPendiente && llegada.isAfter(refrigerioMasTardio)) {
+                llegada = llegada.plusSeconds(refrigerioSeg);
+                refrigerioPendiente = false;
+            }
+            if (llegada.isAfter(parada.getPedido().getFechaLimite())) {
+                return false;
+            }
+            t = llegada.plusSeconds(servicioSeg);
+            posicion = destino;
+        }
+        return true;
+    }
+
+    /**
+     * Devuelve a {@code DISPONIBLE} las unidades cuya avería ya terminó. Sin esto ninguna unidad
+     * salía nunca de {@code AVERIADO}: {@code estaDisponibleParaRuta} exige {@code DISPONIBLE}, y el
+     * único otro punto que lo asigna (fin de ruta en MotorSimulacion) jamás corre para una unidad
+     * sin ruta -- cada avería retiraba el vehículo de la flota por el resto del escenario.
+     */
+    private void liberarAveriasVencidas(LocalDateTime instante) {
+        for (UnidadTransporte unidad : contextoProblema.vehiculos()) {
+            Averia averia = unidad.getAveriaActual();
+            if (unidad.getEstado() == EstadoUnidad.AVERIADO && averia != null
+                    && !instante.isBefore(averia.fechaFinEstimada())) {
+                unidad.setAveriaActual(null);
+                unidad.setEstado(EstadoUnidad.DISPONIBLE);
+                unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
             }
         }
     }
@@ -732,11 +888,7 @@ public class OrquestadorOperacion {
                 .ifPresent(unidad -> {
                     TipoAveria tipo = TipoAveria.valueOf(solicitud.valorNuevo());
                     LocalDateTime ahora = solicitud.tiempoSimuladoProgramado();
-                    LocalDateTime fin = switch (tipo) {
-                        case TIPO_1 -> ahora.plusHours(2);
-                        case TIPO_2 -> ahora.plusHours(4);
-                        case TIPO_3 -> ahora.plusDays(2);
-                    };
+                    LocalDateTime fin = contextoProblema.configuracionOperacion().finIndisponibilidadAveria(tipo, ahora);
                     // Si la unidad ya venía con una ruta EN_EJECUCION, la avería la abandona: se
                     // marca REEMPLAZADA y sus paradas aún no cumplidas quedan REASIGNADA, para que
                     // el pedido (que sigue PENDIENTE) vuelva a estar disponible y el próximo lote
@@ -755,6 +907,7 @@ public class OrquestadorOperacion {
 
                     unidad.setAveriaActual(new Averia(tipo, ahora, fin, 0, ahora));
                     unidad.setEstado(EstadoUnidad.AVERIADO);
+                    unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
                     reporte.incrementarAverias();
                     motorSimulacion.registrarAveriaVehiculo(0.0, contextoProblema, unidad.getIdUnidad(),
                             unidad.getPosicion(), tipo.name());
@@ -852,10 +1005,23 @@ public class OrquestadorOperacion {
         int diferencia = cantidadDeseada - delTipo.size();
 
         if (diferencia > 0) {
-            Nodo posicionInicial = delTipo.get(0).getPosicion();
-            int siguienteCorrelativo = delTipo.size() + 1;
-            for (int i = 0; i < diferencia; i++) {
-                String nuevoId = tipo.getId() + "-" + (siguienteCorrelativo + i);
+            // Toda unidad nueva parte del almacén central (regla del caso), no de donde esté la
+            // primera unidad del tipo -- esa podía ir a mitad de una ruta. Ids en formato TTNN
+            // (TA11, TM16...) continuando el mayor correlativo existente.
+            Nodo posicionInicial = contextoProblema.almacenes().stream()
+                    .filter(AlmacenCentral.class::isInstance)
+                    .findFirst()
+                    .map(Almacen::getPosicion)
+                    .orElseThrow();
+            String prefijo = "T" + tipo.getId().charAt(0);
+            int mayorCorrelativo = delTipo.stream()
+                    .map(UnidadTransporte::getIdUnidad)
+                    .filter(id -> id.length() > 2 && id.substring(2).chars().allMatch(Character::isDigit))
+                    .mapToInt(id -> Integer.parseInt(id.substring(2)))
+                    .max()
+                    .orElse(0);
+            for (int i = 1; i <= diferencia; i++) {
+                String nuevoId = String.format("%s%02d", prefijo, mayorCorrelativo + i);
                 nuevaLista.add(new UnidadTransporte(nuevoId, tipo, posicionInicial, contextoProblema.marcaTiempoActual()));
             }
         } else if (diferencia < 0) {

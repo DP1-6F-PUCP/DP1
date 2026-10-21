@@ -37,9 +37,13 @@ public final class EvaluadorCostos {
 
         double tiempoServicioHoras = operacion.tiempoServicioClienteHoras();
         double duracionRefrigerioHoras = operacion.duracionRefrigerioHoras();
-        double duracionTurnoHoras = operacion.duracionTurnoHoras();
-        LocalDateTime inicioRefrigerioIdeal = TiempoUtil.sumarHoras(ruta.getHoraInicioPlanificada(), duracionTurnoHoras / 2.0);
-        boolean refrigerioTomado = unidad.isRefrigerioTomado();
+        // Mismo ancla de turno real que VerificadorRestricciones.esRutaFactible y
+        // MotorSimulacion.simularUnaRuta -- sin esto, el costo/ETA estimado (parada.fechaEntregada,
+        // expuesto al visualizador) asumía el refrigerio a mitad de la ruta en vez de a mitad del
+        // turno real, desalineado con lo que el simulador realmente hace.
+        LocalDateTime inicioTurno = operacion.inicioTurnoQueContiene(ruta.getHoraInicioPlanificada());
+        LocalDateTime inicioRefrigerioIdeal = operacion.inicioRefrigerioMasTardio(inicioTurno);
+        boolean refrigerioTomado = inicioTurno.equals(unidad.getTiempoInicioTurnoActual()) && unidad.isRefrigerioTomado();
 
         for (ParadaPlanificada parada : paradas) {
             LocalDateTime liberacion = parada.getPedido().getFechaIngreso();

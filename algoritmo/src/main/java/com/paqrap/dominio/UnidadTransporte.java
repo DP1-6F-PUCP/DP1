@@ -29,6 +29,45 @@ public class UnidadTransporte {
     // lote segun en que fase termino la simulacion de este vehiculo (ver ActividadVehiculo).
     private ActividadVehiculo actividadActual = ActividadVehiculo.INACTIVO;
 
+    /**
+     * Un punto del recorrido real de la unidad: desde {@code instante} y hasta el punto siguiente,
+     * la unidad hace {@code actividad} (si el punto siguiente está en otro nodo, viaja hacia él).
+     */
+    public record PuntoTrayectoria(Nodo nodo, LocalDateTime instante, ActividadVehiculo actividad) {
+    }
+
+    /**
+     * Recorrido real del ÚLTIMO lote simulado (se reinicia al empezar cada lote): cada nodo por el
+     * que pasó, con su instante simulado, más los puntos donde empezó/terminó una pausa (entrega,
+     * refrigerio). Lo consume el visualizador para reproducir exactamente lo que simuló el backend
+     * -- antes solo recibía la posición final del lote y tenía que adivinar el camino y los
+     * tiempos (con la replanificación por lote, a menudo se equivocaba: diagonales, vehículos
+     * "moviéndose" mientras entregaban, paradas intermedias invisibles).
+     */
+    private final List<PuntoTrayectoria> trayectoriaLote = new ArrayList<>();
+
+    public synchronized void iniciarTrayectoria(LocalDateTime instante) {
+        trayectoriaLote.clear();
+        trayectoriaLote.add(new PuntoTrayectoria(posicion, instante, actividadActual));
+    }
+
+    public synchronized void registrarPuntoTrayectoria(Nodo nodo, LocalDateTime instante, ActividadVehiculo actividad) {
+        if (!trayectoriaLote.isEmpty()) {
+            PuntoTrayectoria ultimo = trayectoriaLote.get(trayectoriaLote.size() - 1);
+            if (instante.isBefore(ultimo.instante())) {
+                instante = ultimo.instante(); // nunca hacia atrás en el tiempo
+            }
+            if (ultimo.nodo().equals(nodo) && ultimo.instante().equals(instante) && ultimo.actividad() == actividad) {
+                return;
+            }
+        }
+        trayectoriaLote.add(new PuntoTrayectoria(nodo, instante, actividad));
+    }
+
+    public synchronized List<PuntoTrayectoria> getTrayectoriaLote() {
+        return List.copyOf(trayectoriaLote);
+    }
+
     public UnidadTransporte(String idUnidad, TipoVehiculo tipoVehiculo, Nodo posicion,
             LocalDateTime tiempoInicioTurnoActual) {
         this.idUnidad = idUnidad;
@@ -102,6 +141,23 @@ public class UnidadTransporte {
 
     public void setRefrigerioTomado(boolean refrigerioTomado) {
         this.refrigerioTomado = refrigerioTomado;
+    }
+
+    /**
+     * Devuelve la unidad al estado de arranque de un escenario nuevo. La flota es estado compartido
+     * entre ejecuciones, así que sin esto una ejecución detenida a mitad de camino dejaba su última
+     * ruta {@code EN_EJECUCION}, su avería y su refrigerio vivos para la siguiente.
+     */
+    public synchronized void reiniciarParaNuevaEjecucion(Nodo posicionInicial, LocalDateTime inicioTurno) {
+        this.posicion = posicionInicial;
+        this.estado = EstadoUnidad.DISPONIBLE;
+        this.averiaActual = null;
+        this.rutas.clear();
+        this.tiempoInicioTurnoActual = inicioTurno;
+        this.horaRefrigerioProgramada = null;
+        this.refrigerioTomado = false;
+        this.actividadActual = ActividadVehiculo.INACTIVO;
+        this.trayectoriaLote.clear();
     }
 
     public ActividadVehiculo getActividadActual() {

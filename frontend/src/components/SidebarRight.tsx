@@ -16,8 +16,9 @@ import {
   Layers,
   ShieldAlert,
   SlidersHorizontal,
+  Coffee,
 } from 'lucide-react';
-import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
+import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useEscenario } from '../features/escenario/hooks/useEscenario';
 import { useMapStore } from '../store/mapStore';
 import { useAlertas } from '../features/alertas/hooks/useAlertas';
@@ -25,8 +26,13 @@ import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
 import { BreakdownType } from '../types';
 import { BreakdownModal } from './BreakdownModal';
 import { ConfigModal } from './ConfigModal';
+import { DelayAlertModal } from './DelayAlertModal';
 import { useToast } from './ToastProvider';
 import { getVehicleSemaforoStatus } from '../utils/vehicleStatus';
+import { useSemaforoStore } from '../store/semaforoStore';
+import { useScenarioStore } from '../store/scenarioStore';
+import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
+import type { EventoDTO } from '../types/backend';
 
 interface SidebarRightProps {
   isCollapsed: boolean;
@@ -37,13 +43,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   isCollapsed,
   onToggleCollapse,
 }) => {
-  const { warehouses, vehicles, orders, estadoRaw } = useEstadoOperacion();
+  // Estado retrasado al mismo instante que el mapa (ver engine/useEstadoVisual): antes el panel
+  // mostraba el dato en vivo, ~sa segundos reales por delante de lo que se veía en el mapa.
+  const { warehouses, vehicles, orders, estadoRaw } = useEstadoVisual();
   const { ejecucion } = useEscenario();
   const selectedVehicleId = useMapStore((s) => s.selectedVehicleId);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
   const selectedWarehouseId = useMapStore((s) => s.selectedWarehouseId);
   const setSelectedWarehouseId = useMapStore((s) => s.setSelectedWarehouseId);
   const { alertas } = useAlertas();
+  const umbralesSemaforo = useSemaforoStore((s) => s.umbrales);
+  const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
+  const [alertaDetalle, setAlertaDetalle] = useState<EventoDTO | null>(null);
   const { reportBreakdown, isReportingBreakdown } = useVehicles();
   const { addToast, notifications } = useToast();
   const alertasVistasRef = useRef<Set<string> | null>(null);
@@ -54,12 +65,24 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const [fleetSearchTerm, setFleetSearchTerm] = useState('');
   const [fleetFilterType, setFleetFilterType] = useState<'all' | 'car' | 'motorcycle' | 'bicycle'>('all');
   const [fleetFilterStatus, setFleetFilterStatus] = useState<
-    'all' | 'idle' | 'en_route' | 'delivering' | 'broken' | 'maintenance'
+    'all' | 'idle' | 'en_route' | 'delivering' | 'on_break' | 'broken' | 'maintenance'
   >('all');
 
   const previousSelectedVehicleId = useRef<string | null>(selectedVehicleId);
   const vehicleCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
+
+  // Para el detalle de una alerta de riesgo SLA (DelayAlertModal) -- mismo cálculo que usaba
+  // AlertasBell (ahora sin montar, ver alertaDetalle más abajo: se reusa solo el modal, no la
+  // lista, para no duplicar la lista de alertas que esta barra ya muestra).
+  const nowMsGlobal = estadoRaw?.marcaTiempoActual ? Date.parse(estadoRaw.marcaTiempoActual) : null;
+  const simMinuteGlobal =
+    nowMsGlobal != null && scenarioStartMs != null ? Math.round((nowMsGlobal - scenarioStartMs) / 60000) : 0;
+  const simTimeGlobal =
+    nowMsGlobal != null
+      ? new Date(nowMsGlobal).toLocaleString('es-PE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
+      : '--:--';
+  const ordenDetalle = alertaDetalle?.pedidoId ? orders.find((o) => o.id === alertaDetalle.pedidoId) ?? null : null;
 
   useEffect(() => {
     const bloqueos = alertas.filter((alerta) => alerta.tipo === 'INCIDENCIA_BLOQUEO');
@@ -443,6 +466,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         { key: 'idle' as const, label: 'Inactivos', count: vehicles.filter((v) => v.status === 'idle' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
                         { key: 'en_route' as const, label: 'En ruta', count: vehicles.filter((v) => v.status === 'en_route' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
                         { key: 'delivering' as const, label: 'Entregando', count: vehicles.filter((v) => v.status === 'delivering' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
+                        { key: 'on_break' as const, label: 'Refrigerio', count: vehicles.filter((v) => v.status === 'on_break' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
                         { key: 'broken' as const, label: 'Averiados', count: vehicles.filter((v) => v.status === 'broken' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
                         { key: 'maintenance' as const, label: 'Mantenimiento', count: vehicles.filter((v) => v.status === 'maintenance' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
                       ].map((st) => (
@@ -529,6 +553,15 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                   <span className="border border-amber-500/50 bg-amber-950/60 text-amber-300 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-medium">
                                     <Clock className="h-3 w-3 text-amber-400" /> Mantenimiento
                                   </span>
+                                ) : v.status === 'on_break' ? (
+                                  // Bug real reportado (captura: TA01 "Averiado" sin ninguna avería
+                                  // registrada en el backend): 'on_break' (EN_REFRIGERIO) no tenía
+                                  // rama propia y caía en el else de abajo -- todo vehículo en
+                                  // refrigerio se mostraba como averiado. Mismo teal que su
+                                  // marcador en el mapa (ver LeafletManhattanMap, isEnRefrigerio).
+                                  <span className="border border-teal-500/50 bg-teal-950/60 text-teal-300 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-medium">
+                                    <Coffee className="h-3 w-3 text-teal-400" /> Refrigerio
+                                  </span>
                                 ) : (
                                   <span className="border border-rose-500/60 bg-rose-950/70 text-rose-300 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-bold animate-pulse">
                                     <AlertTriangle className="h-3 w-3 text-rose-400" /> Averiado
@@ -596,6 +629,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               ) : (
                 /* PESTAÑA: OPERACIÓN */
                 <div className="space-y-3.5 fade-in">
+                  {/* MÉTRICAS DE DESEMPEÑO (MetricasOperacionDTO completo -- antes solo se leía
+                      contadorIncumplidos para el banner de ejecución detenida, el resto se
+                      descartaba sin mostrarse en ningún lado) */}
+                  {estadoRaw?.metricas && (
+                    <section className="space-y-2 p-3 rounded-2xl border border-slate-800 bg-slate-900/60">
+                      <span className="text-[10px] font-bold uppercase flex items-center gap-1.5 text-slate-300">
+                        <Activity className="h-3.5 w-3.5 text-cyan-400" /> Métricas de la Operación
+                      </span>
+                      <MetricasStrip metricas={estadoRaw.metricas} />
+                    </section>
+                  )}
+
                   {/* CAPACIDAD DE ALMACENES */}
                   <section className="space-y-2 p-3 rounded-2xl border border-slate-800 bg-slate-900/60">
                     <div className="flex justify-between items-center">
@@ -680,7 +725,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                       const startMs = ejecucion?.fechaInicioSimulada ? Date.parse(ejecucion.fechaInicioSimulada) : null;
                       const simMin = nowMs && startMs ? Math.round((nowMs - startMs) / 60000) : 0;
 
-                      const semaforos = vehicles.map((v) => getVehicleSemaforoStatus(v, orders, simMin));
+                      const semaforos = vehicles.map((v) => getVehicleSemaforoStatus(v, orders, simMin, umbralesSemaforo));
                       const onTimeCount = semaforos.filter((s) => s.state === 'on_time').length;
                       const atRiskCount = semaforos.filter((s) => s.state === 'at_risk').length;
                       const delayedCount = semaforos.filter((s) => s.state === 'delayed').length;
@@ -842,11 +887,25 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                     <span className="text-[9px] font-mono-code text-slate-400">{timeStr}</span>
                                   </div>
                                   <p className="leading-tight text-slate-300">{alt.descripcion}</p>
-                                  {alt.vehiculoId && (
-                                    <span className="text-[9px] text-cyan-400 font-mono-code mt-1 inline-block">
-                                      Ver vehículo {alt.vehiculoId} →
-                                    </span>
-                                  )}
+                                  <div className="mt-1 flex items-center gap-3">
+                                    {alt.vehiculoId && (
+                                      <span className="text-[9px] text-cyan-400 font-mono-code inline-block">
+                                        Ver vehículo {alt.vehiculoId} →
+                                      </span>
+                                    )}
+                                    {alt.pedidoId && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAlertaDetalle(alt);
+                                        }}
+                                        className="text-[9px] text-slate-300 font-mono-code underline-offset-2 hover:underline inline-block"
+                                      >
+                                        Ver detalle / PDF →
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               );
                             })}
@@ -885,6 +944,16 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         onClose={() => setIsBreakdownModalOpen(false)}
         vehicles={selectedVehicleId ? vehicles.filter((v) => v.id === selectedVehicleId) : []}
         onConfirmBreakdown={handleConfirmBreakdown}
+        isDarkTheme
+      />
+      <DelayAlertModal
+        isOpen={Boolean(alertaDetalle)}
+        onClose={() => setAlertaDetalle(null)}
+        order={ordenDetalle}
+        simTime={simTimeGlobal}
+        simMinute={simMinuteGlobal}
+        warehouses={warehouses}
+        vehicles={vehicles}
         isDarkTheme
       />
 

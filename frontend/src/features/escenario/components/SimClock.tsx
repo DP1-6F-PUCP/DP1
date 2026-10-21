@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { simulationEngine } from '../../../engine/simulationEngine';
+import { useScenarioStore } from '../../../store/scenarioStore';
 
 /**
  * Lee el reloj simulado del motor central (ver engine/simulationEngine.ts) en vez de mantener su
@@ -11,6 +12,7 @@ import { simulationEngine } from '../../../engine/simulationEngine';
  */
 export const SimClock: React.FC = () => {
   const [, forceTick] = useState(0);
+  const saSegundos = (useScenarioStore((s) => s.ejecucion?.sa) ?? 20 / 60) * 60;
 
   useEffect(() => {
     const id = setInterval(() => forceTick((v) => v + 1), 1000);
@@ -29,7 +31,9 @@ export const SimClock: React.FC = () => {
     second: '2-digit',
   });
 
-  const estancado = snap.segundosDesdeUltimoLote > 50; // mas de sa(20s)+margen sin recibir un tick nuevo
+  // Mas de dos lotes (sa) sin recibir uno nuevo, con margen -- antes estaba fijo en 50s, que solo
+  // tenia sentido con sa=20s.
+  const estancado = snap.segundosDesdeUltimoLote > saSegundos * 2 + 10;
 
   return (
     <div

@@ -25,4 +25,15 @@ export function useSincronizarEjecucion() {
       setEjecucion(query.data);
     }
   }, [query.data, setEjecucion]);
+
+  // El backend ya no conoce esta ejecución (se reinició, o se inició otra después de que esta
+  // terminara): adoptar la activa actual, si la hay, en vez de quedar consultando un id muerto
+  // con la vista congelada.
+  useEffect(() => {
+    if (!query.isError) return;
+    escenariosApi
+      .consultarActiva()
+      .then((activa) => setEjecucion(activa))
+      .catch(() => setEjecucion(null));
+  }, [query.isError, setEjecucion]);
 }

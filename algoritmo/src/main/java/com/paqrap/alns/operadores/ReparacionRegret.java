@@ -93,7 +93,7 @@ public class ReparacionRegret implements OperadorReparacion {
 
     private static boolean esFactible(Ruta rutaOriginal, Ruta rutaPrueba, Solucion solucion, ContextoProblema contexto) {
         return VerificadorRestricciones.esRutaFactible(rutaPrueba, contexto.ciudad(), contexto.bloqueos(),
-                contexto.configuracionOperacion())
+                contexto.configuracionOperacion(), contexto.mantenimientos())
                 && VerificadorRestricciones.respetaStockAlmacenes(rutaOriginal, rutaPrueba, solucion.getRutas(),
                         contexto.almacenes());
     }

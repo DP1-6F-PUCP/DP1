@@ -2,6 +2,7 @@ import React from 'react';
 import { Pause, Play, Square } from 'lucide-react';
 import { useEscenario } from '../features/escenario/hooks/useEscenario';
 import { SimClock } from '../features/escenario/components/SimClock';
+import { EventLogButton } from '../features/eventos/components/EventLogButton';
 
 export const OperacionTopbar: React.FC = () => {
   const { ejecucion, pausar, reanudar, detener, isPausando, isReanudando, isDeteniendo } = useEscenario();
@@ -16,7 +17,9 @@ export const OperacionTopbar: React.FC = () => {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-700 bg-[#0f172a] px-3 text-slate-300">
-      <div />
+      <div className="flex items-center gap-2">
+        <EventLogButton />
+      </div>
 
       <div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-[#111c31] px-2 py-1.5">
         <div className="border-r border-slate-700 pr-2">

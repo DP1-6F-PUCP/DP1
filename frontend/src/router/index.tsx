@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { DashboardPage } from '../pages/DashboardPage';
 import { DataFilesPage } from '../pages/DataFilesPage';
@@ -16,6 +17,7 @@ import { useSimulationSocket } from '../hooks/useSimulationSocket';
 import { useSincronizarEjecucion } from '../hooks/useSincronizarEjecucion';
 import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
 import { useSimulationEngineIngest } from '../engine/useSimulationEngineIngest';
+import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useScenarioStore } from '../store/scenarioStore';
 import { useThemeStore } from '../store/themeStore';
 import { OperacionTopbar } from '../components/OperacionTopbar';
@@ -42,13 +44,19 @@ const RootLayout: React.FC = () => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [showDataFiles, setShowDataFiles] = useState(false);
 
-  // Mapa persistente montado una sola vez aqui (no en cada pagina); cada MapSlot lo reparenta
-  // (appendChild nativo, ver contexts/MapSlotContext.tsx) hacia donde la pagina activa lo necesite.
-  const mapHostRef = useRef<HTMLDivElement>(null);
+  // Mapa persistente montado una sola vez aqui
+  const [mapSlot, setMapSlot] = useState<HTMLDivElement | null>(null);
   const { warehouses, vehicles, blockedStreets, orders, routes, estadoRaw } = useEstadoOperacion();
-  // Unico punto de ingesta del motor de simulacion (engine/simulationEngine.ts) -- de aqui en
-  // adelante, el mapa/SimClock/etc. ya no calculan nada por su cuenta, solo leen del motor.
-  useSimulationEngineIngest(vehicles, routes, blockedStreets, estadoRaw?.marcaTiempoActual ?? null);
+  // Unico punto de ingesta del motor de simulacion (engine/simulationEngine.ts), con el estado EN
+  // VIVO. Todo lo que se muestra junto al mapa lee el estado retrasado (useEstadoVisual), para que
+  // marcadores, reloj, badges y panel muestren el mismo instante.
+  useSimulationEngineIngest({ vehicles, routes, orders, warehouses, blockedStreets, estadoRaw });
+  const visual = useEstadoVisual();
+  const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
+  const simMinutesVisible = visual.marcaVisibleMs != null && scenarioStartMs != null
+    ? Math.round((visual.marcaVisibleMs - scenarioStartMs) / 60000)
+    : 0;
+  // El modal de fin muestra el estado FINAL real (en vivo), no el retrasado.
   const failedOrder = orders.find((order) => order.status === 'delayed') ?? null;
   const failedOrderVehicle = failedOrder?.assignedVehicleId
     ? vehicles.find((vehicle) => vehicle.id === failedOrder.assignedVehicleId) ?? null
@@ -95,7 +103,7 @@ const RootLayout: React.FC = () => {
                 <DataFilesPage warehouses={warehouses} />
               ) : (
                 <SeleccionarEscenarioGate>
-                  <MapSlotContext.Provider value={mapHostRef}>
+                  <MapSlotContext.Provider value={{ slot: mapSlot, setSlot: setMapSlot }}>
                     <Outlet />
                   </MapSlotContext.Provider>
                 </SeleccionarEscenarioGate>
@@ -120,23 +128,21 @@ const RootLayout: React.FC = () => {
             }}
           />
 
-          {/* Mapa persistente: una sola instancia de React/Leaflet para toda la sesion, SIEMPRE
-              montada aqui -- cada <MapSlot/> de la pagina activa la reparenta (appendChild nativo)
-              hacia donde la necesite. Navegar entre paginas ya no destruye y reconstruye el mapa
-              (ni pierde la animacion en tiempo real, ni la suscripcion al motor de simulacion): el
-              nodo real nunca se desmonta, solo cambia de padre en el DOM. */}
-          <div ref={mapHostRef} className="hidden w-full h-full">
-            <MapErrorBoundary fallbackTitle="Error en el Mapa">
-              <RouteMap
-                warehouses={warehouses}
-                vehicles={vehicles}
-                blockedStreets={blockedStreets}
-                orders={orders}
-                routes={routes}
-                isDarkTheme={isDark}
-              />
-            </MapErrorBoundary>
-          </div>
+          {mapSlot &&
+            createPortal(
+              <MapErrorBoundary fallbackTitle="Error en el Mapa">
+                <RouteMap
+                  warehouses={visual.warehouses}
+                  vehicles={visual.vehicles}
+                  blockedStreets={visual.blockedStreets}
+                  orders={visual.orders}
+                  routes={visual.routes}
+                  simMinutes={simMinutesVisible}
+                  isDarkTheme={isDark}
+                />
+              </MapErrorBoundary>,
+              mapSlot,
+            )}
         </div>
       </ToastProvider>
     </LiveAnnouncer>

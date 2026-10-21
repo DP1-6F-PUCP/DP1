@@ -35,6 +35,7 @@ import java.util.List;
 public final class EnsambladorRespuestas {
 
     private static final Logger log = LoggerFactory.getLogger(EnsambladorRespuestas.class);
+    private static final long HORAS_BLOQUEOS_VISIBLES = 24;
 
     private EnsambladorRespuestas() {
     }
@@ -63,7 +64,13 @@ public final class EnsambladorRespuestas {
                                 contexto.marcaTiempoActual()))
                         .toList(),
                 contexto.almacenes().stream().map(EnsambladorRespuestas::aAlmacenDTO).toList(),
-                contexto.bloqueos().stream().map(b -> aBloqueoDTO(b, contexto.marcaTiempoActual())).toList(),
+                // Solo los bloqueos vigentes o que empiezan en las próximas HORAS_BLOQUEOS_VISIBLES
+                // -- contexto.bloqueos() es el universo completo cargado (mes actual + siguiente, más
+                // de 1000 en datos reales) y era ~95% del estado enviado en CADA lote (≈330 KB de
+                // 355 KB medidos), cuando el visualizador solo dibuja los vigentes.
+                Bloqueo.filtrarEnHorizonte(contexto.bloqueos(), contexto.marcaTiempoActual(),
+                        contexto.marcaTiempoActual().plusHours(HORAS_BLOQUEOS_VISIBLES)).stream()
+                        .map(b -> aBloqueoDTO(b, contexto.marcaTiempoActual())).toList(),
                 eventosRecientes.stream().map(evento -> aEventoDTO(evento, anclaEventos)).toList(),
                 aMetricasDTO(reporte));
     }
@@ -129,9 +136,12 @@ public final class EnsambladorRespuestas {
             List<Almacen> almacenes, LocalDateTime instante) {
         int cargaActual = unidad.cargaActual();
         List<String> geometriaRetorno = calcularGeometriaRetorno(unidad, ciudad, bloqueos, almacenes, instante);
+        List<PuntoTrayectoriaDTO> trayectoria = unidad.getTrayectoriaLote().stream()
+                .map(p -> new PuntoTrayectoriaDTO(p.nodo().x(), p.nodo().y(), p.instante(), p.actividad().name()))
+                .toList();
         return new VehiculoDTO(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), unidad.getEstado().name(),
                 unidad.getPosicion().x(), unidad.getPosicion().y(), cargaActual, geometriaRetorno,
-                unidad.getActividadActual().name(), calcularActividadDesde(unidad));
+                unidad.getActividadActual().name(), calcularActividadDesde(unidad), trayectoria);
     }
 
     /**
@@ -192,8 +202,11 @@ public final class EnsambladorRespuestas {
         int stockActual = almacen instanceof AlmacenIntermedio intermedio ? intermedio.getStockActual() : 0;
         int capacidadMaxima = almacen instanceof AlmacenIntermedio intermedio ? intermedio.getCapacidadMaxima() : 0;
         float nivelOcupacion = capacidadMaxima > 0 ? (100f * stockActual / capacidadMaxima) : 0f;
+        float frecuenciaRecargaHoras = almacen instanceof AlmacenIntermedio intermedio
+                ? (float) intermedio.getFrecuenciaRecargaHoras()
+                : 0f;
         return new AlmacenDTO(nombre, esCentral, almacen.getPosicion().x(), almacen.getPosicion().y(), stockActual,
-                capacidadMaxima, nivelOcupacion);
+                capacidadMaxima, nivelOcupacion, frecuenciaRecargaHoras);
     }
 
     public static BloqueoDTO aBloqueoDTO(Bloqueo bloqueo, LocalDateTime instanteActual) {
@@ -269,9 +282,9 @@ public final class EnsambladorRespuestas {
                 (float) operacion.tiempoCargaAlmacenHoras(), operacion.maxParadasPorRuta());
     }
 
-    public static TipoVehiculoDTO aTipoVehiculoDTO(TipoVehiculo tipoVehiculo) {
+    public static TipoVehiculoDTO aTipoVehiculoDTO(TipoVehiculo tipoVehiculo, int cantidadUnidades) {
         return new TipoVehiculoDTO(tipoVehiculo.getId(), tipoVehiculo.getNombre(), tipoVehiculo.getCapacidad(),
-                (float) tipoVehiculo.getVelocidadKmH(), (float) tipoVehiculo.getCostoPorKm());
+                (float) tipoVehiculo.getVelocidadKmH(), (float) tipoVehiculo.getCostoPorKm(), cantidadUnidades);
     }
 
     public static MetricasOperacionDTO aMetricasDTO(ReporteDesempeno reporte) {

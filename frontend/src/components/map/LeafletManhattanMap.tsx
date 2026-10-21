@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
 import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
 import { getVehicleSemaforoStatus } from '../../utils/vehicleStatus';
+import { useSemaforoStore } from '../../store/semaforoStore';
 import { simulationEngine } from '../../engine/simulationEngine';
 
 export interface LeafletManhattanMapProps {
@@ -58,6 +59,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   cityHeight = GRID_HEIGHT_KM,
   className = '',
 }) => {
+  const umbralesSemaforo = useSemaforoStore((s) => s.umbrales);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
@@ -79,10 +81,10 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // posicion de la ejecucion anterior, etc.) -- ver el efecto de suscripcion mas abajo.
   const [buffering, setBuffering] = useState(true);
   // Linea de ruta del vehiculo seleccionado (feature de un teammate, portada aqui sobre el motor
-  // centralizado en vez de sobre el SincroVehiculo/posicionInterpolada viejo que reemplazamos) --
-  // ver el efecto de suscripcion mas abajo y simulationEngine.getCaminoRestante.
+  // centralizado) -- ver el efecto de suscripcion mas abajo y simulationEngine.getRutaVisible.
   const selectedRouteLineRef = useRef<L.Polyline | null>(null);
-  const selectedRouteTailRef = useRef<[number, number][]>([]);
+  // Marcadores del destino (anillo, punto y etiqueta) -- se mueven junto con el final de la linea.
+  const selectedRouteEndMarkersRef = useRef<Array<L.Marker | L.CircleMarker>>([]);
   const selectedVehicleIdRef = useRef<string | null>(selectedVehicleId);
   selectedVehicleIdRef.current = selectedVehicleId;
 
@@ -108,6 +110,15 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       dragging: false, // fixed position, perfectly centered
       zoomSnap: 0, // fractional zoom to fill 100% of container
       zoomDelta: 0.1,
+      // Bug real reportado ("el mapa sobrepasa la dimension de la pantalla", reproducido con Chrome
+      // headless): fitBounds animado competia con invalidateSize en cada cambio de tamaño del
+      // contenedor y el zoom final quedaba calculado para un tamaño viejo -- unas veces la grilla
+      // se salia del contenedor, otras quedaba chica. El mapa es fijo (sin zoom ni arrastre del
+      // usuario), asi que las animaciones no aportan nada: sin ellas el ajuste es inmediato y
+      // determinista.
+      zoomAnimation: false,
+      fadeAnimation: false,
+      markerZoomAnimation: false,
     });
 
     mapInstanceRef.current = map;
@@ -127,24 +138,21 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     warehousesLayerGroupRef.current.addTo(map);
     vehiclesLayerGroupRef.current.addTo(map);
 
-    // Fit bounds with zero padding to fill entire container
-    map.fitBounds(bounds, { padding: [0, 0] });
+    // Ajuste a la grilla completa, sin animacion (ver opciones del mapa). Un pequeño margen evita
+    // que los marcadores del borde (x=70, y=50) queden cortados a la mitad.
+    const ajustar = () => {
+      const m = mapInstanceRef.current;
+      if (!m) return;
+      m.invalidateSize({ animate: false });
+      m.fitBounds(bounds, { padding: [12, 12], animate: false });
+    };
+    ajustar();
 
     // Ensure map bounds are maximized on next tick
-    const fitTimer = setTimeout(() => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.invalidateSize();
-        mapInstanceRef.current.fitBounds(bounds, { padding: [0, 0] });
-      }
-    }, 60);
+    const fitTimer = setTimeout(ajustar, 60);
 
     // Resize observer to always adapt fixed map to container changes
-    const resizeObserver = new ResizeObserver(() => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.invalidateSize();
-        mapInstanceRef.current.fitBounds(bounds, { padding: [0, 0] });
-      }
-    });
+    const resizeObserver = new ResizeObserver(ajustar);
     resizeObserver.observe(mapContainerRef.current);
 
     return () => {
@@ -300,7 +308,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const group = routesLayerGroupRef.current;
     group.clearLayers();
     selectedRouteLineRef.current = null;
-    selectedRouteTailRef.current = [];
+    selectedRouteEndMarkersRef.current = [];
 
     if (!showProjectedRoutes) return;
     if (!selectedVehicleId) return;
@@ -341,19 +349,17 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const accent = isBroken ? '#94a3b8' : isReturning ? '#f59e0b' : '#38bdf8';
       const ringAccent = isBroken ? '#ef4444' : accent;
 
-      const firstPoint = routePath[0];
-      // La geometría del backend pertenece al último snapshot y puede comenzar en una
-      // posición distinta a la que el marcador ya alcanzó por interpolación. Al anteponer la
-      // posición actual hay que volver a normalizar el camino completo; de lo contrario el
-      // primer segmento queda diagonal (la línea visible se separa del camino Manhattan).
-      const destinationPath = normalizeManhattanPath(
-        firstPoint?.x === selectedVehicle.position.x && firstPoint.y === selectedVehicle.position.y
-          ? routePath
-          : [selectedVehicle.position, ...routePath]
-      );
-      // La geometría real termina en el destino que el backend pudo calcular. Usar ese extremo
-      // para el marcador evita que un pedido atrasado del endpoint /pedidos deje el círculo en
-      // otra ubicación distinta al final visible de la ruta.
+      // La linea sale del motor (simulationEngine.getRutaVisible): continua desde la posicion
+      // interpolada del marcador, por los tramos en cola, hasta el destino planificado. La
+      // geometria de las props queda solo como respaldo si el motor aun no tiene tramos.
+      const desdeMotor = simulationEngine.getRutaVisible(selectedVehicle.id);
+      const destinationPath = desdeMotor && desdeMotor.length > 1
+        ? desdeMotor
+        : normalizeManhattanPath(
+            routePath[0]?.x === selectedVehicle.position.x && routePath[0].y === selectedVehicle.position.y
+              ? routePath
+              : [selectedVehicle.position, ...routePath]
+          );
       const destination = destinationPath[destinationPath.length - 1];
 
       const routeLine = L.polyline(
@@ -369,14 +375,9 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         }
       ).addTo(group);
       selectedRouteLineRef.current = routeLine;
-      // La cola empieza en destinationPath[1]; el bucle de animación antepone el tramo restante
-      // del marcador hasta destinationPath[0] (ver caminoRestante).
-      selectedRouteTailRef.current = destinationPath
-        .slice(1)
-        .map((point) => [point.y, point.x] as [number, number]);
 
       // Outer dashed ring
-      L.circleMarker([destination.y, destination.x], {
+      const anillo = L.circleMarker([destination.y, destination.x], {
         radius: 7,
         color: ringAccent,
         weight: 1.5,
@@ -386,7 +387,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       }).addTo(group);
 
       // Inner solid circle
-      L.circleMarker([destination.y, destination.x], {
+      const punto = L.circleMarker([destination.y, destination.x], {
         radius: 3.5,
         color: '#ffffff',
         weight: 1,
@@ -400,7 +401,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       // circulo (que marca hacia DONDE VA el vehiculo, no donde esta -- legitimo que quede lejos
       // para uno en refrigerio/entregando a mitad de ruta) es indistinguible a simple vista entre
       // muchos iconos de vehiculo parecidos. Etiqueta chica para que quede inequivoco.
-      L.marker([destination.y, destination.x], {
+      const etiqueta = L.marker([destination.y, destination.x], {
         icon: L.divIcon({
           className: 'destino-seleccionado-label',
           html: `
@@ -421,6 +422,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         }),
         interactive: false,
       }).addTo(group);
+      selectedRouteEndMarkersRef.current = [anillo, punto, etiqueta];
     }
   }, [showProjectedRoutes, vehicles, routes, selectedVehicleId]);
 
@@ -520,7 +522,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
     vehicles.forEach((v) => {
       const isSelected = selectedVehicleId === v.id;
-      const semaforo = getVehicleSemaforoStatus(v, orders, simMinutes);
+      const semaforo = getVehicleSemaforoStatus(v, orders, simMinutes, umbralesSemaforo);
       const isDelayedOrBroken = semaforo.state === 'delayed' || v.status === 'broken';
       // Bug real reportado: un vehiculo en refrigerio (VehiculoDTO.actividad=EN_REFRIGERIO) se
       // veia en el mapa IDENTICO a uno viajando normalmente -- el semaforo solo mira riesgo de
@@ -657,7 +659,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         marker.setIcon(vehicleIcon);
       }
     });
-  }, [vehicles, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle]);
+  }, [vehicles, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, umbralesSemaforo]);
 
   // Suscripcion al motor de simulacion (engine/simulationEngine.ts): un callback por frame que
   // mueve los marcadores existentes segun la posicion ya interpolada que calcula el motor, y
@@ -665,10 +667,9 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // Montado una sola vez (deps []); el motor sigue corriendo (o pausado en segundo plano, ver
   // simulationEngine.ts) independientemente de si este efecto esta montado.
   //
-  // Para el vehiculo seleccionado tambien redibuja su linea de ruta: tramo pendiente del marcador
-  // hasta el final del tramo vigente (simulationEngine.getCaminoRestante, sigue el camino real y
-  // evita diagonales) + resto de la ruta (selectedRouteTailRef) -- feature de un teammate, portada
-  // aqui sobre el motor centralizado en vez del SincroVehiculo/posicionInterpolada que reemplazo.
+  // Para el vehiculo seleccionado tambien redibuja su linea de ruta (simulationEngine.getRutaVisible:
+  // lo que le falta recorrer de su trayectoria real + su camino planificado) y mueve el marcador
+  // de destino al final de esa linea -- feature de un teammate, portada sobre el motor.
   useEffect(() => {
     let bufferingAnterior = true;
     const unsubscribe = simulationEngine.subscribe((snap) => {
@@ -679,12 +680,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         }
 
         if (id === selectedVehicleIdRef.current && selectedRouteLineRef.current) {
-          const restante = simulationEngine.getCaminoRestante(id);
-          if (restante) {
-            selectedRouteLineRef.current.setLatLngs([
-              ...restante.map((p) => [p.y, p.x] as [number, number]),
-              ...selectedRouteTailRef.current,
-            ]);
+          const ruta = simulationEngine.getRutaVisible(id);
+          if (ruta && ruta.length > 1) {
+            selectedRouteLineRef.current.setLatLngs(ruta.map((p) => [p.y, p.x] as [number, number]));
+            const fin = ruta[ruta.length - 1];
+            for (const m of selectedRouteEndMarkersRef.current) m.setLatLng([fin.y, fin.x]);
           }
         }
       }

@@ -1,159 +1,92 @@
-import { BlockedStreet, Point, Route, Vehicle } from '../types';
-import { EngineSnapshot, SincroVehiculo } from './types';
+import { Point, Route, TrajectoryPoint, Vehicle, VehicleStatus } from '../types';
+import { EngineSnapshot, EstadoVisual, FrameData } from './types';
 
 /**
  * Motor de simulacion del front: singleton fuera del arbol de React, unica fuente de verdad del
- * "ahora" visual (reloj simulado extrapolado + posicion interpolada de cada vehiculo).
+ * "ahora" visual (reloj simulado + posicion y estado de cada vehiculo).
  *
- * Por que existe (AS-IS investigado en vivo antes de este cambio): habia 4 mecanismos de tiempo
- * independientes sin ningun estado compartido -- SimClock con su propio setInterval+extrapolacion
- * por `k`, LeafletManhattanMap con su propio requestAnimationFrame+buffer+extrapolacion por `sa`,
- * y los badges de "Entregando/En refrigerio · Xm" leyendo un nowMs congelado por poll. Ademas, el
- * bucle de animacion vivia en un solo requestAnimationFrame sin ningun manejo de
- * `visibilitychange` -- confirmado con la documentacion de Chromium que rAF se DETIENE por
- * completo (no se retrasa, se cancela) en pestañas en segundo plano, lo que explicaba los reportes
- * de "el front se queda pegado por mucho tiempo" aunque el backend seguia mandando lotes normal.
+ * Como funciona: el backend manda, por cada lote, la TRAYECTORIA REAL de cada vehiculo (cada nodo
+ * por el que paso con su instante simulado, y donde empezo/termino cada pausa -- ver
+ * VehiculoDTO.trayectoria). El motor:
+ *   1. guarda cada lote como un cuadro (estado completo + instante REAL en que llego);
+ *   2. renderiza con un retraso fijo (sa + margen) para tener siempre el lote siguiente ya en mano;
+ *   3. convierte ese instante real retrasado en un instante SIMULADO interpolando entre las marcas
+ *      de los dos lotes que lo encierran (relojEnRender);
+ *   4. ubica cada vehiculo en su trayectoria en ese instante simulado -- y su estado visible
+ *      (viajando / entregando / refrigerio) sale de la misma trayectoria.
  *
- * Este modulo consolida los primeros dos (reloj + buffer de vehiculos) en un solo lugar, con un
- * solo rAF, que SI maneja visibilitychange. La logica de interpolacion/buffer en si NO cambia --
- * es un traslado literal de lo que ya vivia en LeafletManhattanMap (ver el historial de esa
- * investigacion), no un rediseño del algoritmo.
+ * Antes el backend solo mandaba la posicion final de cada lote y el motor adivinaba el camino
+ * (geometria del lote anterior o una "L" Manhattan) y los tiempos (todo el lote en movimiento).
+ * Con la replanificacion por lote esa adivinanza fallaba seguido: diagonales, vehiculos
+ * "moviendose" mientras entregaban, paradas intermedias invisibles, saltos al llegar.
  */
 
-/** Retraso fijo (ms) con el que se renderiza respecto al reloj real -- ver EngineSnapshot. Debe
- * ser al menos tan grande como el intervalo real entre lotes. Se deriva de `sa` (minutos nominales
- * entre lotes) con este respaldo mientras `sa` todavia no llega. */
+/** Respaldo de `renderDelayMs` mientras todavia no se conoce `sa`. */
 const RENDER_DELAY_RESPALDO_MS = 20_000;
 
-function posicionInterpolada(sync: SincroVehiculo, renderTimeMs: number): Point {
-  const { origen, destino, waypoints, origenMs, destinoMs } = sync;
-  const span = destinoMs - origenMs;
-  const fraccion = span > 0 ? Math.min(1, Math.max(0, (renderTimeMs - origenMs) / span)) : 1;
-
-  if (waypoints.length < 2) {
-    return { x: origen.x + (destino.x - origen.x) * fraccion, y: origen.y + (destino.y - origen.y) * fraccion };
-  }
-
-  let distanciaTotal = 0;
-  const segmentos: number[] = [];
-  for (let i = 0; i < waypoints.length - 1; i++) {
-    const d = Math.abs(waypoints[i + 1].x - waypoints[i].x) + Math.abs(waypoints[i + 1].y - waypoints[i].y);
-    segmentos.push(d);
-    distanciaTotal += d;
-  }
-  if (distanciaTotal === 0) {
-    return destino;
-  }
-
-  let objetivo = fraccion * distanciaTotal;
-  for (let i = 0; i < segmentos.length; i++) {
-    const largo = segmentos[i];
-    if (objetivo <= largo || i === segmentos.length - 1) {
-      const t = largo > 0 ? Math.min(1, objetivo / largo) : 1;
-      const p0 = waypoints[i];
-      const p1 = waypoints[i + 1];
-      return { x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t };
-    }
-    objetivo -= largo;
-  }
-  return waypoints[waypoints.length - 1];
-}
-
 /**
- * Puntos desde la posicion interpolada actual hasta {@code destino}, siguiendo los waypoints del
- * tramo (axis-aligned si waypoints lo es) -- feature de un teammate (linea de ruta del vehiculo
- * seleccionado), portada aqui para usar origenMs/destinoMs reales en vez de inicioMs/duracionMs
- * adivinados. El primer elemento es la posicion interpolada actual; el ultimo es siempre
- * {@code destino}. Se usa para dibujar la linea de la ruta seleccionada: antes la linea iba de la
- * posicion interpolada directo al SIGUIENTE punto de la cola, saltandose el nodo intermedio
- * (destino) y produciendo segmentos en diagonal (imposibles en una grilla Manhattan) en las
- * esquinas.
+ * Margen (ms) que se suma a `sa*60000` para formar `renderDelayMs`. El lote nuevo llega por
+ * WebSocket (el backend revisa cada 250ms) o, si el socket se cae, por el polling de respaldo
+ * (cada 3s): sin margen, ese retraso hacia que el render alcanzara el final del ultimo lote
+ * recibido antes de tener el siguiente, y el vehiculo se congelaba y luego saltaba (reporte
+ * directo: "se queda parado y luego salta de posicion" en CINCO_DIAS).
  */
-function caminoRestanteDesde(sync: SincroVehiculo, renderTimeMs: number): Point[] {
-  const { origen, destino, waypoints, origenMs, destinoMs } = sync;
-  const span = destinoMs - origenMs;
-  const fraccion = span > 0 ? Math.min(1, Math.max(0, (renderTimeMs - origenMs) / span)) : 1;
-  const camino = waypoints.length >= 2 ? waypoints : [origen, destino];
+const MARGEN_LATENCIA_POLLING_MS = 6_000;
 
-  const largos: number[] = [];
-  let total = 0;
-  for (let i = 0; i < camino.length - 1; i++) {
-    const d = Math.abs(camino[i + 1].x - camino[i].x) + Math.abs(camino[i + 1].y - camino[i].y);
-    largos.push(d);
-    total += d;
-  }
-  if (total === 0) return [destino];
+const MAX_CUADROS = 12;
+/** Cuanto historial de trayectoria se conserva detras del instante visible (ms simulados). */
+const HISTORIAL_TRAYECTORIA_MS = 6 * 3600_000;
 
-  let objetivo = fraccion * total;
-  for (let i = 0; i < largos.length; i++) {
-    if (objetivo <= largos[i] || i === largos.length - 1) {
-      const t = largos[i] > 0 ? Math.min(1, objetivo / largos[i]) : 1;
-      const p0 = camino[i];
-      const p1 = camino[i + 1];
-      const punto = { x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t };
-      return [punto, ...camino.slice(i + 1)];
-    }
-    objetivo -= largos[i];
-  }
-  return [destino];
+/** Un lote tal como llego al front: su estado completo + el instante REAL en que llego. */
+interface Cuadro {
+  arrivalMs: number;
+  marca: string | null;
+  marcaMs: number | null;
+  data: FrameData;
 }
 
-/** {@code true} si el segmento axis-aligned p0-p1 se superpone con algun tramo de {@code bloqueos}. */
-function segmentoBloqueado(p0: Point, p1: Point, bloqueos: BlockedStreet[]): boolean {
-  const horizontal = p0.y === p1.y;
-  const vertical = p0.x === p1.x;
-  if (!horizontal && !vertical) return false;
-  const loX = Math.min(p0.x, p1.x);
-  const hiX = Math.max(p0.x, p1.x);
-  const loY = Math.min(p0.y, p1.y);
-  const hiY = Math.max(p0.y, p1.y);
-  return bloqueos.some((b) => {
-    if (horizontal && b.start.y === b.end.y && b.start.y === p0.y) {
-      const bLo = Math.min(b.start.x, b.end.x);
-      const bHi = Math.max(b.start.x, b.end.x);
-      return bLo < hiX && bHi > loX;
-    }
-    if (vertical && b.start.x === b.end.x && b.start.x === p0.x) {
-      const bLo = Math.min(b.start.y, b.end.y);
-      const bHi = Math.max(b.start.y, b.end.y);
-      return bLo < hiY && bHi > loY;
-    }
-    return false;
-  });
+interface PosicionEnLinea {
+  punto: Point;
+  /** Nodo entero del ultimo punto alcanzado (para mostrar coordenadas en el panel). */
+  nodo: Point;
+  act: TrajectoryPoint['act'];
+  moviendo: boolean;
 }
 
-/** Puente Manhattan local (L, en cualquiera de sus dos orientaciones) entre dos puntos, para el
- * tramo de transicion cuando NO hay camino real conocido -- prueba ambas orientaciones contra
- * {@code blockedStreets} y usa la primera que no cruce ninguna; null si ambas cruzan. */
-function puenteManhattanSeguro(desde: Point, hasta: Point, bloqueos: BlockedStreet[]): Point[] | null {
-  if (desde.x === hasta.x && desde.y === hasta.y) {
-    return [desde, hasta];
+/** Posicion de un vehiculo en su trayectoria en el instante simulado `t`. Los puntos consecutivos
+ * son nodos vecinos (tramos rectos) o el mismo nodo (pausa); dos puntos con el mismo instante y
+ * distinta posicion son un traslado instantaneo (p. ej. averia tipo 2/3 al almacen central). */
+function posicionEn(linea: TrajectoryPoint[], t: number): PosicionEnLinea | null {
+  if (linea.length === 0) return null;
+  let i = 0;
+  // Ultimo punto con instante <= t (ante empates, el ultimo: un traslado instantaneo ya ocurrio).
+  for (let j = 0; j < linea.length; j++) {
+    if (linea[j].t <= t) i = j;
+    else break;
   }
-  if (desde.x === hasta.x || desde.y === hasta.y) {
-    return segmentoBloqueado(desde, hasta, bloqueos) ? null : [desde, hasta];
+  const a = linea[i];
+  const b = linea[i + 1];
+  if (!b || t <= a.t || b.t <= a.t) {
+    return { punto: { x: a.x, y: a.y }, nodo: { x: a.x, y: a.y }, act: a.act, moviendo: false };
   }
-  const opciones: Point[][] = [
-    [desde, { x: hasta.x, y: desde.y }, hasta],
-    [desde, { x: desde.x, y: hasta.y }, hasta],
-  ];
-  for (const opcion of opciones) {
-    const bloqueada = segmentoBloqueado(opcion[0], opcion[1], bloqueos) || segmentoBloqueado(opcion[1], opcion[2], bloqueos);
-    if (!bloqueada) return opcion;
-  }
-  return null;
+  const f = (t - a.t) / (b.t - a.t);
+  const moviendo = a.x !== b.x || a.y !== b.y;
+  return {
+    punto: { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f },
+    nodo: { x: a.x, y: a.y },
+    act: a.act,
+    moviendo,
+  };
 }
 
 /** Bug real reportado (captura: un vehiculo en refrigerio "no se ve en el mapa"): varios
- * vehiculos pueden terminar en el MISMO punto exacto -- el caso mas comun es el almacen central,
- * cuando mas de uno tiene el refrigerio vencido justo al momento de ser despachado y lo toma ahi
- * mismo antes de salir. Sus marcadores se dibujan unos encima de otros; sin ningun desplazamiento,
- * solo el ultimo pintado queda visible, los demas quedan perfectamente ocultos debajo. Abre un
- * abanico chico y deterministico (mismo orden de ids siempre, sin parpadeo entre frames) alrededor
- * del punto compartido -- es puramente cosmetico, se recalcula fresco cada frame desde las
- * posiciones reales, asi que deja de aplicarse solo en cuanto alguno se mueve de verdad. */
-function separarPosicionesSuperpuestas(posiciones: Map<string, Point>): void {
+ * vehiculos DETENIDOS en el mismo punto exacto (tipicamente el almacen central) se dibujan uno
+ * encima de otro. Se abren en un abanico chico y deterministico. Los que solo estan pasando por
+ * encima no se agrupan (antes saltaban al abanico en plena animacion). */
+function separarPosicionesSuperpuestas(posiciones: Map<string, Point>, enMovimiento: Set<string>): void {
   const grupos = new Map<string, string[]>();
   for (const [id, p] of posiciones) {
+    if (enMovimiento.has(id)) continue;
     const clave = `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
     let grupo = grupos.get(clave);
     if (!grupo) {
@@ -178,10 +111,27 @@ function separarPosicionesSuperpuestas(posiciones: Map<string, Point>): void {
   }
 }
 
+/** Estado visible de un vehiculo segun lo que hace en su trayectoria en este instante. Averia y
+ * mantenimiento mandan sobre la trayectoria (el vehiculo no opera). */
+function statusVisible(base: VehicleStatus, act: TrajectoryPoint['act'] | undefined): VehicleStatus {
+  if (base === 'broken' || base === 'maintenance' || !act) return base;
+  switch (act) {
+    case 'ENTREGANDO':
+      return 'delivering';
+    case 'EN_REFRIGERIO':
+      return 'on_break';
+    case 'VIAJANDO':
+      return 'en_route';
+    default:
+      return 'idle';
+  }
+}
+
 export interface IngestParams {
   vehicles: Vehicle[];
   routes: Route[];
-  blockedStreets: BlockedStreet[];
+  /** Estado completo del lote (para los cuadros que alimentan getEstadoVisual). */
+  frame: FrameData;
   idEjecucion: string | undefined;
   sa: number | undefined;
   marcaTiempoActual: string | null;
@@ -190,15 +140,16 @@ export interface IngestParams {
 }
 
 class SimulationEngine {
-  private vehicleBuffers = new Map<string, SincroVehiculo[]>();
   private renderDelayMs = RENDER_DELAY_RESPALDO_MS;
   private idEjecucionAnterior: string | undefined;
-  private loteCount = 0;
   private buffering = true;
   private bufferingDesdeMs = performance.now();
 
-  // Reloj simulado: mismo mecanismo que antes tenia SimClock (extrapolar por k desde el ultimo
-  // marcaTiempoActual real), ahora centralizado aca.
+  /** Trayectoria acumulada de cada vehiculo (lotes consecutivos encadenados). */
+  private lineas = new Map<string, TrajectoryPoint[]>();
+  /** Camino planificado mas reciente (geometria de su ruta, o de regreso) -- para la linea de ruta. */
+  private futuros = new Map<string, Point[]>();
+
   private relojMarcaConocidaValor: string | null = null;
   private relojMarcaConocidaMs: number | null = null;
   private relojInstanteConocidoMs = performance.now();
@@ -208,12 +159,17 @@ class SimulationEngine {
   private listeners = new Set<(snap: EngineSnapshot) => void>();
   private rafId: number | null = null;
 
-  /** Llamado cada vez que llega un lote nuevo (push WS o poll) -- NUNCA desde el bucle de render.
-   * Logica identica a la que antes vivia en el efecto de sincronizacion de LeafletManhattanMap. */
-  ingest(params: IngestParams): void {
-    const { vehicles, routes, blockedStreets, idEjecucion, sa, marcaTiempoActual, k, avanzando } = params;
+  private cuadros: Cuadro[] = [];
+  private estadoVisual: EstadoVisual | null = null;
+  private claveVisual = '';
+  private visualListeners = new Set<() => void>();
+  private ultimoSimNow: number | null = null;
 
-    this.renderDelayMs = sa && sa > 0 ? sa * 60_000 : RENDER_DELAY_RESPALDO_MS;
+  /** Llamado cada vez que cambian los datos en vivo (push WS o poll) -- NUNCA desde el render. */
+  ingest(params: IngestParams): void {
+    const { vehicles, routes, frame, idEjecucion, sa, marcaTiempoActual, k, avanzando } = params;
+
+    this.renderDelayMs = sa && sa > 0 ? sa * 60_000 + MARGEN_LATENCIA_POLLING_MS : RENDER_DELAY_RESPALDO_MS;
     this.k = k;
     this.avanzando = avanzando;
 
@@ -226,88 +182,108 @@ class SimulationEngine {
     const huboResetDeEjecucion = Boolean(idEjecucion)
       && this.idEjecucionAnterior != null
       && this.idEjecucionAnterior !== idEjecucion;
-    if (huboResetDeEjecucion) {
-      this.vehicleBuffers.clear();
-      this.loteCount = 0;
-      this.bufferingDesdeMs = performance.now();
-      this.buffering = true;
-    }
     if (idEjecucion) {
       this.idEjecucionAnterior = idEjecucion;
     }
     if (huboResetDeEjecucion) {
-      // Igual que antes: se espera a que `vehicles` refleje la ejecucion nueva de verdad (el
-      // refetch/WS lo trae en breve) en vez de reconstruir con datos que podrian ser viejos.
+      this.lineas.clear();
+      this.futuros.clear();
+      this.cuadros = [];
+      this.estadoVisual = null;
+      this.claveVisual = '';
+      this.bufferingDesdeMs = performance.now();
+      this.buffering = true;
+      // Se espera a que `vehicles` refleje la ejecucion nueva (el refetch/WS lo trae en breve).
       return;
     }
 
+    const loteNuevo = this.registrarCuadro(frame, marcaTiempoActual);
+
     const idsActuales = new Set(vehicles.map((v) => v.id));
-    for (const id of this.vehicleBuffers.keys()) {
+    for (const id of this.lineas.keys()) {
       if (!idsActuales.has(id)) {
-        this.vehicleBuffers.delete(id);
+        this.lineas.delete(id);
+        this.futuros.delete(id);
       }
     }
-
-    let huboLoteNuevo = false;
 
     for (const v of vehicles) {
-      let cola = this.vehicleBuffers.get(v.id);
-      if (!cola) {
-        cola = [];
-        this.vehicleBuffers.set(v.id, cola);
-      }
-      const ultimoBracket = cola[cola.length - 1];
-
       const rutaActiva = routes.find((r) => r.vehicleId === v.id && r.status === 'in_progress');
-      const fuenteId = rutaActiva ? rutaActiva.id : 'retorno';
-
-      const sinCambios = ultimoBracket && ultimoBracket.destino.x === v.position.x
-        && ultimoBracket.destino.y === v.position.y && ultimoBracket.fuenteId === fuenteId;
-      if (sinCambios) {
-        continue;
-      }
-
-      const ahora = performance.now();
-      const origen = ultimoBracket ? ultimoBracket.destino : v.position;
-      const origenMs = ultimoBracket ? ultimoBracket.destinoMs : ahora - this.renderDelayMs;
-
-      const caminoFuturoAnterior = ultimoBracket?.caminoFuturo ?? [];
-      const idxDestino = caminoFuturoAnterior.findIndex((p) => p.x === v.position.x && p.y === v.position.y);
-      const hayCaminoReal = idxDestino > 0;
-      const puenteSeguro = hayCaminoReal ? null : puenteManhattanSeguro(origen, v.position, blockedStreets);
-      const waypoints = hayCaminoReal ? caminoFuturoAnterior.slice(0, idxDestino + 1) : puenteSeguro ?? [];
-      const origenSeguro = hayCaminoReal || puenteSeguro ? origen : v.position;
-
-      const caminoFuturo = rutaActiva?.waypoints ?? v.returnPath;
-
-      cola.push({
-        origen: origenSeguro,
-        origenMs,
-        destino: v.position,
-        destinoMs: ahora,
-        waypoints,
-        caminoFuturo,
-        fuenteId,
-      });
-      huboLoteNuevo = true;
-      if (cola.length > 8) {
-        cola.splice(0, cola.length - 8);
+      this.futuros.set(v.id, rutaActiva?.waypoints ?? v.returnPath ?? []);
+      if (loteNuevo) {
+        this.agregarTrayectoria(v);
       }
     }
 
-    if (huboLoteNuevo) {
-      this.loteCount += 1;
-      if (this.loteCount >= 2) {
-        this.buffering = false;
-      }
+    if (this.cuadros.length >= 2) {
+      this.buffering = false;
     }
   }
 
-  /** Calcula el snapshot "ahora mismo" -- puro respecto al estado interno, se puede llamar tanto
-   * desde el bucle de render (push a suscriptores) como bajo demanda (pull, ver getSnapshotNow).
-   * Efecto colateral intencional: consume (shift) tramos ya reproducidos del todo -- es seguro
-   * llamarlo mas de una vez por frame desde distintos lugares, siempre converge al mismo tramo
-   * vigente para el renderTimeMs de ese instante. */
+  /** Encadena la trayectoria del lote recien llegado a la acumulada del vehiculo. */
+  private agregarTrayectoria(v: Vehicle): void {
+    let linea = this.lineas.get(v.id);
+    if (!linea) {
+      linea = [];
+      this.lineas.set(v.id, linea);
+    }
+    const nuevos = v.trajectory.length > 0
+      ? v.trajectory
+      : this.relojMarcaConocidaMs != null
+        ? [{ x: v.position.x, y: v.position.y, t: this.relojMarcaConocidaMs, act: 'INACTIVO' as const }]
+        : [];
+    for (const p of nuevos) {
+      const ultimo = linea[linea.length - 1];
+      if (ultimo && p.t < ultimo.t) continue; // nunca hacia atras
+      if (ultimo && p.t === ultimo.t && p.x === ultimo.x && p.y === ultimo.y && p.act === ultimo.act) continue;
+      linea.push(p);
+    }
+  }
+
+  /** Agrega el cuadro de un lote nuevo (true) o actualiza el ultimo si es el MISMO lote, p. ej.
+   * porque llego despues la lista de pedidos (false). */
+  private registrarCuadro(data: FrameData, marca: string | null): boolean {
+    const ultimo = this.cuadros[this.cuadros.length - 1];
+    if (ultimo && ultimo.marca === marca) {
+      ultimo.data = data;
+      this.claveVisual = '';
+      return false;
+    }
+    this.cuadros.push({ arrivalMs: performance.now(), marca, marcaMs: marca ? Date.parse(marca) : null, data });
+    if (this.cuadros.length > MAX_CUADROS) {
+      this.cuadros.splice(0, this.cuadros.length - MAX_CUADROS);
+    }
+    return true;
+  }
+
+  /** Indice del ultimo cuadro que ya habia llegado en el instante de render (o el primero). */
+  private indiceCuadro(renderTimeMs: number): number {
+    let idx = 0;
+    for (let i = 0; i < this.cuadros.length; i++) {
+      if (this.cuadros[i].arrivalMs <= renderTimeMs) idx = i;
+      else break;
+    }
+    return idx;
+  }
+
+  /** Instante simulado que corresponde al instante real de render: interpolado entre las marcas
+   * de los dos lotes que lo encierran; si el siguiente todavia no llego, extrapolado por k (solo
+   * si la ejecucion avanza). */
+  private relojEnRender(renderTimeMs: number): number | null {
+    if (this.cuadros.length === 0) return this.relojMarcaConocidaMs;
+    const i = this.indiceCuadro(renderTimeMs);
+    const actual = this.cuadros[i];
+    if (actual.marcaMs == null) return null;
+    if (renderTimeMs < actual.arrivalMs) return actual.marcaMs;
+    const siguiente = this.cuadros[i + 1];
+    if (siguiente && siguiente.marcaMs != null && siguiente.arrivalMs > actual.arrivalMs) {
+      const f = Math.min(1, (renderTimeMs - actual.arrivalMs) / (siguiente.arrivalMs - actual.arrivalMs));
+      return actual.marcaMs + f * (siguiente.marcaMs - actual.marcaMs);
+    }
+    return this.avanzando && this.k > 0 ? actual.marcaMs + this.k * (renderTimeMs - actual.arrivalMs) : actual.marcaMs;
+  }
+
+  /** Snapshot "ahora mismo" -- se llama desde el bucle de render (push) o bajo demanda (pull). */
   private computeSnapshot(): EngineSnapshot {
     const ahoraReal = performance.now();
     const renderTimeMs = ahoraReal - this.renderDelayMs;
@@ -316,48 +292,104 @@ class SimulationEngine {
       this.buffering = false;
     }
 
+    const simNow = this.relojEnRender(renderTimeMs);
+    this.ultimoSimNow = simNow;
+
     const vehiclePositions = new Map<string, Point>();
-    for (const [id, cola] of this.vehicleBuffers) {
-      while (cola.length > 1 && renderTimeMs >= cola[0].destinoMs) {
-        cola.shift();
+    const enMovimiento = new Set<string>();
+    const estados = new Map<string, PosicionEnLinea>();
+    if (simNow != null) {
+      for (const [id, linea] of this.lineas) {
+        // Poda: conserva poco historial detras del instante visible.
+        while (linea.length > 2 && linea[1].t < simNow - HISTORIAL_TRAYECTORIA_MS) linea.shift();
+        const pos = posicionEn(linea, simNow);
+        if (!pos) continue;
+        vehiclePositions.set(id, pos.punto);
+        estados.set(id, pos);
+        if (pos.moviendo) enMovimiento.add(id);
       }
-      const bracket = cola[0];
-      if (!bracket) continue;
-      const punto = renderTimeMs < bracket.origenMs ? bracket.origen : posicionInterpolada(bracket, renderTimeMs);
-      vehiclePositions.set(id, punto);
     }
 
-    separarPosicionesSuperpuestas(vehiclePositions);
+    separarPosicionesSuperpuestas(vehiclePositions, enMovimiento);
+    this.actualizarEstadoVisual(renderTimeMs, simNow, estados);
 
     const segundosDesdeUltimoLote = Math.round((ahoraReal - this.relojInstanteConocidoMs) / 1000);
-    const nowSimMs = this.avanzando && this.relojMarcaConocidaMs != null && this.k > 0
-      ? this.relojMarcaConocidaMs + this.k * segundosDesdeUltimoLote * 1000
-      : this.relojMarcaConocidaMs;
-
-    return { vehiclePositions, buffering: this.buffering, nowSimMs, segundosDesdeUltimoLote };
+    return { vehiclePositions, buffering: this.buffering, nowSimMs: simNow, segundosDesdeUltimoLote };
   }
 
-  /** Lectura bajo demanda (pull) sin suscribirse -- para consumidores de baja frecuencia como
-   * SimClock, que no necesitan re-renderizar 60 veces por segundo. */
+  /**
+   * Recalcula el estado visible y avisa a sus suscriptores solo si cambio. Base: el cuadro del
+   * lote que se esta reproduciendo (el primero cuya marca alcanza el instante visible). El estado
+   * de cada vehiculo (viajando / entregando / refrigerio / inactivo) sale de su trayectoria en
+   * ese instante -- el mismo dato que mueve su marcador, asi que nunca se contradicen.
+   */
+  private actualizarEstadoVisual(renderTimeMs: number, simNow: number | null, estados: Map<string, PosicionEnLinea>): void {
+    if (this.cuadros.length === 0) return;
+    let base = this.cuadros[this.indiceCuadro(renderTimeMs)];
+    if (simNow != null) {
+      const enReproduccion = this.cuadros.find((c) => c.marcaMs != null && c.marcaMs >= simNow);
+      if (enReproduccion) base = enReproduccion;
+    }
+
+    let firma = '';
+    for (const v of base.data.vehicles) {
+      const e = estados.get(v.id);
+      firma += `${v.id}:${e?.act ?? '-'}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
+    }
+    const clave = `${base.arrivalMs}|${firma}`;
+    if (clave === this.claveVisual) return;
+    this.claveVisual = clave;
+
+    const vehicles = base.data.vehicles.map((v) => {
+      const e = estados.get(v.id);
+      if (!e) return v;
+      return { ...v, status: statusVisible(v.status, e.act), position: e.nodo };
+    });
+    this.estadoVisual = { ...base.data, vehicles, marcaVisibleMs: simNow ?? base.marcaMs };
+    for (const fn of this.visualListeners) fn();
+  }
+
+  /** Estado que la UI debe mostrar ahora (mismo instante que el mapa). Referencia estable
+   * mientras no cambie -- apta para useSyncExternalStore. null si aun no hay datos. */
+  getEstadoVisual = (): EstadoVisual | null => this.estadoVisual;
+
+  subscribeVisual = (fn: () => void): (() => void) => {
+    this.visualListeners.add(fn);
+    return () => {
+      this.visualListeners.delete(fn);
+    };
+  };
+
   getSnapshotNow(): EngineSnapshot {
     return this.computeSnapshot();
   }
 
-  /** Camino restante (desde la posicion interpolada actual hasta el final del tramo vigente,
-   * siguiendo los waypoints reales) para UN vehiculo -- a diferencia de getSnapshotNow/subscribe
-   * (posicion final de TODOS los vehiculos), esto expone el camino geometrico restante de uno
-   * solo, bajo demanda. Usado por la linea de ruta del vehiculo seleccionado en
-   * LeafletManhattanMap. null si el vehiculo no tiene ningun tramo conocido todavia. */
-  getCaminoRestante(vehicleId: string): Point[] | null {
-    const cola = this.vehicleBuffers.get(vehicleId);
-    const bracket = cola?.[0];
-    if (!bracket) return null;
-    const renderTimeMs = performance.now() - this.renderDelayMs;
-    return caminoRestanteDesde(bracket, renderTimeMs);
+  /**
+   * Linea de ruta de UN vehiculo, continua y en el mismo instante que su marcador: desde su
+   * posicion actual, por lo que le falta recorrer de la trayectoria ya recibida, y luego por su
+   * camino planificado (geometria del ultimo lote) hasta el destino. null si no hay datos.
+   */
+  getRutaVisible(vehicleId: string): Point[] | null {
+    const linea = this.lineas.get(vehicleId);
+    const simNow = this.ultimoSimNow;
+    if (!linea || linea.length === 0 || simNow == null) return null;
+    const actual = posicionEn(linea, simNow);
+    if (!actual) return null;
+    const camino: Point[] = [actual.punto];
+    for (const p of linea) {
+      if (p.t > simNow) {
+        const ultimo = camino[camino.length - 1];
+        if (ultimo.x !== p.x || ultimo.y !== p.y) camino.push({ x: p.x, y: p.y });
+      }
+    }
+    const futuro = this.futuros.get(vehicleId) ?? [];
+    const fin = camino[camino.length - 1];
+    const idx = futuro.findIndex((p) => p.x === fin.x && p.y === fin.y);
+    camino.push(...(idx >= 0 ? futuro.slice(idx + 1) : []));
+    return camino;
   }
 
-  /** Suscripcion de alta frecuencia (push, un callback por frame) -- para el mapa, que muta
-   * marcadores de Leaflet directamente sin pasar por el ciclo de render de React. */
+  /** Suscripcion de alta frecuencia (un callback por frame) -- para el mapa. */
   subscribe(fn: (snap: EngineSnapshot) => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
@@ -387,15 +419,9 @@ class SimulationEngine {
 
 export const simulationEngine = new SimulationEngine();
 
-// Bug real corregido (AS-IS investigado en vivo: "el front se queda pegado por mucho tiempo" en
-// pruebas live, pese a que el backend seguia mandando lotes normalmente): confirmado con la
-// documentacion oficial de Chromium que requestAnimationFrame se DETIENE por completo (no se
-// retrasa) en pestañas en segundo plano -- sin este manejo, el bucle de render del motor se
-// congelaba en silencio al perder foco y nunca se reanudaba solo. Como cada tramo guarda
-// timestamps REALES (no deltas acumulados), simplemente reanudar el rAF al volver es suficiente:
-// no hace falta ninguna logica de "recuperar el tiempo perdido", el primer frame post-regreso ya
-// calcula renderTimeMs fresco contra el reloj real y cae en el lugar correcto de la cola (que
-// siguio llenandose via WebSocket mientras la pestaña estaba oculta, porque solo el rAF se pausa).
+// requestAnimationFrame se DETIENE por completo en pestañas en segundo plano (documentacion de
+// Chromium) -- sin esto, el bucle de render se congelaba en silencio al perder foco. Como todo se
+// calcula contra el reloj real (no deltas acumulados), basta con reanudar el rAF al volver.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {

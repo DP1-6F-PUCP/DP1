@@ -52,6 +52,16 @@ export interface VehiculoDTO {
   // Instante (LocalDateTime ISO sin zona) en que arranco la fase actual de `actividad` --
   // solo presente para ENTREGANDO/EN_REFRIGERIO, null en cualquier otro caso.
   actividadDesde: string | null;
+  // Recorrido real del ultimo lote, nodo a nodo con instantes simulados (incluye pausas): desde
+  // cada punto hasta el siguiente el vehiculo hace `actividad`.
+  trayectoria: PuntoTrayectoriaDTO[];
+}
+
+export interface PuntoTrayectoriaDTO {
+  x: number;
+  y: number;
+  instante: string; // LocalDateTime ISO (sin zona)
+  actividad: ActividadVehiculo;
 }
 
 export interface RutaDTO {
@@ -76,6 +86,7 @@ export interface AlmacenDTO {
   stockActual: number;
   capacidadMaxima: number;
   nivelOcupacion: number; // 0..100 (ya es porcentaje, ver EnsambladorRespuestas.aAlmacenDTO -- NO es una fracción 0..1)
+  frecuenciaRecargaHoras: number; // 0 para el central (no se recarga, stock infinito)
 }
 
 export interface BloqueoDTO {
@@ -131,6 +142,7 @@ export interface TipoVehiculoDTO {
   capacidad: number;
   velocidadKmH: number;
   costoPorKm: number;
+  cantidadUnidades: number; // unidades de este tipo en la flota vigente
 }
 
 export interface ConfiguracionActualDTO {

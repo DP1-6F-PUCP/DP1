@@ -1,20 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { escenariosApi } from '../../../services/escenariosApi';
 import { useScenarioStore } from '../../../store/scenarioStore';
-import { TipoEscenarioBackend } from '../../../types/backend';
+import { useConfigInicialStore } from '../../../store/configInicialStore';
+import { SeleccionarEscenarioRequest } from '../../../types/backend';
 
 export function useEscenario() {
   const ejecucion = useScenarioStore((s) => s.ejecucion);
   const setEjecucion = useScenarioStore((s) => s.setEjecucion);
+  const limpiarAjustesPendientes = useConfigInicialStore((s) => s.limpiar);
   const queryClient = useQueryClient();
 
   const iniciarMutation = useMutation({
-    mutationFn: ({ tipo, fechaInicioSimulada }: { tipo: TipoEscenarioBackend; fechaInicioSimulada?: string }) =>
-      escenariosApi.iniciarEscenario({ tipo, fechaInicioSimulada }),
+    mutationFn: (request: SeleccionarEscenarioRequest) => escenariosApi.iniciarEscenario(request),
     onSuccess: (dto) => {
       setEjecucion(dto);
+      // Los ajustes ya forman parte de la configuración vigente del servidor.
+      limpiarAjustesPendientes();
       queryClient.invalidateQueries({ queryKey: ['estado-operacion'] });
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracion'] });
     },
   });
 
