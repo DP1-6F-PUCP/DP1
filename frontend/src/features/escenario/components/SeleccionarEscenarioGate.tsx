@@ -1,113 +1,106 @@
 import React, { useState } from 'react';
 import { useEscenario } from '../hooks/useEscenario';
 import { useDescubrirEjecucionActiva } from '../../../hooks/useDescubrirEjecucionActiva';
-import { TipoEscenarioBackend } from '../../../types/backend';
+import { useScenarioStore } from '../../../store/scenarioStore';
 import { formatDateForInput } from '../../../utils/simulation';
+import { Play, Loader2 } from 'lucide-react';
 
-const OPCIONES: { tipo: TipoEscenarioBackend; label: string; description: string }[] = [
-  { tipo: 'DIA_A_DIA', label: 'Día a día', description: 'Operación continua en tiempo real (k=1).' },
-  { tipo: 'CINCO_DIAS', label: 'Cinco días', description: 'Evaluación comprimida de 5 días simulados.' },
-  { tipo: 'COLAPSO_LOGISTICO', label: 'Colapso logístico', description: 'Estrés hasta el primer incumplimiento.' },
-];
-
-/**
- * Bloquea el resto de la app hasta que exista una ejecucion activa -- sin esto, GET
- * /api/estado-operacion siempre devuelve un contexto vacio (OrquestadorOperacion ni existe).
- * seleccionarEscenario es idempotente en el backend: si otro dispositivo ya inicio una ejecucion,
- * esta llamada simplemente se le une en vez de crear una segunda.
- */
-// Mismo criterio que ServicioPlanificacionImpl.esEjecucionActiva: PAUSADA sigue contando como
-// activa (reversible, la app debe seguir visible aunque congelada); FINALIZADA/
-// DETENIDA_POR_INCUMPLIMIENTO no.
 const ESTADOS_ACTIVOS = new Set(['INICIADA', 'EN_CURSO', 'PAUSADA']);
 
-export const SeleccionarEscenarioGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const SeleccionarEscenarioGate: React.FC<{
+  children: React.ReactNode;
+}> = ({ children }) => {
   const { ejecucion, iniciarEscenario, isIniciando, error } = useEscenario();
   const { verificando } = useDescubrirEjecucionActiva();
-  const [tipo, setTipo] = useState<TipoEscenarioBackend>('DIA_A_DIA');
+  const tipo = useScenarioStore((s) => s.selectedScenarioType);
   const [fecha, setFecha] = useState(formatDateForInput(new Date()));
+  const [hora, setHora] = useState('07:00');
 
-  if (ejecucion && ESTADOS_ACTIVOS.has(ejecucion.estado)) {
+  const hasActive = Boolean(ejecucion && ESTADOS_ACTIVOS.has(ejecucion.estado));
+
+  if (hasActive) {
     return <>{children}</>;
   }
 
-  // Evita el parpadeo de "Iniciar ejecución" seguido de un salto al dashboard apenas resuelve la
-  // consulta de useDescubrirEjecucionActiva (GET /api/escenarios/activa).
-  if (verificando) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-[#0B111E] text-slate-400 text-xs">
-        Buscando ejecución activa...
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 flex items-center justify-center bg-[#0B111E] text-slate-100 p-6">
-      <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/95 p-6 space-y-5">
-        <div>
-          <h1 className="text-lg font-bold text-white">Iniciar ejecución</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Elige el tipo de escenario para arrancar el planificador. Si ya hay una ejecución activa en
-            cualquier dispositivo, esta pantalla se une a ella en vez de crear una nueva.
-          </p>
-        </div>
+    <div className="absolute inset-0 z-10 flex h-full w-full items-center justify-center overflow-auto bg-[var(--color-background)] px-5 py-10 text-[var(--color-text-primary)] animate-in fade-in">
+        {verificando ? (
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+            <span>Verificando ejecución activa...</span>
+          </div>
+        ) : (
+          <div className="w-full max-w-[405px] space-y-7">
+            <div className="text-center">
+              <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                Escenario:
+                <strong className="font-semibold text-slate-800 dark:text-slate-200">
+                  {tipo === 'DIA_A_DIA' ? 'Tiempo Real' : tipo === 'CINCO_DIAS' ? 'Simulación 5 Días' : 'Colapso Logístico'}
+                </strong>
+              </div>
+              <h1 className="text-[26px] font-bold tracking-tight text-slate-950 dark:text-slate-100">Inicio de ejecución</h1>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Define la fecha y hora para comenzar la operación</p>
+            </div>
 
-        <div className="space-y-2">
-          {OPCIONES.map((op) => (
-            <label
-              key={op.tipo}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                tipo === op.tipo
-                  ? 'border-blue-500/60 bg-blue-950/30'
-                  : 'border-slate-800 hover:border-slate-700'
-              }`}
+            <div className="space-y-5">
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="fecha-inicio-simulada">Fecha</label>
+                  <button type="button" className="text-blue-600 hover:text-blue-700" onClick={() => setFecha(formatDateForInput(new Date()))}>
+                    Hoy
+                  </button>
+                </div>
+                <div>
+                  <input id="fecha-inicio-simulada" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+                    className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900" />
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                  {new Date(`${fecha}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-slate-700 dark:text-slate-300" htmlFor="hora-inicio-simulada">Hora</label>
+                <div>
+                  <input id="hora-inicio-simulada" type="time" value={hora} onChange={(e) => setHora(e.target.value)}
+                    className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900" />
+                </div>
+              </div>
+            </div>
+
+            {error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
+                {(error as Error).message || 'No se pudo iniciar el escenario seleccionado.'}
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={isIniciando}
+              onClick={() =>
+                iniciarEscenario({
+                  tipo,
+                  fechaInicioSimulada: fecha ? `${fecha}T${hora || '00:00'}:00Z` : undefined,
+                })
+              }
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <input
-                type="radio"
-                name="tipo-escenario"
-                className="mt-1"
-                checked={tipo === op.tipo}
-                onChange={() => setTipo(op.tipo)}
-              />
-              <span>
-                <span className="block text-sm font-medium text-slate-100">{op.label}</span>
-                <span className="block text-xs text-slate-400">{op.description}</span>
-              </span>
-            </label>
-          ))}
-        </div>
+              {isIniciando ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Iniciando simulación...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 fill-current" />
+                  <span>Iniciar Simulación</span>
+                </>
+              )}
+            </button>
 
-        <div>
-          <label className="block text-xs font-medium text-slate-400 mb-1" htmlFor="fecha-inicio-simulada">
-            Fecha de inicio simulada
-          </label>
-          <input
-            id="fecha-inicio-simulada"
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-          />
-        </div>
-
-        {error && (
-          <p className="text-xs text-rose-400">{(error as Error).message || 'No se pudo iniciar el escenario.'}</p>
+          </div>
         )}
-
-        <button
-          type="button"
-          disabled={isIniciando}
-          onClick={() =>
-            iniciarEscenario({
-              tipo,
-              fechaInicioSimulada: fecha ? `${fecha}T00:00:00Z` : undefined,
-            })
-          }
-          className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
-        >
-          {isIniciando ? 'Iniciando...' : 'Iniciar ejecución'}
-        </button>
-      </div>
     </div>
   );
 };

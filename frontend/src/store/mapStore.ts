@@ -16,7 +16,6 @@ interface MapState {
   realtimePositions: Record<string, Point>;
   zoomLevel: number;
   panOffset: Point;
-
   // Acciones (siempre inmutables)
   setSelectedVehicleId: (id: string | null) => void;
   setSelectedWarehouseId: (id: string | null) => void;
@@ -43,7 +42,6 @@ export const useMapStore = create<MapState>((set) => ({
   realtimePositions: {},
   zoomLevel: 1,
   panOffset: { x: 0, y: 0 },
-
   setSelectedVehicleId: (id) =>
     set({
       selectedVehicleId: id,

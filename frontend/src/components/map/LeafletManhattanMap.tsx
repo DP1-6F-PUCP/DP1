@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Warehouse, Vehicle, BlockedStreet, Order } from '../../types';
-import { GRID_WIDTH_KM, GRID_HEIGHT_KM } from '../../utils/manhattan';
+import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
+import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
 import { getVehicleSemaforoStatus } from '../../utils/vehicleStatus';
 import { simulationEngine } from '../../engine/simulationEngine';
 
@@ -10,6 +10,10 @@ export interface LeafletManhattanMapProps {
   vehicles?: Vehicle[];
   blockedStreets?: BlockedStreet[];
   orders?: Order[];
+  /** Geometria real de cada ruta (RutaDTO.geometria via adaptRuta) -- usada por la linea de ruta
+   * del vehiculo seleccionado (ver efecto "Render Projected Routes"), no por la animacion (eso
+   * vive en simulationEngine). */
+  routes?: Route[];
   selectedVehicleId?: string | null;
   selectedWarehouseId?: string | null;
   selectedBlockId?: string | null;
@@ -37,6 +41,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   vehicles = [],
   blockedStreets = [],
   orders = [],
+  routes = [],
   selectedVehicleId = null,
   selectedWarehouseId = null,
   selectedBlockId = null,
@@ -73,6 +78,13 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // mapa con un loader en vez de dejar ver el estado transitorio (vehiculos "regresando" a la
   // posicion de la ejecucion anterior, etc.) -- ver el efecto de suscripcion mas abajo.
   const [buffering, setBuffering] = useState(true);
+  // Linea de ruta del vehiculo seleccionado (feature de un teammate, portada aqui sobre el motor
+  // centralizado en vez de sobre el SincroVehiculo/posicionInterpolada viejo que reemplazamos) --
+  // ver el efecto de suscripcion mas abajo y simulationEngine.getCaminoRestante.
+  const selectedRouteLineRef = useRef<L.Polyline | null>(null);
+  const selectedRouteTailRef = useRef<[number, number][]>([]);
+  const selectedVehicleIdRef = useRef<string | null>(selectedVehicleId);
+  selectedVehicleIdRef.current = selectedVehicleId;
 
   // 1. Initialize Leaflet Map with L.CRS.Simple - Fixed, non-zoomable, adapted to max screen
   useEffect(() => {
@@ -277,15 +289,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
   // 4. Render Projected Routes (Only shown when a vehicle is selected)
   //
-  // Bug real corregido (reporte directo): la linea punteada hacia el destino se construia con
-  // generateManhattanPath, una aproximacion local -- no el camino que el backend realmente eligio
-  // para ese vehiculo (CalculadorDistancia, que evade bloqueos via A*). Cuando ambos difieren se ve
-  // como ruido visual: una linea que cruza por donde el vehiculo NO va a pasar. Se quita la linea;
-  // el circulo de destino se mantiene (es solo un punto, selectedVehicle.destination ya es un dato
-  // real, no una aproximacion).
+  // Dos casos:
+  //  - Vehiculo en camino a entregar un pedido: ruta activa (in_progress) -> geometria de
+  //    activeRoute.waypoints, en azul.
+  //  - Vehiculo regresando a un almacen: la Ruta ya quedo FINALIZADA, asi que no hay ruta activa;
+  //    se usa Vehicle.returnPath (VehiculoDTO.geometriaRetorno), en ambar y mas punteado.
+  //
+  // El fallback directo solo cubre estados sin geometria.
   useEffect(() => {
     const group = routesLayerGroupRef.current;
     group.clearLayers();
+    selectedRouteLineRef.current = null;
+    selectedRouteTailRef.current = [];
 
     if (!showProjectedRoutes) return;
     if (!selectedVehicleId) return;
@@ -293,14 +308,77 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
     if (!selectedVehicle) return;
 
-    const isBroken = selectedVehicle.status === 'broken';
+    // Mientras entrega no se muestra su siguiente ruta
+    if (selectedVehicle.status === 'delivering') return;
 
-    // Destination Marker on the Grid (Concentric circle matching SVG)
-    if (selectedVehicle.destination) {
+    const isBroken = selectedVehicle.status === 'broken';
+    const activeRoute = routes.find(
+      (route) =>
+        route.vehicleId === selectedVehicle.id &&
+        route.status === 'in_progress'
+    );
+
+    // Camino hacia un pedido (ruta activa) o de regreso a un almacén (sin ruta activa)
+    const deliveryPath = activeRoute?.waypoints ?? [];
+    const returnPath = selectedVehicle.returnPath ?? [];
+    const isReturning = deliveryPath.length < 2 && returnPath.length > 1;
+
+    const geometry = deliveryPath.length > 1
+      ? deliveryPath
+      : isReturning
+        ? returnPath
+        : [];
+
+    const fallbackDestination = selectedVehicle.destination;
+    const routePath = geometry.length > 1
+      ? geometry
+      : fallbackDestination
+        ? normalizeManhattanPath([selectedVehicle.position, fallbackDestination])
+        : [];
+
+    if (routePath.length > 1) {
+      // Azul = hacia pedido, ámbar = hacia almacén, gris/rojo = averiado
+      const accent = isBroken ? '#94a3b8' : isReturning ? '#f59e0b' : '#38bdf8';
+      const ringAccent = isBroken ? '#ef4444' : accent;
+
+      const firstPoint = routePath[0];
+      // La geometría del backend pertenece al último snapshot y puede comenzar en una
+      // posición distinta a la que el marcador ya alcanzó por interpolación. Al anteponer la
+      // posición actual hay que volver a normalizar el camino completo; de lo contrario el
+      // primer segmento queda diagonal (la línea visible se separa del camino Manhattan).
+      const destinationPath = normalizeManhattanPath(
+        firstPoint?.x === selectedVehicle.position.x && firstPoint.y === selectedVehicle.position.y
+          ? routePath
+          : [selectedVehicle.position, ...routePath]
+      );
+      // La geometría real termina en el destino que el backend pudo calcular. Usar ese extremo
+      // para el marcador evita que un pedido atrasado del endpoint /pedidos deje el círculo en
+      // otra ubicación distinta al final visible de la ruta.
+      const destination = destinationPath[destinationPath.length - 1];
+
+      const routeLine = L.polyline(
+        destinationPath.map((point) => [point.y, point.x] as [number, number]),
+        {
+          color: accent,
+          weight: 2.5,
+          opacity: 0.9,
+          dashArray: isReturning ? '2, 8' : '6, 8', // el regreso se ve más punteado
+          lineCap: 'round',
+          lineJoin: 'round',
+          interactive: false,
+        }
+      ).addTo(group);
+      selectedRouteLineRef.current = routeLine;
+      // La cola empieza en destinationPath[1]; el bucle de animación antepone el tramo restante
+      // del marcador hasta destinationPath[0] (ver caminoRestante).
+      selectedRouteTailRef.current = destinationPath
+        .slice(1)
+        .map((point) => [point.y, point.x] as [number, number]);
+
       // Outer dashed ring
-      L.circleMarker([selectedVehicle.destination.y, selectedVehicle.destination.x], {
+      L.circleMarker([destination.y, destination.x], {
         radius: 7,
-        color: isBroken ? '#ef4444' : '#38bdf8',
+        color: ringAccent,
         weight: 1.5,
         dashArray: '3, 2',
         fill: false,
@@ -308,11 +386,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       }).addTo(group);
 
       // Inner solid circle
-      L.circleMarker([selectedVehicle.destination.y, selectedVehicle.destination.x], {
+      L.circleMarker([destination.y, destination.x], {
         radius: 3.5,
         color: '#ffffff',
         weight: 1,
-        fillColor: isBroken ? '#ef4444' : '#38bdf8',
+        fillColor: ringAccent,
         fillOpacity: 1,
         interactive: false,
       }).addTo(group);
@@ -322,7 +400,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       // circulo (que marca hacia DONDE VA el vehiculo, no donde esta -- legitimo que quede lejos
       // para uno en refrigerio/entregando a mitad de ruta) es indistinguible a simple vista entre
       // muchos iconos de vehiculo parecidos. Etiqueta chica para que quede inequivoco.
-      L.marker([selectedVehicle.destination.y, selectedVehicle.destination.x], {
+      L.marker([destination.y, destination.x], {
         icon: L.divIcon({
           className: 'destino-seleccionado-label',
           html: `
@@ -344,7 +422,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         interactive: false,
       }).addTo(group);
     }
-  }, [showProjectedRoutes, vehicles, selectedVehicleId]);
+  }, [showProjectedRoutes, vehicles, routes, selectedVehicleId]);
 
   // 5. Render Warehouses (No balloon popups - triggers left inspector popup on click)
   useEffect(() => {
@@ -586,6 +664,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // refleja su flag `buffering` -- nunca recalcula nada aca, el componente es puro consumidor.
   // Montado una sola vez (deps []); el motor sigue corriendo (o pausado en segundo plano, ver
   // simulationEngine.ts) independientemente de si este efecto esta montado.
+  //
+  // Para el vehiculo seleccionado tambien redibuja su linea de ruta: tramo pendiente del marcador
+  // hasta el final del tramo vigente (simulationEngine.getCaminoRestante, sigue el camino real y
+  // evita diagonales) + resto de la ruta (selectedRouteTailRef) -- feature de un teammate, portada
+  // aqui sobre el motor centralizado en vez del SincroVehiculo/posicionInterpolada que reemplazo.
   useEffect(() => {
     let bufferingAnterior = true;
     const unsubscribe = simulationEngine.subscribe((snap) => {
@@ -593,6 +676,16 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         const punto = snap.vehiclePositions.get(id);
         if (punto) {
           marker.setLatLng([punto.y, punto.x]);
+        }
+
+        if (id === selectedVehicleIdRef.current && selectedRouteLineRef.current) {
+          const restante = simulationEngine.getCaminoRestante(id);
+          if (restante) {
+            selectedRouteLineRef.current.setLatLngs([
+              ...restante.map((p) => [p.y, p.x] as [number, number]),
+              ...selectedRouteTailRef.current,
+            ]);
+          }
         }
       }
       if (snap.buffering !== bufferingAnterior) {

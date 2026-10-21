@@ -59,6 +59,45 @@ function posicionInterpolada(sync: SincroVehiculo, renderTimeMs: number): Point 
   return waypoints[waypoints.length - 1];
 }
 
+/**
+ * Puntos desde la posicion interpolada actual hasta {@code destino}, siguiendo los waypoints del
+ * tramo (axis-aligned si waypoints lo es) -- feature de un teammate (linea de ruta del vehiculo
+ * seleccionado), portada aqui para usar origenMs/destinoMs reales en vez de inicioMs/duracionMs
+ * adivinados. El primer elemento es la posicion interpolada actual; el ultimo es siempre
+ * {@code destino}. Se usa para dibujar la linea de la ruta seleccionada: antes la linea iba de la
+ * posicion interpolada directo al SIGUIENTE punto de la cola, saltandose el nodo intermedio
+ * (destino) y produciendo segmentos en diagonal (imposibles en una grilla Manhattan) en las
+ * esquinas.
+ */
+function caminoRestanteDesde(sync: SincroVehiculo, renderTimeMs: number): Point[] {
+  const { origen, destino, waypoints, origenMs, destinoMs } = sync;
+  const span = destinoMs - origenMs;
+  const fraccion = span > 0 ? Math.min(1, Math.max(0, (renderTimeMs - origenMs) / span)) : 1;
+  const camino = waypoints.length >= 2 ? waypoints : [origen, destino];
+
+  const largos: number[] = [];
+  let total = 0;
+  for (let i = 0; i < camino.length - 1; i++) {
+    const d = Math.abs(camino[i + 1].x - camino[i].x) + Math.abs(camino[i + 1].y - camino[i].y);
+    largos.push(d);
+    total += d;
+  }
+  if (total === 0) return [destino];
+
+  let objetivo = fraccion * total;
+  for (let i = 0; i < largos.length; i++) {
+    if (objetivo <= largos[i] || i === largos.length - 1) {
+      const t = largos[i] > 0 ? Math.min(1, objetivo / largos[i]) : 1;
+      const p0 = camino[i];
+      const p1 = camino[i + 1];
+      const punto = { x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t };
+      return [punto, ...camino.slice(i + 1)];
+    }
+    objetivo -= largos[i];
+  }
+  return [destino];
+}
+
 /** {@code true} si el segmento axis-aligned p0-p1 se superpone con algun tramo de {@code bloqueos}. */
 function segmentoBloqueado(p0: Point, p1: Point, bloqueos: BlockedStreet[]): boolean {
   const horizontal = p0.y === p1.y;
@@ -302,6 +341,19 @@ class SimulationEngine {
    * SimClock, que no necesitan re-renderizar 60 veces por segundo. */
   getSnapshotNow(): EngineSnapshot {
     return this.computeSnapshot();
+  }
+
+  /** Camino restante (desde la posicion interpolada actual hasta el final del tramo vigente,
+   * siguiendo los waypoints reales) para UN vehiculo -- a diferencia de getSnapshotNow/subscribe
+   * (posicion final de TODOS los vehiculos), esto expone el camino geometrico restante de uno
+   * solo, bajo demanda. Usado por la linea de ruta del vehiculo seleccionado en
+   * LeafletManhattanMap. null si el vehiculo no tiene ningun tramo conocido todavia. */
+  getCaminoRestante(vehicleId: string): Point[] | null {
+    const cola = this.vehicleBuffers.get(vehicleId);
+    const bracket = cola?.[0];
+    if (!bracket) return null;
+    const renderTimeMs = performance.now() - this.renderDelayMs;
+    return caminoRestanteDesde(bracket, renderTimeMs);
   }
 
   /** Suscripcion de alta frecuencia (push, un callback por frame) -- para el mapa, que muta

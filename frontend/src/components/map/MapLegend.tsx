@@ -15,8 +15,8 @@ export const MapLegend: React.FC = () => {
   ];
 
   return (
-    <div className="absolute bottom-3 left-3 z-20 rounded-lg border border-slate-700/80 bg-slate-900/90 backdrop-blur-sm px-3 py-2 text-[10px] text-slate-300 space-y-1.5 pointer-events-none select-none">
-      <div className="font-semibold text-slate-200 uppercase tracking-wide text-[9px]">Leyenda</div>
+    <div className="absolute bottom-3 left-3 z-20 rounded-lg border border-slate-300 bg-white/95 backdrop-blur-sm px-3 py-2 text-[10px] text-slate-600 shadow-sm space-y-1.5 pointer-events-none select-none">
+      <div className="font-semibold text-slate-700 uppercase tracking-wide text-[9px]">Leyenda</div>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {estadosVehiculo.map((s) => (
           <div key={s.state} className="flex items-center gap-1.5">
@@ -35,7 +35,7 @@ export const MapLegend: React.FC = () => {
           <span>Bloqueo vial</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm border border-slate-400 bg-slate-700 shrink-0" />
+          <span className="h-2.5 w-2.5 rounded-sm border border-slate-400 bg-slate-200 shrink-0" />
           <span>Almacén</span>
         </div>
       </div>

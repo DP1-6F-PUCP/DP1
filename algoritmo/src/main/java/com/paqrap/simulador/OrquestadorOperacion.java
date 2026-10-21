@@ -109,6 +109,7 @@ public class OrquestadorOperacion {
     private final Set<YearMonth> mesesPedidosCargados = new HashSet<>();
     private final Set<YearMonth> mesesBloqueosCargados = new HashSet<>();
     private final Set<String> bimestresMantenimientoCargados = new HashSet<>();
+    private final Set<Bloqueo> bloqueosNotificados = new HashSet<>();
     /** Pedidos recién cargados de un archivo oficial, pendientes de incorporarse al próximo lote. */
     private final List<Pedido> pedidosPorIncorporar = new ArrayList<>();
 
@@ -126,6 +127,7 @@ public class OrquestadorOperacion {
 
     private volatile List<Ruta> ultimasRutas = List.of();
     private volatile List<com.paqrap.simulador.EventoSimulacion> ultimosEventos = List.of();
+    private final List<EventoSimulacion> eventosIncidenciaLote = new ArrayList<>();
     private volatile LocalDateTime anclaUltimoLote;
 
     public OrquestadorOperacion(Planificador planificador, GestorLogSimulacion gestorLog, float sa, float ta,
@@ -182,6 +184,7 @@ public class OrquestadorOperacion {
                 contextoProblema.marcaTiempoActual(), sa, k);
         this.ejecucionActual.iniciar();
         this.detenido = false;
+        this.bloqueosNotificados.clear();
 
         this.programador = Executors.newSingleThreadScheduledExecutor();
         long periodoMs = Math.round(sa * 60_000.0);
@@ -344,7 +347,9 @@ public class OrquestadorOperacion {
         // solo media planificador.planificarRutas(), que en el lote sospechoso dio 0.000s -- la
         // demora esta en otra parte de este metodo. Se mide cada fase para encontrar cual.
         long tInicioLote = System.currentTimeMillis();
+        eventosIncidenciaLote.clear();
         asegurarDatosOficialesCargados(contextoProblema.marcaTiempoActual());
+        registrarBloqueosActivos();
         long tDespuesCarga = System.currentTimeMillis();
         aplicarSolicitudesVencidas();
         aplicarMantenimientos(contextoProblema.marcaTiempoActual());
@@ -441,7 +446,8 @@ public class OrquestadorOperacion {
         List<Pedido> noAsignados = pedidosNoAsignados(todasLasRutas, pedidosDelLote);
         anclaUltimoLote = contextoProblema.marcaTiempoActual();
         long tAntesSimular = System.currentTimeMillis();
-        ultimosEventos = motorSimulacion.simularRutas(todasLasRutas, noAsignados, contextoDelLote, 0.0, horasAvance);
+        ultimosEventos = new ArrayList<>(
+                motorSimulacion.simularRutas(todasLasRutas, noAsignados, contextoDelLote, 0.0, horasAvance));
         ultimasRutas = todasLasRutas;
         long tDespuesSimular = System.currentTimeMillis();
 
@@ -454,6 +460,8 @@ public class OrquestadorOperacion {
 
         LocalDateTime instanteAnterior = contextoProblema.marcaTiempoActual();
         LocalDateTime nuevoInstante = instanteAnterior.plusSeconds(Math.round(horasAvance * 3600.0));
+        registrarBloqueosQueComienzan(instanteAnterior, nuevoInstante);
+        ultimosEventos.addAll(eventosIncidenciaLote);
 
         recargarAlmacenesSiCorrespondeMedianoche(instanteAnterior, nuevoInstante);
 
@@ -487,6 +495,28 @@ public class OrquestadorOperacion {
         }
 
         ejecucionActual.setEstado(EstadoEjecucion.EN_CURSO);
+    }
+
+    private void registrarBloqueosActivos() {
+        LocalDateTime ahora = contextoProblema.marcaTiempoActual();
+        todosLosBloqueos.stream()
+                .filter(bloqueo -> bloqueo.estaVigente(ahora))
+                .filter(bloqueo -> bloqueosNotificados.add(bloqueo))
+                .forEach(bloqueo -> eventosIncidenciaLote.add(
+                        motorSimulacion.registrarBloqueoCalle(0.0, contextoProblema, bloqueo)));
+    }
+
+    private void registrarBloqueosQueComienzan(LocalDateTime desde, LocalDateTime hasta) {
+        todosLosBloqueos.stream()
+                .filter(bloqueo -> !bloqueo.getFechaInicio().isBefore(desde)
+                        && !bloqueo.getFechaInicio().isAfter(hasta))
+                .filter(bloqueo -> bloqueosNotificados.add(bloqueo))
+                .forEach(bloqueo -> {
+                    double horasDesdeInicio = java.time.Duration.between(desde, bloqueo.getFechaInicio())
+                            .toSeconds() / 3600.0;
+                    eventosIncidenciaLote.add(
+                            motorSimulacion.registrarBloqueoCalle(horasDesdeInicio, contextoProblema, bloqueo));
+                });
     }
 
     /** Detiene el ciclo periódico. Si la ejecución no terminó por incumplimiento, la marca {@code FINALIZADA}. */

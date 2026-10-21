@@ -1,9 +1,7 @@
 import React from 'react';
 import { useMapStore } from '../../store/mapStore';
-import { Vehicle, Warehouse, BlockedStreet, Order } from '../../types';
+import { Vehicle, Warehouse, BlockedStreet, Order, Route } from '../../types';
 import { LeafletManhattanMap } from './LeafletManhattanMap';
-import { MapLegend } from './MapLegend';
-import { MapLayersControl } from './MapLayersControl';
 import { useEstadoOperacion } from '../../hooks/useEstadoOperacion';
 
 export interface RouteMapProps {
@@ -11,6 +9,9 @@ export interface RouteMapProps {
   vehicles?: Vehicle[];
   blockedStreets?: BlockedStreet[];
   orders?: Order[];
+  /** Geometria real de cada ruta -- usada por la linea de ruta del vehiculo seleccionado (ver
+   * LeafletManhattanMap), no por la animacion (eso vive en el motor de simulacion). */
+  routes?: Route[];
   onSelectVehicle?: (vehicle: Vehicle) => void;
   onSelectWarehouse?: (warehouse: Warehouse) => void;
   isDarkTheme?: boolean;
@@ -21,6 +22,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   vehicles = [],
   blockedStreets = [],
   orders = [],
+  routes = [],
   onSelectVehicle,
   onSelectWarehouse,
   isDarkTheme = true,
@@ -58,6 +60,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         vehicles={vehicles}
         blockedStreets={blockedStreets}
         orders={orders}
+        routes={routes}
         selectedVehicleId={selectedVehicleId}
         selectedWarehouseId={selectedWarehouseId}
         onSelectVehicle={handleVehicleClick}
@@ -70,8 +73,6 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         isDarkTheme={isDarkTheme}
         className="w-full h-full"
       />
-      <MapLayersControl />
-      <MapLegend />
     </div>
   );
 };

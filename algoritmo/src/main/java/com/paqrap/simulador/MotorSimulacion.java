@@ -388,13 +388,15 @@ public class MotorSimulacion {
         return java.time.Duration.between(contexto.marcaTiempoActual(), instante).toSeconds() / 3600.0;
     }
 
-    public void registrarBloqueoCalle(double tiempoHoras, ContextoProblema contexto, Bloqueo bloqueo) {
+    public EventoSimulacion registrarBloqueoCalle(double tiempoHoras, ContextoProblema contexto, Bloqueo bloqueo) {
         Nodo primero = bloqueo.getSecuenciaNodos().get(0);
-        gestorLog.registrarEvento(new EventoSimulacion(tiempoHoras,
+        EventoSimulacion evento = new EventoSimulacion(tiempoHoras,
                 contexto.marcaTiempoActual().getHour() + contexto.marcaTiempoActual().getMinute() / 60.0,
                 TipoEvento.INCIDENCIA_BLOQUEO, null, null, primero.x(), primero.y(),
                 String.format("ALERTA VIAL: nuevo bloqueo activo sobre %s", bloqueo.getSecuenciaNodos()),
-                "Estado: VÍA CLAUSURADA"));
+                "Estado: VÍA CLAUSURADA");
+        gestorLog.registrarEvento(evento);
+        return evento;
     }
 
     public void registrarAveriaVehiculo(double tiempoHoras, ContextoProblema contexto, String idUnidad, Nodo posicion,

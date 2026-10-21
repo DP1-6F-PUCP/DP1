@@ -23,7 +23,7 @@ import {
 import { Order, OrderStatus, OrderUrgency } from '../types/order';
 import { Vehicle, VehicleType, VehicleStatus } from '../types/vehicle';
 import { Route, Warehouse, BlockedStreet, Point } from '../types/route';
-import { generateManhattanPath } from './manhattan';
+import { generateManhattanPath, isSegmentBlocked, normalizeManhattanPath } from './manhattan';
 
 const TIPO_A_VEHICLE_TYPE: Record<string, VehicleType> = {
   AUTO: 'car',
@@ -187,7 +187,7 @@ export function adaptVehiculo(
       || 'idle',
     position,
     destination,
-    returnPath: dto.geometriaRetorno.map(parseNodo),
+    returnPath: normalizeManhattanPath(dto.geometriaRetorno.map(parseNodo)),
     activityRemainingMinutes,
     activitySince: dto.actividadDesde ?? undefined,
     historyPath: [], // no expuesto por el backend
@@ -258,13 +258,19 @@ export function adaptRuta(
   // dto.geometria es el camino real que CalculadorDistancia uso para evaluar la ruta en el
   // backend (respeta bloqueos vigentes via A*) -- ya no se recalcula una aproximacion local salvo
   // que venga vacia (ruta sin paradas, o backend viejo sin este campo todavia en cache).
-  let waypoints: Point[] = dto.geometria.length > 0 ? dto.geometria.map(parseNodo) : [];
-  if (waypoints.length === 0) {
+  let waypoints: Point[] = dto.geometria.length > 0
+    ? normalizeManhattanPath(dto.geometria.map(parseNodo))
+    : [];
+  const geometriaCruzaBloqueo = waypoints.some((point, index) =>
+    index > 0 && isSegmentBlocked(waypoints[index - 1], point, bloqueos)
+  );
+  if (waypoints.length === 0 || geometriaCruzaBloqueo) {
     waypoints = [origin];
     let cursor = origin;
     for (const punto of puntos) {
-      waypoints = waypoints.concat(generateManhattanPath(cursor, punto, bloqueos).slice(1));
-      cursor = punto;
+      const tramo = generateManhattanPath(cursor, punto, bloqueos);
+      waypoints = waypoints.concat(tramo.slice(1));
+      cursor = tramo[tramo.length - 1];
     }
   }
 
