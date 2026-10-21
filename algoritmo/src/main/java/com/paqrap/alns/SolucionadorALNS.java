@@ -22,6 +22,7 @@ import com.paqrap.alns.operadores.ReparacionVoraz;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -90,8 +91,18 @@ public class SolucionadorALNS implements PlanificadorRutas {
         Random random = new Random();
         int iteracion = 1;
         int contadorSinMejora = 0;
+        long inicioMs = System.currentTimeMillis();
+        double presupuestoSegundos = configuracion.getPresupuestoSegundos();
 
-        while (iteracion <= configuracion.getMaxIteraciones() && contadorSinMejora < configuracion.getMaxSinMejora()) {
+        // Bug real reportado (captura: front "pegado" 68s) + investigado en vivo contra datos
+        // reales: maxSinMejora ya cortaba el bucle bien antes de maxIteraciones (confirmado:
+        // lotes de 79 pedidos convergian en la iteracion ~29, el bucle terminaba cerca de la 119,
+        // nunca llegaba a 350) -- el problema real NO era la CANTIDAD de iteraciones, era que CADA
+        // iteracion individual se volvia carisima con muchas rutas activas. Este chequeo de tiempo
+        // real es la red de seguridad que faltaba (antes tiempoMaximoComputoSegundos solo generaba
+        // un WARN despues de terminar, nunca interrumpia nada) -- <=0 preserva "sin limite".
+        while (iteracion <= configuracion.getMaxIteraciones() && contadorSinMejora < configuracion.getMaxSinMejora()
+                && (presupuestoSegundos <= 0 || (System.currentTimeMillis() - inicioMs) / 1000.0 < presupuestoSegundos)) {
             Solucion vecina = solucionActual.copiar();
 
             int idxDestruccion = gestorDestruccion.seleccionarIndiceOperador();
@@ -103,13 +114,28 @@ public class SolucionadorALNS implements PlanificadorRutas {
             int q = configuracion.getMinCantidadDestruccion()
                     + random.nextInt(configuracion.getMaxCantidadDestruccion() - configuracion.getMinCantidadDestruccion() + 1);
 
+            // Bug real reportado (mismo caso de arriba) + investigado en vivo: esta fue la causa
+            // dominante del costo por iteracion, no el conteo de iteraciones en si. Antes se
+            // recalculaban TODAS las rutas activas en CADA iteracion (vecina.getRutas()), aunque
+            // destruir()+reparar() solo tocan q<=5 pedidos -- con 37 rutas activas (caso real:
+            // lote de 79 pedidos), eso es ~37x mas trabajo del necesario por iteracion. Se compara
+            // la firma de paradas de cada ruta antes/despues (barato: solo ids) y solo se
+            // recalcula (CalculadorDistancia vía EvaluadorCostos) la que de verdad cambio.
+            Map<Ruta, List<String>> firmaAntes = new java.util.IdentityHashMap<>();
+            for (Ruta ruta : vecina.getRutas()) {
+                firmaAntes.put(ruta, idsDeParadas(ruta));
+            }
+
             List<Pedido> pedidosRemovidos = opDestruccion.destruir(vecina, q, contexto);
             vecina.getPedidosNoAsignados().addAll(pedidosRemovidos);
 
             opReparacion.reparar(vecina, vecina.getPedidosNoAsignados(), contexto);
 
             for (Ruta ruta : vecina.getRutas()) {
-                EvaluadorCostos.recalcularRuta(ruta, contexto.ciudad(), contexto.bloqueos(), contexto.configuracionOperacion());
+                List<String> antes = firmaAntes.get(ruta);
+                if (antes == null || !antes.equals(idsDeParadas(ruta))) {
+                    EvaluadorCostos.recalcularRuta(ruta, contexto.ciudad(), contexto.bloqueos(), contexto.configuracionOperacion());
+                }
             }
 
             if (vecina.calcularCostoTotal() < mejorSolucion.calcularCostoTotal()) {
@@ -213,6 +239,12 @@ public class SolucionadorALNS implements PlanificadorRutas {
         new ReparacionRegret(2).reparar(sol, noAsignados, contexto);
         sol.getPedidosNoAsignados().addAll(noAsignados);
         return sol;
+    }
+
+    /** Firma barata (solo ids de pedido, en orden) para detectar si una ruta cambio de paradas
+     * entre dos instantes -- ver el comentario de uso en planificarRutas. */
+    private List<String> idsDeParadas(Ruta ruta) {
+        return ruta.getSecuenciaParadas().stream().map(p -> p.getPedido().getIdPedido()).toList();
     }
 
     private void agregarRutasAlPool(List<Ruta> pool, Solucion solucion) {

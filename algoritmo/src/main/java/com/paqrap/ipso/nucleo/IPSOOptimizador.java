@@ -3,6 +3,7 @@ package com.paqrap.ipso.nucleo;
 import com.paqrap.dominio.Bloqueo;
 import com.paqrap.dominio.CalculadorDistancia;
 import com.paqrap.dominio.Ciudad;
+import com.paqrap.dominio.ConfiguracionOperacion;
 import com.paqrap.dominio.Nodo;
 import com.paqrap.dominio.Pedido;
 import com.paqrap.dominio.UnidadTransporte;
@@ -37,6 +38,17 @@ public class IPSOOptimizador {
     private final IPSOConfig config;
     private final LocalDateTime horaSalida;
     private final Random rnd;
+    // Bug real encontrado (investigacion de por que IPSO pierde tanto contra ALNS en
+    // pctATiempo): costoRuta (la funcion de fitness que el propio PSO usa para decidir que
+    // permutacion es mejor) no insertaba la pausa obligatoria de refrigerio -- a diferencia de
+    // EvaluadorCostos.recalcularRuta de ALNS. El PSO podia terminar prefiriendo una secuencia que
+    // en el papel llegaba a tiempo, pero que en la simulacion real (que si para al vehiculo a
+    // refrigerar) resultaba tarde. inicioRefrigerioIdeal/refrigerioTomadoInicial se calculan una
+    // sola vez en el constructor (mismos datos que usa ALNS: ConfiguracionOperacion +
+    // UnidadTransporte.isRefrigerioTomado), costoRuta los usa en cada evaluacion de fitness.
+    private final LocalDateTime inicioRefrigerioIdeal;
+    private final double duracionRefrigerioHoras;
+    private final boolean refrigerioTomadoInicial;
 
     private double[][] distancias;
     private int indiceDeposito;
@@ -51,7 +63,7 @@ public class IPSOOptimizador {
     }
 
     public IPSOOptimizador(List<Pedido> pedidos, Nodo deposito, UnidadTransporte unidad, Ciudad ciudad,
-            List<Bloqueo> bloqueos, IPSOConfig config, LocalDateTime horaSalida) {
+            List<Bloqueo> bloqueos, IPSOConfig config, LocalDateTime horaSalida, ConfiguracionOperacion operacion) {
         this.pedidos = pedidos;
         this.deposito = deposito;
         this.unidad = unidad;
@@ -60,6 +72,9 @@ public class IPSOOptimizador {
         this.config = config;
         this.horaSalida = horaSalida;
         this.rnd = new Random(config.getSemillaAleatoria());
+        this.duracionRefrigerioHoras = operacion.duracionRefrigerioHoras();
+        this.inicioRefrigerioIdeal = horaSalida.plusSeconds(Math.round(operacion.duracionTurnoHoras() / 2.0 * 3600.0));
+        this.refrigerioTomadoInicial = unidad.isRefrigerioTomado();
     }
 
     /**
@@ -201,11 +216,22 @@ public class IPSOOptimizador {
         double tiempoAcumuladoHoras = 0.0;
         double penalizacionPlazos = 0.0;
         int cargaTotal = 0;
+        boolean refrigerioTomado = refrigerioTomadoInicial;
 
         int nodoAnterior = indiceDeposito;
         for (int idx : permutacion) {
             Pedido pedido = pedidos.get(idx);
             cargaTotal += pedido.getCantidadSolicitada();
+
+            // Bug real encontrado (ver comentario de los campos de refrigerio arriba): sin esto,
+            // el PSO evaluaba secuencias como "a tiempo" ignorando que el vehiculo puede tener que
+            // parar a refrigerar a mitad de ruta -- misma logica que EvaluadorCostos.recalcularRuta
+            // de ALNS (insertar la pausa apenas se cruza el punto medio del turno).
+            LocalDateTime instanteActual = horaSalida.plusMinutes(Math.round(tiempoAcumuladoHoras * 60));
+            if (!refrigerioTomado && !instanteActual.isBefore(inicioRefrigerioIdeal)) {
+                tiempoAcumuladoHoras += duracionRefrigerioHoras;
+                refrigerioTomado = true;
+            }
 
             double distanciaTramo = distancias[nodoAnterior][idx];
             distanciaTotalKm += distanciaTramo;
@@ -400,8 +426,14 @@ public class IPSOOptimizador {
         double distanciaTotalKm = 0.0;
         double tiempoAcumuladoHoras = 0.0;
         boolean cumplePlazos = true;
+        boolean refrigerioTomado = refrigerioTomadoInicial;
         int nodoAnterior = indiceDeposito;
         for (int idx : gBest) {
+            LocalDateTime instanteActual = horaSalida.plusMinutes(Math.round(tiempoAcumuladoHoras * 60));
+            if (!refrigerioTomado && !instanteActual.isBefore(inicioRefrigerioIdeal)) {
+                tiempoAcumuladoHoras += duracionRefrigerioHoras;
+                refrigerioTomado = true;
+            }
             double tramo = distancias[nodoAnterior][idx];
             distanciaTotalKm += tramo;
             tiempoAcumuladoHoras += tramo / unidad.getTipoVehiculo().getVelocidadKmH();

@@ -411,6 +411,17 @@ public class OrquestadorOperacion {
             ruta.getUnidadTransporte().agregarRuta(ruta);
         }
         double segundosComputo = (System.currentTimeMillis() - inicioMs) / 1000.0;
+        // Instrumentacion temporal para recalibrar ConfiguracionALNS.maxIteraciones contra carga
+        // real (pedido directo: "recalibremos" tras encontrar que el 350 actual nunca se valido
+        // empiricamente -- el experimento historico solo igualo el presupuesto con IPSO a 300,
+        // nunca lo tuneo). getUltimaIteracionMejora() ya existia en SolucionadorALNS como
+        // diagnostico de convergencia; nunca se habia conectado a logging en produccion. Si la
+        // mejora deja de ocurrir mucho antes de maxIteraciones en lotes reales pesados, es
+        // evidencia directa de presupuesto desperdiciado.
+        if (planificador instanceof com.paqrap.alns.SolucionadorALNS alns) {
+            log.info("Convergencia ALNS: ultima mejora en iteracion {} ({} pedidos en este lote)",
+                    alns.getUltimaIteracionMejora(), pedidosParaPlanificar.size());
+        }
         // INFO siempre (no solo al exceder el presupuesto): visibilidad operativa real del costo
         // de cada lote -- antes solo se sabia si se disparaba el warning de "supera el
         // presupuesto", sin ningun numero para los casos normales. Util para calibrar sa/ta contra

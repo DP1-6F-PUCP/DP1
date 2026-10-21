@@ -22,6 +22,18 @@ public class ConfiguracionALNS {
     private double pesoDistanciaShaw = 1.0;
     private double pesoTiempoShaw = 2.0;
     private double epsilonMejoraRVND = 0.01;
+    // Presupuesto de tiempo REAL (segundos) para el bucle principal -- a diferencia de los campos
+    // de arriba, NO se carga desde config-alns.json (no es un hiperparametro de tuning, es
+    // operacional: el mismo valor que el orquestador ya usaba solo para loguear un WARN post-hoc,
+    // ver OrquestadorOperacion.tiempoMaximoComputoSegundos). <=0 significa "sin limite" (valor por
+    // defecto, preserva el comportamiento historico para quien construya esta config a mano, p.
+    // ej. el experimento de afinamiento que fijaba maxIteraciones directamente). Bug real
+    // reportado (captura: front "pegado" 68s): un lote de 79 pedidos tardaba 56-128s porque
+    // maxSinMejora ya cortaba el bucle bastante antes de 350 iteraciones, pero cada iteracion
+    // individual se volvia carisima con muchas rutas activas -- este presupuesto es la red de
+    // seguridad real que faltaba (antes tiempoMaximoComputoSegundos solo generaba un WARN
+    // despues de terminar, nunca interrumpia nada).
+    private double presupuestoSegundos = -1;
 
     /**
      * Construye una configuración a partir de un mapa de datos (típicamente el resultado de
@@ -169,5 +181,13 @@ public class ConfiguracionALNS {
 
     public void setEpsilonMejoraRVND(double epsilonMejoraRVND) {
         this.epsilonMejoraRVND = epsilonMejoraRVND;
+    }
+
+    public double getPresupuestoSegundos() {
+        return presupuestoSegundos;
+    }
+
+    public void setPresupuestoSegundos(double presupuestoSegundos) {
+        this.presupuestoSegundos = presupuestoSegundos;
     }
 }

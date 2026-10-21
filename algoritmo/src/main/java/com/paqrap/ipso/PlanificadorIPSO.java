@@ -9,6 +9,7 @@ import com.paqrap.dominio.ParadaPlanificada;
 import com.paqrap.dominio.Pedido;
 import com.paqrap.dominio.Planificador;
 import com.paqrap.dominio.Ruta;
+import com.paqrap.dominio.UnidadTransporte;
 import com.paqrap.ipso.nucleo.IPSOConfig;
 import com.paqrap.ipso.nucleo.IPSOOptimizador;
 import com.paqrap.ipso.nucleo.ResultadoIPSO;
@@ -64,13 +65,14 @@ public class PlanificadorIPSO implements Planificador {
         List<ClusterizadorPedidos.LoteVehiculo> lotes = clusterizador.clusterizar(pedidosPendientes,
                 contexto.vehiculos(), contexto.almacenes(), contexto.marcaTiempoActual(),
                 contexto.configuracionOperacion().maxParadasPorRuta(),
-                contexto.configuracionOperacion().tiempoServicioClienteHoras());
+                contexto.configuracionOperacion().tiempoServicioClienteHoras(), contexto.ciudad(), contexto.bloqueos());
 
         int contadorRutas = 0;
         long sumaIteracionMejora = 0;
         for (ClusterizadorPedidos.LoteVehiculo lote : lotes) {
             IPSOOptimizador ipso = new IPSOOptimizador(lote.pedidos, lote.almacen.getPosicion(), lote.unidad,
-                    contexto.ciudad(), contexto.bloqueos(), config, contexto.marcaTiempoActual());
+                    contexto.ciudad(), contexto.bloqueos(), config, contexto.marcaTiempoActual(),
+                    contexto.configuracionOperacion());
             ResultadoIPSO resultado = ipso.ejecutar();
             sumaIteracionMejora += ipso.getUltimaIteracionMejora();
 
@@ -95,16 +97,36 @@ public class PlanificadorIPSO implements Planificador {
      * llegada estimada mediante {@link CalculadorDistancia} (la misma fuente de verdad de
      * distancias que usa ALNS), de modo que el reporte de cumplimiento de plazos refleje una
      * estimación real y no quede sin registrar.
+     *
+     * <p>Bug real encontrado (investigación de por qué IPSO pierde tanto contra ALNS en
+     * pctATiempo): a diferencia de {@link com.paqrap.alns.EvaluadorCostos#recalcularRuta}, esta
+     * estimación no insertaba la pausa obligatoria de refrigerio -- una ruta que IPSO consideraba
+     * "a tiempo" en el papel podía resultar tarde de verdad en la simulación real (que sí para al
+     * vehículo a refrigerar), porque IPSO simplemente no la vio venir al planificar. Misma lógica
+     * que ALNS, portada aquí (no se puede reusar {@code TiempoUtil} directamente, es
+     * paquete-privado de {@code com.paqrap.alns}).
      */
     private void asignarParadasConLlegadas(Ruta ruta, List<Pedido> secuencia, double velocidadKmH,
             ContextoProblema contexto) {
+        UnidadTransporte unidad = ruta.getUnidadTransporte();
         LocalDateTime tiempoActual = ruta.getHoraInicioPlanificada();
-        Nodo posicionActual = ruta.getUnidadTransporte().getPosicion();
+        Nodo posicionActual = unidad.getPosicion();
+
+        double duracionRefrigerioHoras = contexto.configuracionOperacion().duracionRefrigerioHoras();
+        double duracionTurnoHoras = contexto.configuracionOperacion().duracionTurnoHoras();
+        LocalDateTime inicioRefrigerioIdeal = ruta.getHoraInicioPlanificada()
+                .plusSeconds(Math.round(duracionTurnoHoras / 2.0 * 3600.0));
+        boolean refrigerioTomado = unidad.isRefrigerioTomado();
 
         for (Pedido pedido : secuencia) {
             LocalDateTime liberacion = pedido.getFechaIngreso();
             if (tiempoActual.isBefore(liberacion)) {
                 tiempoActual = liberacion;
+            }
+
+            if (!refrigerioTomado && !tiempoActual.isBefore(inicioRefrigerioIdeal)) {
+                tiempoActual = tiempoActual.plusSeconds(Math.round(duracionRefrigerioHoras * 3600.0));
+                refrigerioTomado = true;
             }
 
             double distanciaKm = CalculadorDistancia.distanciaKm(contexto.ciudad(), contexto.bloqueos(), tiempoActual,

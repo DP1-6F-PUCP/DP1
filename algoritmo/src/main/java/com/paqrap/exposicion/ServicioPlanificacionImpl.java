@@ -206,7 +206,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                 List.copyOf(bloqueosRecibidos), List.copyOf(mantenimientosRecibidos), almacenes, flota, ciudad,
                 configuracionOperacion);
 
-        var planificador = PlanificadorFactory.crear(algoritmoPorDefecto, configAlgoritmo);
+        var planificador = PlanificadorFactory.crear(algoritmoPorDefecto, configAlgoritmo, tiempoMaximoComputoSegundos);
         var gestorLog = new GestorLogSimulacion(carpetaLogs, false);
         OrquestadorOperacion orquestador = new OrquestadorOperacion(planificador, gestorLog, sa, ta, k,
                 tiempoMaximoComputoSegundos, contextoInicial, cargadorRecursos);

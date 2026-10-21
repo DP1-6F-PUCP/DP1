@@ -173,8 +173,17 @@ export const VehiclePanelContainer: React.FC = () => {
 
       {/* Modal Inyección de Avería -- un solo componente reusable, ya no una copia inline (ver
           auditoria de duplicacion: BreakdownModal.tsx estaba completo y nunca se usaba). Se le
-          pasa solo el vehiculo ya seleccionado para que su propio selector quede acotado a el. */}
+          pasa solo el vehiculo ya seleccionado para que su propio selector quede acotado a el.
+          Bug real reportado (captura: "lancé una avería a TB04 y le llegó a TM01"): el modal
+          nunca se desmonta entre aperturas (solo oculta su contenido via `if (!isOpen) return
+          null`), asi que su `useState(activeVehicles[0]?.id)` interno solo corria UNA vez, en el
+          primer vehiculo que se abrio en toda la sesion -- aperturas posteriores para un vehiculo
+          DISTINTO recibian el prop `vehicles` actualizado, pero el <select> seguia con el id
+          viejo atascado si el usuario no lo tocaba a mano antes de confirmar. El `key` fuerza a
+          React a tratarlo como una instancia nueva cada vez que cambia el vehiculo objetivo,
+          reseteando ese estado interno de verdad. */}
       <BreakdownModal
+        key={selectedVehicle?.id ?? 'ninguno'}
         isOpen={isBreakdownModalOpen && Boolean(selectedVehicle)}
         onClose={() => setIsBreakdownModalOpen(false)}
         vehicles={selectedVehicle ? [selectedVehicle] : []}

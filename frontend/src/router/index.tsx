@@ -20,6 +20,7 @@ import { EventLogButton } from '../features/eventos/components/EventLogButton';
 import { useSimulationSocket } from '../hooks/useSimulationSocket';
 import { useSincronizarEjecucion } from '../hooks/useSincronizarEjecucion';
 import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
+import { useSimulationEngineIngest } from '../engine/useSimulationEngineIngest';
 
 const RootLayout: React.FC = () => {
   const location = useLocation();
@@ -29,7 +30,10 @@ const RootLayout: React.FC = () => {
   // El mapa se monta UNA sola vez aqui (no en cada pagina); cada MapSlot lo reparenta (appendChild
   // nativo, ver contexts/MapSlotContext.tsx) hacia donde la pagina activa lo necesite.
   const mapHostRef = useRef<HTMLDivElement>(null);
-  const { warehouses, vehicles, blockedStreets, orders, routes } = useEstadoOperacion();
+  const { warehouses, vehicles, blockedStreets, orders, routes, estadoRaw } = useEstadoOperacion();
+  // Unico punto de ingesta del motor de simulacion (engine/simulationEngine.ts) -- de aqui en
+  // adelante, el mapa/SimClock/etc. ya no calculan nada por su cuenta, solo leen del motor.
+  useSimulationEngineIngest(vehicles, routes, blockedStreets, estadoRaw?.marcaTiempoActual ?? null);
 
   // "Rutas" oculta del nav a pedido explicito -- la pagina/ruta sigue existiendo (RutasPage,
   // /rutas en el router de abajo), solo no aparece como pestaña. Reversible: solo agregar de
@@ -126,7 +130,6 @@ const RootLayout: React.FC = () => {
             vehicles={vehicles}
             blockedStreets={blockedStreets}
             orders={orders}
-            routes={routes}
             isDarkTheme={true}
           />
         </MapErrorBoundary>
