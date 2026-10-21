@@ -222,7 +222,17 @@
 }
 
 /* Suprimir globos de diálogo emergentes nativos de Leaflet en favor del panel inspector lateral */
-.leaflet-popup,
-.leaflet-popup-pane {
+/* Excepción: la lista de vehículos detenidos en un mismo punto (LeafletManhattanMap). */
+.leaflet-popup:not(.popup-grupo) {
   display: none !important;
+}
+
+.popup-grupo-oscuro .leaflet-popup-content-wrapper,
+.popup-grupo-oscuro .leaflet-popup-tip {
+  background: #0f172a;
+  border: 1px solid #334155;
+}
+
+.popup-grupo-oscuro a.leaflet-popup-close-button {
+  color: #94a3b8;
 }

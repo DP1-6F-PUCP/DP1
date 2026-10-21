@@ -56,9 +56,15 @@ export function getVehicleSemaforoStatus(
   umbrales: UmbralesSemaforo = UMBRALES_SEMAFORO_DEFAULT
 ): VehicleSemaforoConfig {
 
-  // 1. Averías o mantenimientos son incidencias críticas inmediatas -> Retrasado / incidencia (#C62828)
-  if (vehicle.status === 'broken' || vehicle.status === 'maintenance') {
+  // 1. Una avería es una incidencia crítica inmediata -> Retrasado / incidencia (#C62828).
+  if (vehicle.status === 'broken') {
     return SEMAFORO_CONFIGS.delayed;
+  }
+  // El mantenimiento preventivo es PROGRAMADO, no un retraso: la unidad queda fuera de servicio sin
+  // pedidos -> Sin asignar / inactivo (#9E9E9E). Antes contaba como "Retraso" en el semáforo de flota
+  // sin que hubiera ningún pedido atrasado (reportado: "veo uno en retraso pero no en la pantalla").
+  if (vehicle.status === 'maintenance') {
+    return SEMAFORO_CONFIGS.inactive;
   }
 
   // 2. Si no tiene pedidos asignados o estado inactivo -> Sin asignar / inactivo (#9E9E9E)

@@ -22,6 +22,13 @@ export interface EstadoVisual extends FrameData {
   marcaVisibleMs: number | null;
 }
 
+/** Vehiculos detenidos en el mismo punto; `clave` identifica el punto entre frames. */
+export interface GrupoDetenido {
+  clave: string;
+  punto: Point;
+  ids: string[];
+}
+
 /** Snapshot que el motor entrega a cada frame (push, via subscribe) o bajo demanda (pull, via
  * getSnapshotNow). */
 export interface EngineSnapshot {
@@ -29,6 +36,9 @@ export interface EngineSnapshot {
    * significa "todavia no hay datos para este vehiculo" -- el consumidor no debe mover su
    * marcador. */
   vehiclePositions: Map<string, Point>;
+  /** Vehiculos detenidos en un mismo punto (2 o mas), p. ej. en un almacen: el mapa los dibuja
+   * como un solo marcador con contador. */
+  gruposDetenidos: GrupoDetenido[];
   /** true mientras no hay al menos dos lotes en el buffer -- el mapa tapa su contenido con un
    * loader. */
   buffering: boolean;

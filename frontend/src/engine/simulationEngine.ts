@@ -1,5 +1,5 @@
 import { Point, Route, TrajectoryPoint, Vehicle, VehicleStatus } from '../types';
-import { EngineSnapshot, EstadoVisual, FrameData } from './types';
+import { EngineSnapshot, EstadoVisual, FrameData, GrupoDetenido } from './types';
 
 /**
  * Motor de simulacion del front: singleton fuera del arbol de React, unica fuente de verdad del
@@ -81,34 +81,24 @@ function posicionEn(linea: TrajectoryPoint[], t: number): PosicionEnLinea | null
 
 /** Bug real reportado (captura: un vehiculo en refrigerio "no se ve en el mapa"): varios
  * vehiculos DETENIDOS en el mismo punto exacto (tipicamente el almacen central) se dibujan uno
- * encima de otro. Se abren en un abanico chico y deterministico. Los que solo estan pasando por
- * encima no se agrupan (antes saltaban al abanico en plena animacion). */
-function separarPosicionesSuperpuestas(posiciones: Map<string, Point>, enMovimiento: Set<string>): void {
-  const grupos = new Map<string, string[]>();
+ * encima de otro. Se agrupan por punto para que el mapa los dibuje como un marcador con contador.
+ * Los que solo estan pasando por encima no se agrupan. */
+function agruparDetenidos(posiciones: Map<string, Point>, enMovimiento: Set<string>): GrupoDetenido[] {
+  const grupos = new Map<string, GrupoDetenido>();
   for (const [id, p] of posiciones) {
     if (enMovimiento.has(id)) continue;
     const clave = `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
     let grupo = grupos.get(clave);
     if (!grupo) {
-      grupo = [];
+      grupo = { clave, punto: p, ids: [] };
       grupos.set(clave, grupo);
     }
-    grupo.push(id);
+    grupo.ids.push(id);
   }
-
-  const RADIO_ABANICO = 0.35;
-  for (const ids of grupos.values()) {
-    if (ids.length < 2) continue;
-    ids.sort();
-    const centro = posiciones.get(ids[0])!;
-    ids.forEach((id, i) => {
-      const angulo = (2 * Math.PI * i) / ids.length;
-      posiciones.set(id, {
-        x: centro.x + RADIO_ABANICO * Math.cos(angulo),
-        y: centro.y + RADIO_ABANICO * Math.sin(angulo),
-      });
-    });
-  }
+  // Antes se abrían en abanico (radio 0.35 km): con decenas de unidades en un almacén el abanico
+  // medía ~5 px contra marcadores de 32 px -- un manchón ilegible donde una incidencia quedaba
+  // tapada. Ahora el mapa los dibuja como un solo marcador con contador (ver LeafletManhattanMap).
+  return [...grupos.values()].filter((g) => g.ids.length >= 2).map((g) => ({ ...g, ids: g.ids.sort() }));
 }
 
 /** Estado visible de un vehiculo segun lo que hace en su trayectoria en este instante. Averia y
@@ -310,11 +300,11 @@ class SimulationEngine {
       }
     }
 
-    separarPosicionesSuperpuestas(vehiclePositions, enMovimiento);
+    const gruposDetenidos = agruparDetenidos(vehiclePositions, enMovimiento);
     this.actualizarEstadoVisual(renderTimeMs, simNow, estados);
 
     const segundosDesdeUltimoLote = Math.round((ahoraReal - this.relojInstanteConocidoMs) / 1000);
-    return { vehiclePositions, buffering: this.buffering, nowSimMs: simNow, segundosDesdeUltimoLote };
+    return { vehiclePositions, gruposDetenidos, buffering: this.buffering, nowSimMs: simNow, segundosDesdeUltimoLote };
   }
 
   /**

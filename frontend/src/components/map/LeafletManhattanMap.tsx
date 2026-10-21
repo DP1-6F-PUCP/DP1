@@ -87,6 +87,19 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   const selectedRouteEndMarkersRef = useRef<Array<L.Marker | L.CircleMarker>>([]);
   const selectedVehicleIdRef = useRef<string | null>(selectedVehicleId);
   selectedVehicleIdRef.current = selectedVehicleId;
+  // Marcador con contador por cada punto con 2+ vehiculos detenidos (ver el efecto de
+  // suscripcion). Sus miembros se sacan de la capa mientras estan agrupados.
+  const groupMarkersRef = useRef<Map<string, { marker: L.Marker; firma: string; ids: string[] }>>(new Map());
+  const vehiclesRef = useRef<Vehicle[]>(vehicles);
+  const onSelectVehicleRef = useRef(onSelectVehicle);
+  const isDarkThemeRef = useRef(isDarkTheme);
+  const warehousesRef = useRef<Warehouse[]>(warehouses);
+  useEffect(() => {
+    warehousesRef.current = warehouses;
+    vehiclesRef.current = vehicles;
+    onSelectVehicleRef.current = onSelectVehicle;
+    isDarkThemeRef.current = isDarkTheme;
+  }, [vehicles, onSelectVehicle, isDarkTheme, warehouses]);
 
   // 1. Initialize Leaflet Map with L.CRS.Simple - Fixed, non-zoomable, adapted to max screen
   useEffect(() => {
@@ -639,10 +652,14 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         iconAnchor: [16, 16],
       });
 
+      // Con decenas de unidades detenidas en un mismo almacén, el abanico de separación queda más
+      // chico que el propio marcador: una incidencia o la selección quedaban tapadas por el resto.
+      const zIndexOffset = isSelected ? 2000 : isDelayedOrBroken ? 1000 : 0;
+
       let marker = markers.get(v.id);
 
       if (!marker) {
-        marker = L.marker([v.position.y, v.position.x], { icon: vehicleIcon });
+        marker = L.marker([v.position.y, v.position.x], { icon: vehicleIcon, zIndexOffset });
         marker.on('click', (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
           if (selectedVehicleId === v.id) {
@@ -657,6 +674,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         // El icono se refresca siempre (color de semaforo, seleccion, averia pueden cambiar
         // aunque la posicion no cambie).
         marker.setIcon(vehicleIcon);
+        marker.setZIndexOffset(zIndexOffset);
       }
     });
   }, [vehicles, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, umbralesSemaforo]);
@@ -672,12 +690,138 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // de destino al final de esa linea -- feature de un teammate, portada sobre el motor.
   useEffect(() => {
     let bufferingAnterior = true;
+    const capa = vehiclesLayerGroupRef.current;
+
+    const ETIQUETA_ESTADO: Record<string, string> = {
+      idle: 'Inactivo',
+      en_route: 'En ruta',
+      delivering: 'Entregando',
+      on_break: 'Refrigerio',
+      broken: 'Averiado',
+      maintenance: 'Mantenimiento',
+    };
+
+    const abrirListaGrupo = (clave: string, punto: { x: number; y: number }) => {
+      const map = mapInstanceRef.current;
+      const entrada = groupMarkersRef.current.get(clave);
+      if (!map || !entrada) return;
+      const oscuro = isDarkThemeRef.current;
+      const porId = new Map(vehiclesRef.current.map((v) => [v.id, v]));
+      const miembros = entrada.ids
+        .map((id) => porId.get(id))
+        .filter((v): v is Vehicle => v != null)
+        .sort((a, b) => a.code.localeCompare(b.code));
+
+      const raiz = document.createElement('div');
+      raiz.style.cssText = `min-width:180px;font-family:system-ui,sans-serif;color:${oscuro ? '#e2e8f0' : '#0f172a'}`;
+      const titulo = document.createElement('div');
+      titulo.textContent = `${miembros.length} vehículos detenidos en (${Math.round(punto.x)}, ${Math.round(punto.y)})`;
+      titulo.style.cssText = 'font-size:12px;font-weight:700;margin-bottom:6px';
+      raiz.appendChild(titulo);
+      const lista = document.createElement('div');
+      lista.style.cssText = 'max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px';
+      for (const v of miembros) {
+        const incidencia = v.status === 'broken' || v.status === 'maintenance';
+        const fila = document.createElement('button');
+        fila.type = 'button';
+        fila.style.cssText = `display:flex;justify-content:space-between;gap:12px;width:100%;padding:4px 6px;border:0;border-radius:6px;cursor:pointer;font-size:12px;text-align:left;background:${oscuro ? '#1e293b' : '#f1f5f9'};color:inherit`;
+        const codigo = document.createElement('span');
+        codigo.textContent = v.code;
+        codigo.style.cssText = 'font-family:monospace;font-weight:700';
+        const estado = document.createElement('span');
+        estado.textContent = ETIQUETA_ESTADO[v.status] ?? v.status;
+        estado.style.color = v.status === 'broken' ? '#ef4444' : incidencia ? '#f59e0b' : oscuro ? '#94a3b8' : '#64748b';
+        fila.append(codigo, estado);
+        fila.addEventListener('click', (e) => {
+          e.stopPropagation();
+          map.closePopup();
+          onSelectVehicleRef.current?.(v);
+        });
+        lista.appendChild(fila);
+      }
+      raiz.appendChild(lista);
+      L.popup({ closeButton: true, autoPan: false, className: oscuro ? 'popup-grupo popup-grupo-oscuro' : 'popup-grupo' })
+        .setLatLng([punto.y, punto.x])
+        .setContent(raiz)
+        .openOn(map);
+    };
+
+    const actualizarMarcadorGrupo = (clave: string, punto: { x: number; y: number }, ids: string[]) => {
+      const porId = new Map(vehiclesRef.current.map((v) => [v.id, v]));
+      const averiados = ids.filter((id) => porId.get(id)?.status === 'broken').length;
+      const oscuro = isDarkThemeRef.current;
+      // En un almacén el contador va como insignia arriba a la derecha, para no tapar su ícono.
+      const enAlmacen = warehousesRef.current.some(
+        (w) => Math.abs(w.coords.x - punto.x) < 1e-3 && Math.abs(w.coords.y - punto.y) < 1e-3
+      );
+      const firma = `${ids.join(',')}|${averiados}|${oscuro}|${enAlmacen}`;
+      let entrada = groupMarkersRef.current.get(clave);
+      if (entrada && entrada.firma === firma) return;
+
+      const relleno = averiados > 0 ? '#C62828' : oscuro ? '#334155' : '#475569';
+      const icono = L.divIcon({
+        className: 'svg-style-vehicle-marker',
+        html: `
+          <svg width="40" height="40" viewBox="-20 -20 40 40" style="overflow: visible; cursor: pointer; display: block;">
+            ${averiados > 0 ? '<circle cx="0" cy="0" r="15" fill="#C62828" fill-opacity="0.35" />' : ''}
+            <circle cx="0" cy="0" r="11" fill="${relleno}" stroke="#ffffff" stroke-width="1.8" />
+            <text x="0" y="4" text-anchor="middle" font-size="${ids.length > 99 ? 8 : 10}" font-family="monospace"
+              font-weight="bold" fill="#ffffff">${ids.length}</text>
+          </svg>`,
+        iconSize: [40, 40],
+        iconAnchor: enAlmacen ? [2, 38] : [20, 20],
+      });
+
+      if (!entrada) {
+        const marker = L.marker([punto.y, punto.x], { icon: icono, zIndexOffset: averiados > 0 ? 1000 : 500 });
+        marker.bindTooltip('', { direction: 'top', offset: [0, -14] });
+        marker.on('click', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          abrirListaGrupo(clave, punto);
+        });
+        capa.addLayer(marker);
+        entrada = { marker, firma, ids };
+        groupMarkersRef.current.set(clave, entrada);
+      } else {
+        entrada.marker.setIcon(icono);
+        entrada.marker.setZIndexOffset(averiados > 0 ? 1000 : 500);
+        entrada.firma = firma;
+        entrada.ids = ids;
+      }
+      entrada.marker.setTooltipContent(
+        `${ids.length} vehículos detenidos${averiados > 0 ? ` · ${averiados} averiado${averiados > 1 ? 's' : ''}` : ''} — clic para ver`
+      );
+    };
+
     const unsubscribe = simulationEngine.subscribe((snap) => {
+      // Vehiculos detenidos en un mismo punto (2+, sin contar el seleccionado, que siempre se ve
+      // solo): un marcador con contador en vez de N marcadores encimados.
+      const agrupados = new Set<string>();
+      const gruposVigentes = new Set<string>();
+      for (const g of snap.gruposDetenidos) {
+        const ids = g.ids.filter((id) => id !== selectedVehicleIdRef.current && vehicleMarkersRef.current.has(id));
+        if (ids.length < 2) continue;
+        ids.forEach((id) => agrupados.add(id));
+        gruposVigentes.add(g.clave);
+        actualizarMarcadorGrupo(g.clave, g.punto, ids);
+      }
+      for (const [clave, entrada] of groupMarkersRef.current) {
+        if (!gruposVigentes.has(clave)) {
+          capa.removeLayer(entrada.marker);
+          groupMarkersRef.current.delete(clave);
+        }
+      }
+
       for (const [id, marker] of vehicleMarkersRef.current) {
         const punto = snap.vehiclePositions.get(id);
         if (punto) {
           marker.setLatLng([punto.y, punto.x]);
         }
+        if (agrupados.has(id)) {
+          if (capa.hasLayer(marker)) capa.removeLayer(marker);
+          continue;
+        }
+        if (!capa.hasLayer(marker)) capa.addLayer(marker);
 
         if (id === selectedVehicleIdRef.current && selectedRouteLineRef.current) {
           const ruta = simulationEngine.getRutaVisible(id);
@@ -693,7 +837,12 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         setBuffering(snap.buffering);
       }
     });
-    return unsubscribe;
+    const grupos = groupMarkersRef.current;
+    return () => {
+      unsubscribe();
+      for (const entrada of grupos.values()) capa.removeLayer(entrada.marker);
+      grupos.clear();
+    };
   }, []);
 
   return (
