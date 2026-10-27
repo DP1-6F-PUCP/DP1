@@ -39,3 +39,19 @@ services:
       - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL:-60}
       - WATCHTOWER_INCLUDE_RESTARTING=true
     command: --interval ${WATCHTOWER_INTERVAL:-60} --cleanup backend frontend
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dozzle_data:/data
+    environment:
+      - DOZZLE_AUTH_PROVIDER=simple
+      - DOZZLE_BASE=${DOZZLE_BASE:-/}
+
+volumes:
+  dozzle_data:
+
