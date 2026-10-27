@@ -49,9 +49,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - dozzle_data:/data
     environment:
-      - DOZZLE_AUTH_PROVIDER=simple
       - DOZZLE_BASE=${DOZZLE_BASE:-/}
 
 volumes:
   dozzle_data:
-
