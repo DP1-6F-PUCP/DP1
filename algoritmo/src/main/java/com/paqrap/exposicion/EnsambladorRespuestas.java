@@ -141,7 +141,8 @@ public final class EnsambladorRespuestas {
                 .toList();
         return new VehiculoDTO(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), unidad.getEstado().name(),
                 unidad.getPosicion().x(), unidad.getPosicion().y(), cargaActual, geometriaRetorno,
-                unidad.getActividadActual().name(), calcularActividadDesde(unidad), trayectoria);
+                unidad.getActividadActual().name(), calcularActividadDesde(unidad), trayectoria,
+                unidad.getAveriaActual() == null ? null : unidad.getAveriaActual().tipo().name());
     }
 
     /**

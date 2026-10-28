@@ -234,6 +234,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     if (!selectedVehicleId || !vehicleSelectionChanged) return;
 
     setActiveTab('fleet');
+    setExpandedVehicleId(selectedVehicleId);
     if (isCollapsed) onToggleCollapse();
 
     requestAnimationFrame(() => {

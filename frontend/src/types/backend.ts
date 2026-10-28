@@ -55,6 +55,8 @@ export interface VehiculoDTO {
   // Recorrido real del ultimo lote, nodo a nodo con instantes simulados (incluye pausas): desde
   // cada punto hasta el siguiente el vehiculo hace `actividad`.
   trayectoria: PuntoTrayectoriaDTO[];
+  // Tipo de la avería activa ("TIPO_1", "TIPO_2" o "TIPO_3"); null si no está averiado.
+  tipoAveria: string | null;
 }
 
 export interface PuntoTrayectoriaDTO {

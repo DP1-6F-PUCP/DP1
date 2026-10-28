@@ -21,7 +21,7 @@ import {
   ConfiguracionActualDTO,
 } from '../types/backend';
 import { Order, OrderStatus, OrderUrgency } from '../types/order';
-import { Vehicle, VehicleType, VehicleStatus } from '../types/vehicle';
+import { BreakdownType, Vehicle, VehicleType, VehicleStatus } from '../types/vehicle';
 import { Route, Warehouse, BlockedStreet, Point } from '../types/route';
 import { generateManhattanPath, isSegmentBlocked, normalizeManhattanPath } from './manhattan';
 import { parseBackendSimulatedTime } from './backendTime';
@@ -48,6 +48,29 @@ const ACTIVIDAD_A_STATUS: Partial<Record<string, VehicleStatus>> = {
   ENTREGANDO: 'delivering',
   EN_REFRIGERIO: 'on_break',
 };
+
+const TIPO_AVERIA_A_BREAKDOWN_TYPE: Record<string, BreakdownType> = {
+  TIPO_1: 1,
+  TIPO_2: 2,
+  TIPO_3: 3,
+};
+
+function parseBreakdownType(value: string | number | null | undefined): BreakdownType | undefined {
+  if (typeof value === 'number') {
+    return value === 1 || value === 2 || value === 3 ? value : undefined;
+  }
+  if (!value) return undefined;
+
+  const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  const enumValue = TIPO_AVERIA_A_BREAKDOWN_TYPE[normalized];
+  if (enumValue) return enumValue;
+
+  const numericValue = Number(normalized.replace(/^TIPO_?/, ''));
+  if (numericValue === 1) return 1;
+  if (numericValue === 2) return 2;
+  if (numericValue === 3) return 3;
+  return undefined;
+}
 
 const ESTADO_RUTA_A_STATUS: Record<string, Route['status']> = {
   PLANIFICADA: 'planned',
@@ -186,6 +209,7 @@ export function adaptVehiculo(
     status: (dto.estado === 'EN_RUTA' && ACTIVIDAD_A_STATUS[dto.actividad])
       || ESTADO_UNIDAD_A_STATUS[dto.estado]
       || 'idle',
+    breakdownType: parseBreakdownType(dto.tipoAveria),
     position,
     destination,
     returnPath: normalizeManhattanPath(dto.geometriaRetorno.map(parseNodo)),
@@ -247,7 +271,9 @@ export function adaptRuta(
   dto: RutaDTO,
   vehiculo: VehiculoDTO | undefined,
   pedidosById: Map<string, PedidoDTO>,
-  bloqueos: BlockedStreet[]
+  bloqueos: BlockedStreet[],
+  cityWidth: number,
+  cityHeight: number
 ): Route {
   const puntos: Point[] = dto.secuenciaEntrega
     .map((id) => pedidosById.get(id))
@@ -270,7 +296,7 @@ export function adaptRuta(
     waypoints = [origin];
     let cursor = origin;
     for (const punto of puntos) {
-      const tramo = generateManhattanPath(cursor, punto, bloqueos);
+      const tramo = generateManhattanPath(cursor, punto, bloqueos, cityWidth, cityHeight);
       waypoints = waypoints.concat(tramo.slice(1));
       cursor = tramo[tramo.length - 1];
     }
@@ -318,7 +344,16 @@ export function adaptEstadoOperacion(
       adaptVehiculo(v, config, estado.rutas, pedidosById, nowMs)
     ),
     orders: pedidos.map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs)),
-    routes: estado.rutas.map((r) => adaptRuta(r, vehiculosById.get(r.vehiculoId), pedidosById, blockedStreets)),
+    routes: estado.rutas.map((r) =>
+      adaptRuta(
+        r,
+        vehiculosById.get(r.vehiculoId),
+        pedidosById,
+        blockedStreets,
+        config.ciudad.ancho,
+        config.ciudad.alto
+      )
+    ),
     warehouses: estado.almacenes.map(adaptAlmacen),
     blockedStreets,
   };

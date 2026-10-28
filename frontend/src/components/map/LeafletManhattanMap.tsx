@@ -30,6 +30,20 @@ const ETIQUETA_ESTADO: Record<string, string> = {
   maintenance: 'Mantenimiento',
 };
 
+// Colores exclusivos para averías: no reutilizan los colores de carga, semáforo, almacenes
+// ni estados operativos del resto de marcadores.
+const BREAKDOWN_COLORS: Record<number, string> = {
+  1: '#8B5CF6',
+  2: '#EC4899',
+  3: '#14B8A6',
+};
+
+const BREAKDOWN_LABELS: Record<number, string> = {
+  1: 'Avería Tipo 1 (Menor)',
+  2: 'Avería Tipo 2 (Intermedia)',
+  3: 'Avería Tipo 3 (Mayor)',
+};
+
 const getVehicleIconMarkup = (vehicle: Vehicle) => {
   const iconProps = {
     size: 15,
@@ -621,7 +635,14 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
       // El color del círculo comunica la carga disponible; la selección se mantiene con el aro
       // exterior y los estados operativos con sus acentos para no ocultar esta información.
-      const bubbleFill = isReturning ? '#6B7280' : loadStatus.hex;
+      const breakdownType = v.status === 'broken' ? v.breakdownType : undefined;
+      const breakdownBadge = breakdownType ? `A${breakdownType}` : '!';
+      const breakdownColor = breakdownType ? BREAKDOWN_COLORS[breakdownType] : '#6B21A8';
+      const bubbleFill = v.status === 'broken'
+        ? breakdownColor
+        : isReturning
+          ? '#6B7280'
+          : loadStatus.hex;
       const vehicleIconMarkup = getVehicleIconMarkup(v);
 
       const vehicleIcon = L.divIcon({
@@ -656,7 +677,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
                     cx="0"
                     cy="0"
                     r="10"
-                    fill="#C62828"
+                    fill="${v.status === 'broken' ? breakdownColor : '#C62828'}"
                     fill-opacity="0.35"
                   />`
                 : ''
@@ -672,15 +693,37 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
               stroke-width="1.7"
             />
 
-            <!-- Vehicle icon inside the capacity circle -->
-            <g transform="translate(-7.5 -7.5)">
-              ${vehicleIconMarkup}
-            </g>
+            <!-- The breakdown badge replaces the vehicle icon so the type remains legible. -->
+            ${
+              v.status === 'broken'
+                ? ''
+                : `<g transform="translate(-7.5 -7.5)">
+                    ${vehicleIconMarkup}
+                  </g>`
+            }
 
             <!-- Geometric accent for delayed / broken -->
             ${
               isDelayedOrBroken
-                ? `<rect
+                ? v.status === 'broken'
+                  ? `<circle
+                    cx="0"
+                    cy="0"
+                    r="5.2"
+                    fill="#ffffff"
+                    fill-opacity="0.95"
+                  />
+                  <text
+                    x="0"
+                    y="0.5"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    font-family="system-ui, -apple-system, sans-serif"
+                    font-size="5.8"
+                    font-weight="800"
+                    fill="${breakdownColor}"
+                  >${breakdownBadge}</text>`
+                  : `<rect
                     x="-1.8"
                     y="-1.8"
                     width="3.6"
@@ -713,11 +756,17 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const fillRatio = v.capacity > 0 ? v.currentLoad / v.capacity : 0;
       const pct = Math.round(fillRatio * 100);
       const estadoTexto = isReturning ? 'Regresando al almacén' : ETIQUETA_ESTADO[v.status] ?? v.status;
+      const averiaTexto = v.status === 'broken'
+        ? (breakdownType
+          ? BREAKDOWN_LABELS[breakdownType]
+          : 'Avería: tipo no informado')
+        : '';
       const tooltipContent = `
         <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 120px;">
           <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${v.code}</div>
           <div><strong>Ocupación:</strong> ${v.currentLoad} / ${v.capacity} paq (${pct}%)</div>
           <div><strong>Estado:</strong> ${estadoTexto}</div>
+          ${averiaTexto ? `<div><strong>${averiaTexto}</strong></div>` : ''}
         </div>
       `;
 

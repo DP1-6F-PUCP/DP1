@@ -103,7 +103,9 @@ export function isSegmentBlocked(
 export function generateManhattanPath(
   start: Point,
   destination: Point,
-  blockedStreets: BlockedStreet[]
+  blockedStreets: BlockedStreet[],
+  width = GRID_WIDTH_KM,
+  height = GRID_HEIGHT_KM
 ): Point[] {
   if (start.x === destination.x && start.y === destination.y) {
     return [{ ...start }];
@@ -156,9 +158,9 @@ export function generateManhattanPath(
       const key = `${next.x},${next.y}`;
       if (
         next.x < 0 ||
-        next.x > GRID_WIDTH_KM ||
+        next.x > width ||
         next.y < 0 ||
-        next.y > GRID_HEIGHT_KM ||
+        next.y > height ||
         visited.has(key) ||
         isSegmentBlocked(current, next, blockedStreets)
       ) {

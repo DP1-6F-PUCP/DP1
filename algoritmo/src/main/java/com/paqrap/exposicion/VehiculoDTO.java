@@ -26,8 +26,10 @@ import java.util.List;
  * @param trayectoria recorrido real del último lote, nodo a nodo y con instantes simulados,
  *         incluyendo las pausas -- el visualizador lo reproduce tal cual en vez de adivinar el
  *         camino y los tiempos entre dos posiciones finales consecutivas.
+ * @param tipoAveria tipo de avería activa ({@code TIPO_1}, {@code TIPO_2} o {@code TIPO_3}), o
+ *         {@code null} si la unidad no está averiada.
  */
 public record VehiculoDTO(String idUnidad, String tipo, String estado, int posXActual, int posYActual,
         int cargaActual, List<String> geometriaRetorno, String actividad, LocalDateTime actividadDesde,
-        List<PuntoTrayectoriaDTO> trayectoria) {
+        List<PuntoTrayectoriaDTO> trayectoria, String tipoAveria) {
 }
