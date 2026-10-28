@@ -20,16 +20,26 @@ export const SeleccionarEscenarioGate: React.FC<{
   const [fecha, setFecha] = useState(formatDateForInput(new Date()));
   const [hora, setHora] = useState('07:00');
 
-  // DIA_A_DIA es "tiempo real" (k=1): por defecto arranca desde la hora actual, no desde las 07:00.
-  // Sigue siendo editable (p. ej. para una prueba en un día concreto).
+  // DIA_A_DIA es "tiempo real" (k=1): siempre arranca desde el instante actual.
   useEffect(() => {
     if (tipo === 'DIA_A_DIA') {
       const ahora = new Date();
       setFecha(formatDateForInput(ahora));
       setHora(`${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`);
-    } else {
-      setHora('07:00');
     }
+
+    if (tipo !== 'DIA_A_DIA') {
+      setHora('07:00');
+      return;
+    }
+
+    const actualizarHoraActual = () => {
+      const ahora = new Date();
+      setFecha(formatDateForInput(ahora));
+      setHora(`${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`);
+    };
+    const intervalo = window.setInterval(actualizarHoraActual, 60_000);
+    return () => window.clearInterval(intervalo);
   }, [tipo]);
 
   // Solo hay datos oficiales del curso (ventas/bloqueos) de 2026-01 a 2028-12: fuera de ese rango
@@ -60,20 +70,26 @@ export const SeleccionarEscenarioGate: React.FC<{
                 </strong>
               </div>
               <h1 className="text-[26px] font-bold tracking-tight text-slate-950 dark:text-slate-100">Inicio de ejecución</h1>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Define la fecha y hora para comenzar la operación</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {tipo === 'DIA_A_DIA'
+                  ? 'El tiempo real comienza obligatoriamente en la fecha y hora actuales'
+                  : 'Define la fecha y hora para comenzar la operación'}
+              </p>
             </div>
 
             <div className="space-y-5">
               <div>
                 <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
                   <label htmlFor="fecha-inicio-simulada">Fecha</label>
-                  <button type="button" className="text-blue-600 hover:text-blue-700" onClick={() => setFecha(formatDateForInput(new Date()))}>
-                    Hoy
-                  </button>
+                  {tipo !== 'DIA_A_DIA' && (
+                    <button type="button" className="text-blue-600 hover:text-blue-700" onClick={() => setFecha(formatDateForInput(new Date()))}>
+                      Hoy
+                    </button>
+                  )}
                 </div>
                 <div>
-                  <input id="fecha-inicio-simulada" type="date" value={fecha} min={FECHA_MIN_DATOS} max={FECHA_MAX_DATOS} onChange={(e) => setFecha(e.target.value)}
-                    className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900" />
+                  <input id="fecha-inicio-simulada" type="date" value={fecha} min={FECHA_MIN_DATOS} max={FECHA_MAX_DATOS} disabled={tipo === 'DIA_A_DIA'} onChange={(e) => setFecha(e.target.value)}
+                    className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900" />
                 </div>
                 <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                   {new Date(`${fecha}T12:00:00`).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
@@ -83,8 +99,8 @@ export const SeleccionarEscenarioGate: React.FC<{
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-slate-700 dark:text-slate-300" htmlFor="hora-inicio-simulada">Hora</label>
                 <div>
-                  <input id="hora-inicio-simulada" type="time" value={hora} onChange={(e) => setHora(e.target.value)}
-                    className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900" />
+                  <input id="hora-inicio-simulada" type="time" value={hora} disabled={tipo === 'DIA_A_DIA'} onChange={(e) => setHora(e.target.value)}
+                    className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900" />
                 </div>
               </div>
             </div>
@@ -113,7 +129,12 @@ export const SeleccionarEscenarioGate: React.FC<{
               onClick={() =>
                 iniciarEscenario({
                   tipo,
-                  fechaInicioSimulada: fecha ? `${fecha}T${hora || '00:00'}:00Z` : undefined,
+                  fechaInicioSimulada:
+                    tipo === 'DIA_A_DIA'
+                      ? new Date().toISOString()
+                      : fecha
+                        ? `${fecha}T${hora || '00:00'}:00Z`
+                        : undefined,
                   ajustesIniciales: ajustesPendientes.length > 0 ? ajustesPendientes : undefined,
                 })
               }

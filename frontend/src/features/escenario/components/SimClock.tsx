@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { simulationEngine } from '../../../engine/simulationEngine';
 import { useScenarioStore } from '../../../store/scenarioStore';
+import { formatBackendSimulatedTime } from '../../../utils/backendTime';
 
 /**
  * Lee el reloj simulado del motor central (ver engine/simulationEngine.ts) en vez de mantener su
@@ -22,14 +23,7 @@ export const SimClock: React.FC = () => {
   const snap = simulationEngine.getSnapshotNow();
   if (snap.nowSimMs == null) return null;
 
-  const fechaFormateada = new Date(snap.nowSimMs).toLocaleString('es-PE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  const fechaFormateada = formatBackendSimulatedTime(snap.nowSimMs, true, true);
 
   // Mas de dos lotes (sa) sin recibir uno nuevo, con margen -- antes estaba fijo en 50s, que solo
   // tenia sentido con sa=20s.

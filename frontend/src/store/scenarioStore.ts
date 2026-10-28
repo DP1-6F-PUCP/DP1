@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { EjecucionEscenarioDTO, TipoEscenarioBackend } from '../types/backend';
+import { parseBackendSimulatedTime } from '../utils/backendTime';
 
 interface ScenarioState {
   ejecucion: EjecucionEscenarioDTO | null;
@@ -18,7 +19,7 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
   scenarioStartMs: () => {
     const fecha = get().ejecucion?.fechaInicioSimulada;
     if (!fecha) return null;
-    const ms = Date.parse(fecha);
+    const ms = parseBackendSimulatedTime(fecha);
     return Number.isFinite(ms) ? ms : null;
   },
 }));

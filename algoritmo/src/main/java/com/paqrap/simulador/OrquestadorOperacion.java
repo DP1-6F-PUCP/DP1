@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -123,6 +124,7 @@ public class OrquestadorOperacion {
     private volatile List<com.paqrap.simulador.EventoSimulacion> ultimosEventos = List.of();
     private final List<EventoSimulacion> eventosIncidenciaLote = new ArrayList<>();
     private volatile LocalDateTime anclaUltimoLote;
+    private LocalDateTime fechaFinSimulada;
 
     public OrquestadorOperacion(Planificador planificador, GestorLogSimulacion gestorLog, float sa, float ta,
             float k, float tiempoMaximoComputoSegundos, ContextoProblema contextoInicial,
@@ -175,9 +177,13 @@ public class OrquestadorOperacion {
         }
         this.ejecucionActual = new EjecucionEscenario(UUID.randomUUID().toString(), tipoEscenario,
                 contextoProblema.marcaTiempoActual(), sa, k);
+        this.fechaFinSimulada = tipoEscenario == TipoEscenario.CINCO_DIAS
+                ? contextoProblema.marcaTiempoActual().plusDays(5)
+                : null;
         this.ejecucionActual.iniciar();
         this.detenido = false;
         this.bloqueosNotificados.clear();
+        notificarCierreDeLote();
 
         this.programador = Executors.newSingleThreadScheduledExecutor();
         long periodoMs = Math.round(sa * 60_000.0);
@@ -460,6 +466,11 @@ public class OrquestadorOperacion {
         todasLasRutas.addAll(rutasNuevas);
 
         double horasAvance = (sa / 60.0) * k;
+        if (fechaFinSimulada != null) {
+            long segundosRestantes = Duration.between(contextoProblema.marcaTiempoActual(), fechaFinSimulada)
+                    .getSeconds();
+            horasAvance = Math.min(horasAvance, Math.max(0, segundosRestantes) / 3600.0);
+        }
         List<Pedido> noAsignados = pedidosNoAsignados(todasLasRutas, pedidosDelLote);
         anclaUltimoLote = contextoProblema.marcaTiempoActual();
         long tAntesSimular = System.currentTimeMillis();
@@ -477,6 +488,9 @@ public class OrquestadorOperacion {
 
         LocalDateTime instanteAnterior = contextoProblema.marcaTiempoActual();
         LocalDateTime nuevoInstante = instanteAnterior.plusSeconds(Math.round(horasAvance * 3600.0));
+        if (fechaFinSimulada != null && nuevoInstante.isAfter(fechaFinSimulada)) {
+            nuevoInstante = fechaFinSimulada;
+        }
         registrarBloqueosQueComienzan(instanteAnterior, nuevoInstante);
         ultimosEventos.addAll(eventosIncidenciaLote);
 
@@ -505,6 +519,12 @@ public class OrquestadorOperacion {
         if (hayIncumplimiento) {
             reporte.incrementarIncumplidos(1);
             ejecucionActual.setEstado(EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO);
+            detener();
+            notificarCierreDeLote();
+            return;
+        }
+
+        if (fechaFinSimulada != null && !nuevoInstante.isBefore(fechaFinSimulada)) {
             detener();
             notificarCierreDeLote();
             return;

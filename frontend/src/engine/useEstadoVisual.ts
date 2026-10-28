@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
 import { simulationEngine } from './simulationEngine';
+import { parseBackendSimulatedTime } from '../utils/backendTime';
 import { EstadoVisual } from './types';
 
 /**
@@ -25,6 +26,8 @@ export function useEstadoVisual(): EstadoVisual {
     warehouses: vivo.warehouses,
     blockedStreets: vivo.blockedStreets,
     estadoRaw: vivo.estadoRaw,
-    marcaVisibleMs: vivo.estadoRaw?.marcaTiempoActual ? Date.parse(vivo.estadoRaw.marcaTiempoActual) : null,
+    marcaVisibleMs: vivo.estadoRaw?.marcaTiempoActual
+      ? parseBackendSimulatedTime(vivo.estadoRaw.marcaTiempoActual)
+      : null,
   };
 }

@@ -24,6 +24,7 @@ import { Order, OrderStatus, OrderUrgency } from '../types/order';
 import { Vehicle, VehicleType, VehicleStatus } from '../types/vehicle';
 import { Route, Warehouse, BlockedStreet, Point } from '../types/route';
 import { generateManhattanPath, isSegmentBlocked, normalizeManhattanPath } from './manhattan';
+import { parseBackendSimulatedTime } from './backendTime';
 
 const TIPO_A_VEHICLE_TYPE: Record<string, VehicleType> = {
   AUTO: 'car',
@@ -152,7 +153,7 @@ function minutosRestantesActividad(
   nowMs: number | null
 ): number | undefined {
   if (!actividadDesde || nowMs == null) return undefined;
-  const desdeMs = Date.parse(actividadDesde);
+  const desdeMs = parseBackendSimulatedTime(actividadDesde);
   if (!Number.isFinite(desdeMs)) return undefined;
   const finMs = desdeMs + duracionHoras * 3_600_000;
   return Math.max(0, Math.round((finMs - nowMs) / 60_000));
@@ -307,7 +308,7 @@ export function adaptEstadoOperacion(
   pedidos: PedidoDTO[],
   scenarioStartMs: number | null
 ): EstadoAdaptado {
-  const nowMs = estado.marcaTiempoActual ? Date.parse(estado.marcaTiempoActual) : null;
+  const nowMs = estado.marcaTiempoActual ? parseBackendSimulatedTime(estado.marcaTiempoActual) : null;
   const pedidosById = new Map(pedidos.map((p) => [p.idPedido, p]));
   const vehiculosById = new Map(estado.vehiculos.map((v) => [v.idUnidad, v]));
   const blockedStreets = estado.bloqueos.filter((b) => b.vigente).flatMap(adaptBloqueo);

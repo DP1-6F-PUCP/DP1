@@ -10,9 +10,9 @@ import java.util.List;
  * Cuerpo de {@code POST /api/escenarios}.
  *
  * @param fechaInicioSimulada instante simulado desde el que arranca el escenario; opcional --
- *         si se omite, se usa el instante real del servidor (comportamiento previo). Necesario
- *         para escenarios que no tiene sentido arrancar "ahora", como {@code CINCO_DIAS} sobre
- *         un período histórico específico de los datos oficiales del curso.
+ *         si se omite, se usa el instante real del servidor. Para {@code DIA_A_DIA} se ignora
+ *         cualquier valor recibido y siempre se usa el instante real del servidor; solo los
+ *         escenarios históricos, como {@code CINCO_DIAS}, pueden comenzar en una fecha indicada.
  * @param ajustesIniciales cambios de configuración a aplicar antes del primer lote (velocidad,
  *         capacidad, flota, posición/capacidad/frecuencia de almacén, configuración de ciudad u
  *         operación, incluso una avería de arranque) -- opcional, vacío si se omite. A diferencia

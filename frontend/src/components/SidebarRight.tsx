@@ -3,36 +3,180 @@ import {
   Clock,
   AlertTriangle,
   ChevronLeft,
-  ChevronRight,
   ChevronDown,
+  ChevronUp,
   Car,
   Bike,
   Warehouse as WarehouseIcon,
   Activity,
   Search,
+  Filter,
+  Truck,
+  Package,
   MapPin,
   MinusCircle,
   X,
-  Layers,
-  ShieldAlert,
   SlidersHorizontal,
   Coffee,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Timer,
+  Navigation,
+  Box,
 } from 'lucide-react';
 import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useEscenario } from '../features/escenario/hooks/useEscenario';
 import { useMapStore } from '../store/mapStore';
-import { useAlertas } from '../features/alertas/hooks/useAlertas';
 import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
 import { BreakdownType } from '../types';
 import { BreakdownModal } from './BreakdownModal';
 import { ConfigModal } from './ConfigModal';
-import { DelayAlertModal } from './DelayAlertModal';
 import { useToast } from './ToastProvider';
 import { getVehicleSemaforoStatus } from '../utils/vehicleStatus';
 import { useSemaforoStore } from '../store/semaforoStore';
 import { useScenarioStore } from '../store/scenarioStore';
 import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
-import type { EventoDTO } from '../types/backend';
+import { Vehicle } from '../types/vehicle';
+import { formatBackendSimulatedTime, parseBackendSimulatedTime } from '../utils/backendTime';
+
+type FleetSortKey =
+  | 'occupancy_asc'
+  | 'occupancy_desc'
+  | 'departure_asc'
+  | 'departure_desc'
+  | 'arrival_asc'
+  | 'arrival_desc'
+  | 'dist_remaining_asc'
+  | 'dist_remaining_desc'
+  | 'dist_traveled_asc'
+  | 'dist_traveled_desc';
+
+type DistanceSearchMode = 'none' | 'to_dest' | 'to_origin';
+
+function manhattanDist(ax: number, ay: number, bx: number, by: number): number {
+  return Math.abs(ax - bx) + Math.abs(ay - by);
+}
+
+function kmToMinutes(km: number, speedKmh: number): number {
+  if (speedKmh <= 0) return 0;
+  return Math.round((km / speedKmh) * 60);
+}
+
+const CollapsibleSection: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  badge?: string | number;
+  badgeColor?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}> = ({ title, icon, badge, badgeColor = 'bg-slate-700 text-slate-300', defaultOpen = false, children }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <section className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-2.5 cursor-pointer hover:bg-slate-800/50 transition-colors"
+      >
+        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-300 tracking-wider">
+          {icon}
+          {title}
+          {badge !== undefined && (
+            <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono-code font-bold ${badgeColor}`}>
+              {badge}
+            </span>
+          )}
+        </span>
+        {isOpen ? (
+          <ChevronUp className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+        )}
+      </button>
+      {isOpen && <div className="px-3 pb-3 space-y-2">{children}</div>}
+    </section>
+  );
+};
+
+const StaticSection: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  badge?: string | number;
+  badgeColor?: string;
+  children: React.ReactNode;
+}> = ({ title, icon, badge, badgeColor = 'bg-slate-700 text-slate-300', children }) => (
+  <section className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+    <div className="flex items-center justify-between px-3 py-2.5">
+      <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-300 tracking-wider">
+        {icon}
+        {title}
+        {badge !== undefined && (
+          <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono-code font-bold ${badgeColor}`}>
+            {badge}
+          </span>
+        )}
+      </span>
+    </div>
+    <div className="px-3 pb-3 space-y-2">{children}</div>
+  </section>
+);
+
+const SemaforoBarra: React.FC<{ load: number; capacity: number }> = ({ load, capacity }) => {
+  const pct = capacity > 0 ? Math.min(100, Math.round((load / capacity) * 100)) : 0;
+  const barColor = pct >= 66 ? 'bg-emerald-500' : pct >= 33 ? 'bg-amber-500' : 'bg-rose-500';
+  const dotColor = pct >= 66 ? 'bg-emerald-400' : pct >= 33 ? 'bg-amber-400' : 'bg-rose-400';
+  const textColor = pct >= 66 ? 'text-emerald-300' : pct >= 33 ? 'text-amber-300' : 'text-rose-300';
+  return (
+    <div className="flex items-center gap-1.5 w-full">
+      <span className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
+      <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className={`text-[10px] font-mono-code font-bold shrink-0 ${textColor}`}>
+        {load === 0 ? `Vacío (0/${capacity})` : `${load}/${capacity} (${pct}%)`}
+      </span>
+    </div>
+  );
+};
+
+const isVehicleReturning = (vehicle: Vehicle) =>
+  vehicle.status === 'en_route' && vehicle.returnPath.length > 1;
+
+const SortButton: React.FC<{
+  label: string;
+  ascKey: FleetSortKey;
+  descKey: FleetSortKey;
+  current: FleetSortKey;
+  onChange: (k: FleetSortKey) => void;
+}> = ({ label, ascKey, descKey, current, onChange }) => {
+  const isAsc = current === ascKey;
+  const isDesc = current === descKey;
+  const isActive = isAsc || isDesc;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!isActive || isDesc) onChange(ascKey);
+        else onChange(descKey);
+      }}
+      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium shrink-0 transition-all cursor-pointer ${
+        isActive
+          ? 'bg-blue-600 text-white'
+          : 'bg-slate-800/80 border border-slate-700/50 text-slate-400 hover:text-slate-200'
+      }`}
+    >
+      <span>{label}</span>
+      {isAsc ? (
+        <ArrowUp className="h-2.5 w-2.5" />
+      ) : isDesc ? (
+        <ArrowDown className="h-2.5 w-2.5" />
+      ) : (
+        <ArrowUpDown className="h-2.5 w-2.5 opacity-50" />
+      )}
+    </button>
+  );
+};
 
 interface SidebarRightProps {
   isCollapsed: boolean;
@@ -51,62 +195,37 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
   const selectedWarehouseId = useMapStore((s) => s.selectedWarehouseId);
   const setSelectedWarehouseId = useMapStore((s) => s.setSelectedWarehouseId);
-  const { alertas } = useAlertas();
+  const selectedOrderId = useMapStore((s) => s.selectedOrderId);
+  const setSelectedOrderId = useMapStore((s) => s.setSelectedOrderId);
   const umbralesSemaforo = useSemaforoStore((s) => s.umbrales);
   const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
-  const [alertaDetalle, setAlertaDetalle] = useState<EventoDTO | null>(null);
   const { reportBreakdown, isReportingBreakdown } = useVehicles();
-  const { addToast, notifications } = useToast();
-  const alertasVistasRef = useRef<Set<string> | null>(null);
+  const { addToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'operation' | 'fleet'>('operation');
-  const [isAlertsCollapsed, setIsAlertsCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<'operation' | 'fleet' | 'shipments'>('operation');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [fleetSearchTerm, setFleetSearchTerm] = useState('');
   const [fleetFilterType, setFleetFilterType] = useState<'all' | 'car' | 'motorcycle' | 'bicycle'>('all');
   const [fleetFilterStatus, setFleetFilterStatus] = useState<
     'all' | 'idle' | 'en_route' | 'delivering' | 'on_break' | 'broken' | 'maintenance'
   >('all');
+  const [fleetSortKey, setFleetSortKey] = useState<FleetSortKey>('occupancy_desc');
+  const [distSearchMode, setDistSearchMode] = useState<DistanceSearchMode>('none');
+  const [distSearchMinutes, setDistSearchMinutes] = useState('');
+  const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
+  const [warehouseUpcomingHours, setWarehouseUpcomingHours] = useState(3);
+  const [warehouseDeliveredHours, setWarehouseDeliveredHours] = useState(6);
+  const [shipmentSearchTerm, setShipmentSearchTerm] = useState('');
+  const [shipmentStatusFilter, setShipmentStatusFilter] = useState<
+    'all' | 'on_time' | 'at_risk' | 'delayed' | 'delivered'
+  >('all');
+  const [shipmentWarehouseFilter, setShipmentWarehouseFilter] = useState('all');
 
   const previousSelectedVehicleId = useRef<string | null>(selectedVehicleId);
+  const previousSelectedOrderId = useRef<string | null>(selectedOrderId);
   const vehicleCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const orderCardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
-
-  // Para el detalle de una alerta de riesgo SLA (DelayAlertModal) -- mismo cálculo que usaba
-  // AlertasBell (ahora sin montar, ver alertaDetalle más abajo: se reusa solo el modal, no la
-  // lista, para no duplicar la lista de alertas que esta barra ya muestra).
-  const nowMsGlobal = estadoRaw?.marcaTiempoActual ? Date.parse(estadoRaw.marcaTiempoActual) : null;
-  const simMinuteGlobal =
-    nowMsGlobal != null && scenarioStartMs != null ? Math.round((nowMsGlobal - scenarioStartMs) / 60000) : 0;
-  const simTimeGlobal =
-    nowMsGlobal != null
-      ? new Date(nowMsGlobal).toLocaleString('es-PE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
-      : '--:--';
-  const ordenDetalle = alertaDetalle?.pedidoId ? orders.find((o) => o.id === alertaDetalle.pedidoId) ?? null : null;
-
-  useEffect(() => {
-    const bloqueos = alertas.filter((alerta) => alerta.tipo === 'INCIDENCIA_BLOQUEO');
-    const clavesActuales = new Set(
-      bloqueos.map((alerta) => `${alerta.instante}-${alerta.descripcion}`)
-    );
-
-    if (alertasVistasRef.current === null) {
-      alertasVistasRef.current = clavesActuales;
-      return;
-    }
-
-    bloqueos
-      .filter((alerta) => !alertasVistasRef.current?.has(`${alerta.instante}-${alerta.descripcion}`))
-      .forEach((alerta) => {
-        addToast({
-          type: 'warning',
-          title: 'Nuevo bloqueo vial',
-          description: alerta.descripcion,
-        });
-      });
-
-    alertasVistasRef.current = clavesActuales;
-  }, [alertas, addToast]);
 
   useEffect(() => {
     const vehicleSelectionChanged = previousSelectedVehicleId.current !== selectedVehicleId;
@@ -125,7 +244,67 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     });
   }, [selectedVehicleId, isCollapsed, onToggleCollapse]);
 
+  useEffect(() => {
+    const orderSelectionChanged = previousSelectedOrderId.current !== selectedOrderId;
+    previousSelectedOrderId.current = selectedOrderId;
+
+    if (!selectedOrderId || !orderSelectionChanged) return;
+
+    setActiveTab('shipments');
+    setShipmentSearchTerm('');
+    setShipmentStatusFilter('all');
+    setShipmentWarehouseFilter('all');
+    if (isCollapsed) onToggleCollapse();
+
+    requestAnimationFrame(() => {
+      orderCardRefs.current.get(selectedOrderId)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+  }, [selectedOrderId, isCollapsed, onToggleCollapse]);
+
   const targetWarehouse = warehouses.find((w) => w && w.id === selectedWarehouseId);
+  const currentSimulationMinute = estadoRaw?.marcaTiempoActual && ejecucion?.fechaInicioSimulada
+    ? Math.max(
+        0,
+        Math.round(
+          (parseBackendSimulatedTime(estadoRaw.marcaTiempoActual)
+            - parseBackendSimulatedTime(ejecucion.fechaInicioSimulada)) / 60000
+        )
+      )
+    : 0;
+
+  const getVehicleOrders = (vehicle: Vehicle) =>
+    orders.filter(
+      (order) =>
+        vehicle.assignedOrderIds.includes(order.id) ||
+        order.assignedVehicleId === vehicle.id
+    );
+
+  const getVehicleDistanceToDestination = (vehicle: Vehicle) => {
+    const destination = vehicle.destination ?? getVehicleOrders(vehicle)[0]?.destination;
+    return destination ? manhattanDist(vehicle.position.x, vehicle.position.y, destination.x, destination.y) : 0;
+  };
+
+  const getVehicleDistanceToOrigin = (vehicle: Vehicle) => {
+    const assignedOrder = getVehicleOrders(vehicle)[0];
+    const origin = warehouses.find((warehouse) => warehouse.id === vehicle.homeWarehouseId)?.coords
+      ?? warehouses.find((warehouse) => warehouse.id === assignedOrder?.warehouseOriginId)?.coords
+      ?? warehouses.find((warehouse) => warehouse.id === 'central')?.coords;
+    return origin ? manhattanDist(vehicle.position.x, vehicle.position.y, origin.x, origin.y) : 0;
+  };
+
+  const getVehicleDistanceTraveled = (vehicle: Vehicle) => {
+    const path = vehicle.historyPath.length > 1
+      ? vehicle.historyPath
+      : vehicle.trajectory.map((point) => ({ x: point.x, y: point.y }));
+    return path.reduce(
+      (total, point, index, path) =>
+        index === 0 ? total : total + manhattanDist(path[index - 1].x, path[index - 1].y, point.x, point.y),
+      0
+    );
+  };
 
   const handleConfirmBreakdown = (vehicleId: string, type: BreakdownType, reason: string) => {
     reportBreakdown(
@@ -181,8 +360,67 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     const matchesSearch =
       v.code.toLowerCase().includes(fleetSearchTerm.toLowerCase()) ||
       v.id.toLowerCase().includes(fleetSearchTerm.toLowerCase());
-    return matchesType && matchesStatus && matchesSearch;
+    const distance = distSearchMode === 'to_origin'
+      ? getVehicleDistanceToOrigin(v)
+      : getVehicleDistanceToDestination(v);
+    const maxMinutes = Number(distSearchMinutes);
+    const matchesDistance =
+      distSearchMode === 'none' ||
+      !distSearchMinutes.trim() ||
+      (Number.isFinite(maxMinutes) && kmToMinutes(distance, v.speed) <= maxMinutes);
+    return matchesType && matchesStatus && matchesSearch && matchesDistance;
+  }).sort((a, b) => {
+    const value = (vehicle: Vehicle) => {
+      const assignedOrders = getVehicleOrders(vehicle);
+      switch (fleetSortKey) {
+        case 'occupancy_asc':
+        case 'occupancy_desc':
+          return vehicle.capacity > 0 ? vehicle.currentLoad / vehicle.capacity : 0;
+        case 'departure_asc':
+        case 'departure_desc':
+          return assignedOrders.length ? Math.min(...assignedOrders.map((order) => order.createdMinute)) : Infinity;
+        case 'arrival_asc':
+        case 'arrival_desc':
+          return assignedOrders.length ? Math.max(...assignedOrders.map((order) => order.deadlineMinute)) : Infinity;
+        case 'dist_remaining_asc':
+        case 'dist_remaining_desc':
+          return kmToMinutes(getVehicleDistanceToDestination(vehicle), vehicle.speed);
+        case 'dist_traveled_asc':
+        case 'dist_traveled_desc':
+          return getVehicleDistanceTraveled(vehicle);
+      }
+    };
+    const difference = value(a) - value(b);
+    return fleetSortKey.endsWith('_desc') ? -difference : difference;
   });
+
+  const filteredOrders = orders.filter((order) => {
+    const search = shipmentSearchTerm.trim().toLowerCase();
+    const warehouseMatches =
+      shipmentWarehouseFilter === 'all' ||
+      order.warehouseOriginId === shipmentWarehouseFilter ||
+      (shipmentWarehouseFilter === 'central' && !order.warehouseOriginId);
+    const statusMatches = shipmentStatusFilter === 'all' || order.status === shipmentStatusFilter;
+    const searchMatches =
+      !search ||
+      [order.code, order.id, order.clientId, 'pedido de cliente'].some((value) =>
+        value?.toLowerCase().includes(search)
+      );
+    return warehouseMatches && statusMatches && searchMatches;
+  });
+
+  const formatShipmentTime = (minute: number) => {
+    if (scenarioStartMs == null) return '--:--';
+    return formatBackendSimulatedTime(scenarioStartMs + minute * 60_000, false);
+  };
+
+  const shipmentStatus = {
+    on_time: { label: 'A tiempo', className: 'border-emerald-500/50 bg-emerald-950/60 text-emerald-300' },
+    at_risk: { label: 'En riesgo', className: 'border-amber-500/50 bg-amber-950/60 text-amber-300' },
+    delayed: { label: 'Retrasado', className: 'border-rose-500/50 bg-rose-950/60 text-rose-300' },
+    delivered: { label: 'Entregado', className: 'border-blue-500/50 bg-blue-950/60 text-blue-300' },
+    collapsed: { label: 'Retrasado', className: 'border-rose-500/50 bg-rose-950/60 text-rose-300' },
+  } as const;
 
   return (
     <>
@@ -267,6 +505,23 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               <Car className="h-4 w-4" />
             </button>
 
+            {/* Tab Envíos */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('shipments');
+                onToggleCollapse();
+              }}
+              className={`p-2.5 rounded-xl text-white shadow transition-all cursor-pointer ${
+                activeTab === 'shipments'
+                  ? 'bg-blue-600 border border-blue-400'
+                  : 'bg-[var(--color-sidebar-surface)] hover:bg-[var(--color-sidebar-border)]'
+              }`}
+              title="Seguimiento de Envíos"
+            >
+              <Truck className="h-4 w-4" />
+            </button>
+
             <div className="mt-auto flex flex-col gap-3 pb-2">
               <button
                 type="button"
@@ -281,7 +536,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         ) : (
           /* VISTA EXPANDIDA */
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Selector de Pestañas: Operación | Seguimiento de Flota */}
+            {/* Selector de Pestañas: Operación | Flota | Envíos */}
             <div className="flex items-center px-3 pt-2.5 pb-2 border-b border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] gap-2 shrink-0">
               <button
                 type="button"
@@ -308,6 +563,19 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               >
                 <Car className="h-3.5 w-3.5" />
                 <span>Flota</span>
+              </button>
+              <button
+                type="button"
+                id="tab-btn-shipments"
+                onClick={() => setActiveTab('shipments')}
+                className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'shipments'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/50'
+                }`}
+              >
+                <Truck className="h-3.5 w-3.5" />
+                <span>Envíos</span>
               </button>
             </div>
 
@@ -382,8 +650,141 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 </div>
               )}
 
-              {/* PESTAÑA: SEGUIMIENTO DE FLOTA */}
-              {activeTab === 'fleet' ? (
+              {/* PESTAÑA: ENVÍOS */}
+              {activeTab === 'shipments' ? (
+                <div className="space-y-3 fade-in">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Gestión de Envíos</h3>
+                      <p className="text-[11px] text-slate-400">Pedidos activos y seguimiento de SLA</p>
+                    </div>
+                    <span className="rounded-lg bg-blue-500/15 px-2 py-1 text-[11px] font-mono-code text-blue-300">
+                      {filteredOrders.length}/{orders.length}
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={shipmentSearchTerm}
+                      onChange={(event) => setShipmentSearchTerm(event.target.value)}
+                      placeholder="Código, cliente o producto..."
+                      className="w-full rounded-xl border border-slate-700/80 bg-slate-900 py-2 pl-9 pr-8 text-xs text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                    />
+                    {shipmentSearchTerm && (
+                      <button type="button" onClick={() => setShipmentSearchTerm('')} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white" title="Limpiar búsqueda">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <Filter className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    {([
+                      ['all', 'Todos'],
+                      ['on_time', 'A tiempo'],
+                      ['at_risk', 'En riesgo'],
+                      ['delayed', 'Retrasado'],
+                      ['delivered', 'Entregado'],
+                    ] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setShipmentStatusFilter(key)}
+                        className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-medium ${
+                          shipmentStatusFilter === key ? 'bg-blue-600 text-white' : 'border border-slate-700/50 bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <select
+                    value={shipmentWarehouseFilter}
+                    onChange={(event) => setShipmentWarehouseFilter(event.target.value)}
+                    className="w-full rounded-xl border border-slate-700/80 bg-slate-900 px-3 py-2 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="all">Todos los almacenes</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                    ))}
+                  </select>
+
+                  {filteredOrders.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-slate-400">
+                      <Package className="mx-auto mb-2 h-7 w-7 text-slate-600" />
+                      <p className="font-medium text-slate-300">Sin coincidencias</p>
+                      <p className="mt-1 text-[11px]">Prueba con otro código o filtro.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {filteredOrders.map((order) => {
+                        const status = shipmentStatus[order.status];
+                        const warehouse = warehouses.find((item) => item.id === order.warehouseOriginId) ?? warehouses.find((item) => item.id === 'central') ?? warehouses[0];
+                        const vehicle = order.assignedVehicleId
+                          ? vehicles.find((item) => item.id === order.assignedVehicleId || item.code === order.assignedVehicleId)
+                          : undefined;
+                        const distance = warehouse
+                          ? Math.abs(order.destination.x - warehouse.coords.x) + Math.abs(order.destination.y - warehouse.coords.y)
+                          : 0;
+                        return (
+                          <article
+                            key={order.id}
+                            ref={(element) => {
+                              if (element) orderCardRefs.current.set(order.id, element);
+                              else orderCardRefs.current.delete(order.id);
+                            }}
+                            onClick={() => setSelectedOrderId(selectedOrderId === order.id ? null : order.id)}
+                            className={`rounded-2xl p-3 shadow-md cursor-pointer transition-colors ${
+                              selectedOrderId === order.id
+                                ? 'border-blue-400 bg-blue-950/60 ring-1 ring-blue-400/60'
+                                : 'border-slate-800 bg-[#0d1b2e]/90 hover:border-blue-500/40'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="font-mono-code text-sm font-bold text-white">{order.code}</span>
+                                <p className="mt-0.5 text-[10px] text-slate-400">Cliente: {order.clientId || 'No informado'}</p>
+                              </div>
+                              <span className={`shrink-0 rounded-lg border px-2 py-1 text-[10px] font-semibold ${status.className}`}>{status.label}</span>
+                            </div>
+                            <div className="mt-2 rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-[11px]">
+                              <p className="font-medium text-slate-200">Pedido de cliente</p>
+                              <p className="mt-1 text-slate-400">Carga: <strong className="text-slate-200">{order.quantity ?? 0} unidades</strong></p>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
+                              <div><span className="text-slate-500">Ruta</span><p className="font-medium text-slate-200">{warehouse?.name ?? 'Almacén Central'} → ({Math.round(order.destination.x)}, {Math.round(order.destination.y)}) · {distance} km</p></div>
+                              <div><span className="text-slate-500">Destino cartesiano</span><p className="font-mono-code font-medium text-cyan-300">X={order.destination.x}, Y={order.destination.y}</p></div>
+                              <div><span className="text-slate-500">Salida / ETA</span><p className="font-mono-code font-medium text-slate-200">{formatShipmentTime(order.createdMinute)} / {formatShipmentTime(order.deadlineMinute)}</p></div>
+                              <div><span className="text-slate-500">Tiempo máximo</span><p className="font-medium text-slate-200">{order.slaHours ?? 0} h</p></div>
+                            </div>
+                            <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
+                              <span className="text-[10px] text-slate-400">UT asignada</span>
+                              {vehicle ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedVehicleId(vehicle.id);
+                                    setActiveTab('fleet');
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-[10px] font-semibold text-blue-300 hover:bg-blue-500/20"
+                                >
+                                  <Car className="h-3 w-3" /> {vehicle.code}
+                                </button>
+                              ) : (
+                                <span className="text-[10px] italic text-slate-500">Sin asignar</span>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : activeTab === 'fleet' ? (
                 <div className="space-y-3 fade-in">
 
                   {/* Input de Búsqueda */}
@@ -493,6 +894,55 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     </div>
                   </div>
 
+                  <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/50 p-2.5">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <Navigation className="h-3.5 w-3.5 text-cyan-400" />
+                      Distancia por recorrer
+                    </div>
+                    <div className="flex gap-1.5">
+                      {([
+                        ['none', 'Sin filtro'],
+                        ['to_dest', 'Al destino'],
+                        ['to_origin', 'Al origen'],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setDistSearchMode(mode)}
+                          className={`rounded-lg px-2 py-1 text-[10px] font-medium ${
+                            distSearchMode === mode ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {distSearchMode !== 'none' && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          value={distSearchMinutes}
+                          onChange={(event) => setDistSearchMinutes(event.target.value)}
+                          placeholder="Máx. minutos"
+                          className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-[11px] text-slate-100 focus:border-cyan-500 focus:outline-none"
+                        />
+                        <span className="text-[10px] text-slate-500">estimados</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ordenar lista</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <SortButton label="Ocupación" ascKey="occupancy_asc" descKey="occupancy_desc" current={fleetSortKey} onChange={setFleetSortKey} />
+                      <SortButton label="Salida" ascKey="departure_asc" descKey="departure_desc" current={fleetSortKey} onChange={setFleetSortKey} />
+                      <SortButton label="Llegada" ascKey="arrival_asc" descKey="arrival_desc" current={fleetSortKey} onChange={setFleetSortKey} />
+                      <SortButton label="Por recorrer" ascKey="dist_remaining_asc" descKey="dist_remaining_desc" current={fleetSortKey} onChange={setFleetSortKey} />
+                      <SortButton label="Recorrida" ascKey="dist_traveled_asc" descKey="dist_traveled_desc" current={fleetSortKey} onChange={setFleetSortKey} />
+                    </div>
+                  </div>
+
                   {/* Lista de Vehículos */}
                   <div className="space-y-2.5 pt-1">
                     {filteredVehicles.length === 0 ? (
@@ -504,6 +954,16 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                       filteredVehicles.map((v) => {
                         const isSelected = selectedVehicleId === v.id;
                         const isBroken = v.status === 'broken';
+                        const isReturning = isVehicleReturning(v);
+                        const vehicleOrders = getVehicleOrders(v);
+                        const distanceToDestination = getVehicleDistanceToDestination(v);
+                        const distanceToOrigin = getVehicleDistanceToOrigin(v);
+                        const departureMinute = vehicleOrders.length
+                          ? Math.min(...vehicleOrders.map((order) => order.createdMinute))
+                          : undefined;
+                        const arrivalMinute = vehicleOrders.length
+                          ? Math.max(...vehicleOrders.map((order) => order.deadlineMinute))
+                          : undefined;
 
                         return (
                           <div
@@ -515,7 +975,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                 vehicleCardRefs.current.delete(v.id);
                               }
                             }}
-                            onClick={() => setSelectedVehicleId(isSelected ? null : v.id)}
+                            onClick={() => {
+                              setSelectedVehicleId(isSelected ? null : v.id);
+                              setExpandedVehicleId(isSelected ? null : v.id);
+                            }}
                             className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                               isSelected
                                 ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/50 shadow-lg'
@@ -525,7 +988,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                             {/* Fila Superior */}
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center">
+                                <div className={`p-1.5 rounded-lg flex items-center justify-center ${
+                                  isReturning ? 'bg-slate-600/30 text-slate-300' : 'bg-blue-600/20 text-blue-400'
+                                }`}>
                                   {v.type === 'car' ? <Car className="h-4 w-4" /> : <Bike className="h-4 w-4" />}
                                 </div>
                                 <div className="flex items-baseline gap-1.5">
@@ -537,7 +1002,11 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                               </div>
 
                               <div className="shrink-0">
-                                {v.status === 'idle' ? (
+                                {isReturning ? (
+                                  <span className="border border-slate-500/60 bg-slate-700/70 text-slate-200 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-medium">
+                                    <Navigation className="h-3 w-3 text-slate-300" /> Regresando
+                                  </span>
+                                ) : v.status === 'idle' ? (
                                   <span className="border border-slate-700 bg-slate-800 text-slate-300 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-medium">
                                     <MinusCircle className="h-3 w-3 text-slate-400" /> Inactivo
                                   </span>
@@ -591,32 +1060,98 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                 </span>
                               </div>
                             </div>
+                            {isReturning ? (
+                              <div className="flex items-center gap-1.5 w-full">
+                                <span className="h-2 w-2 rounded-full shrink-0 bg-slate-400" />
+                                <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                                  <div className="h-full rounded-full bg-slate-500 transition-all" style={{ width: `${v.capacity > 0 ? Math.min(100, Math.round((v.currentLoad / v.capacity) * 100)) : 0}%` }} />
+                                </div>
+                                <span className="text-[10px] font-mono-code font-bold text-slate-300 shrink-0">Regreso al almacén</span>
+                              </div>
+                            ) : (
+                              <SemaforoBarra load={v.currentLoad} capacity={v.capacity} />
+                            )}
+                            <div className="mt-1 flex flex-wrap justify-between gap-x-2 text-[9px] text-slate-500">
+                              <span>Destino: {kmToMinutes(distanceToDestination, v.speed)} min</span>
+                              <span>Origen: {kmToMinutes(distanceToOrigin, v.speed)} min</span>
+                              <span>Salida: {departureMinute === undefined ? '--:--' : formatShipmentTime(departureMinute)}</span>
+                              <span>Llegada: {arrivalMinute === undefined ? '--:--' : formatShipmentTime(arrivalMinute)}</span>
+                            </div>
 
                             {/* Detalle si está seleccionado */}
-                            {isSelected && (
-                              <div className="pt-2 mt-1 border-t border-slate-800 flex items-center justify-between gap-2 fade-in">
-                                <span className="text-[11px] text-cyan-400 font-mono-code flex items-center gap-1">
-                                  <MapPin className="h-3.5 w-3.5" /> X={Math.round(v.position.x)}, Y={Math.round(v.position.y)}
-                                </span>
+                            {expandedVehicleId === v.id && (
+                              <div className="mt-2 space-y-2 border-t border-[var(--color-sidebar-border)] pt-2 fade-in">
+                                <div className="flex items-center justify-between">
+                                  <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-100">
+                                    <Package className="h-3.5 w-3.5 text-[var(--color-secondary)]" />
+                                    Envíos a Bordo ({vehicleOrders.length})
+                                  </span>
+                                  <span className="text-[10px] text-[var(--color-sidebar-text-muted)]">Pedidos asignados</span>
+                                </div>
+
+                                {vehicleOrders.length === 0 ? (
+                                  <p className="rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-surface)] p-2 text-[10px] italic text-[var(--color-sidebar-text-muted)]">
+                                    Sin pedidos asignados
+                                  </p>
+                                ) : (
+                                  <div className="space-y-1.5">
+                                    {vehicleOrders.map((order) => (
+                                      <div
+                                        key={order.id}
+                                        className="rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-surface)] p-2 text-slate-100"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="font-mono-code text-[10px] font-semibold text-blue-300">
+                                            {order.code}
+                                          </span>
+                                          <span className="text-[10px] font-mono-code text-slate-300">
+                                            {order.clientId || 'Cliente no informado'}
+                                          </span>
+                                        </div>
+                                        <p className="mt-1 text-[11px] font-semibold">
+                                          Productos:{' '}
+                                          <span className="font-mono-code text-blue-300">
+                                            {order.quantity ?? 0} unidades
+                                          </span>
+                                        </p>
+                                        <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-slate-300">
+                                          <span>
+                                            Destino: ({Math.round(order.destination.x)}, {Math.round(order.destination.y)})
+                                          </span>
+                                          <span className="font-mono-code text-slate-400">
+                                            Tiempo máximo: {order.slaHours ?? 0} h
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
 
                                 {isBroken && (
-                                  <span className="text-[10px] font-semibold py-0.5 px-2 rounded bg-rose-950/60 text-rose-400 border border-rose-500/30">
-                                    Avería en curso
-                                  </span>
+                                  <div className="text-right">
+                                    <span className="text-[10px] font-semibold py-0.5 px-2 rounded bg-[var(--color-danger)]/20 text-[var(--color-danger)] border border-[var(--color-danger)]/40">
+                                      Avería en curso
+                                    </span>
+                                  </div>
                                 )}
                                 {!isBroken && (
-                                  <button
-                                    type="button"
-                                    disabled={isReportingBreakdown}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setIsBreakdownModalOpen(true);
-                                    }}
-                                    className="text-[10px] font-semibold py-1 px-2 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
-                                  >
-                                    <AlertTriangle className="h-3 w-3 text-rose-400" />
-                                    Crear avería
-                                  </button>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[11px] text-blue-300 font-mono-code flex items-center gap-1">
+                                      <MapPin className="h-3.5 w-3.5" /> X={Math.round(v.position.x)}, Y={Math.round(v.position.y)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={isReportingBreakdown}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setIsBreakdownModalOpen(true);
+                                      }}
+                                      className="text-[10px] font-semibold py-1 px-2 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+                                    >
+                                      <AlertTriangle className="h-3 w-3 text-rose-400" />
+                                      Crear avería
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -633,26 +1168,19 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                       contadorIncumplidos para el banner de ejecución detenida, el resto se
                       descartaba sin mostrarse en ningún lado) */}
                   {estadoRaw?.metricas && (
-                    <section className="space-y-2 p-3 rounded-2xl border border-slate-800 bg-slate-900/60">
-                      <span className="text-[10px] font-bold uppercase flex items-center gap-1.5 text-slate-300">
-                        <Activity className="h-3.5 w-3.5 text-cyan-400" /> Métricas de la Operación
-                      </span>
+                    <StaticSection title="Métricas de la operación" icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}>
                       <MetricasStrip metricas={estadoRaw.metricas} />
-                    </section>
+                    </StaticSection>
                   )}
 
                   {/* CAPACIDAD DE ALMACENES */}
-                  <section className="space-y-2 p-3 rounded-2xl border border-slate-800 bg-slate-900/60">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold uppercase flex items-center gap-1.5 text-slate-300">
-                        <WarehouseIcon className="h-3.5 w-3.5 text-blue-400" /> Capacidad de Almacenes
-                      </span>
-                      <span className="text-[10px] font-mono-code text-slate-400">
-                        {warehouses.length} almacenes
-                      </span>
-                    </div>
-
+                  <StaticSection
+                    title="Almacenes y capacidad"
+                    icon={<WarehouseIcon className="h-3.5 w-3.5 text-blue-400" />}
+                    badge={warehouses.length}
+                  >
                     <div className="space-y-2.5">
+
                       {warehouses.map((w) => {
                         const isInfinite = !Number.isFinite(w.capacity);
                         const pct = isInfinite ? 100 : Math.round((w.currentStock / w.capacity) * 100);
@@ -716,14 +1244,112 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         );
                       })}
                     </div>
-                  </section>
+                  </StaticSection>
+
+                  {false && warehouses.map((warehouse) => {
+                    const warehouseOrders = orders.filter(
+                      (order) => order.warehouseOriginId === warehouse.id || (!order.warehouseOriginId && warehouse.id === 'central')
+                    );
+                    const inTransitOrders = warehouseOrders.filter(
+                      (order) => order.status !== 'delivered' && order.assignedVehicleId
+                    );
+                    const upcomingOrders = warehouseOrders.filter(
+                      (order) =>
+                        order.status !== 'delivered' &&
+                        order.createdMinute >= currentSimulationMinute &&
+                        order.createdMinute <= currentSimulationMinute + warehouseUpcomingHours * 60
+                    );
+                    const deliveredOrders = warehouseOrders.filter(
+                      (order) =>
+                        order.status === 'delivered' &&
+                        order.deliveredMinute !== undefined &&
+                        currentSimulationMinute - order.deliveredMinute <= warehouseDeliveredHours * 60
+                    );
+                    const renderWarehouseOrders = (items: typeof orders) =>
+                      items.length ? (
+                        <div className="space-y-1">
+                          {items.map((order) => (
+                            <div key={order.id} className="rounded-lg border border-slate-800 bg-slate-950/60 p-2 text-[10px]">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono-code font-semibold text-blue-300">{order.code}</span>
+                                <span className="text-slate-400">{order.quantity ?? 0} productos</span>
+                              </div>
+                              <div className="mt-1 flex justify-between text-slate-500">
+                                <span>Destino X={Math.round(order.destination.x)}, Y={Math.round(order.destination.y)}</span>
+                                <span>{order.assignedVehicleId ?? 'Sin UT'}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] italic text-slate-500">Sin registros para este periodo.</p>
+                      );
+
+                    return (
+                      <React.Fragment key={warehouse.id}>
+                        <StaticSection
+                          title={`${warehouse.name}: en tránsito`}
+                          icon={<Navigation className="h-3.5 w-3.5 text-sky-400" />}
+                          badge={inTransitOrders.length}
+                        >
+                          {renderWarehouseOrders(inTransitOrders)}
+                        </StaticSection>
+                        <StaticSection
+                          title={`${warehouse.name}: próximos a salir`}
+                          icon={<Clock className="h-3.5 w-3.5 text-amber-400" />}
+                          badge={upcomingOrders.length}
+                        >
+                          <label className="flex items-center gap-2 text-[10px] text-slate-400">
+                            Próximas
+                            <input
+                              type="number"
+                              min="1"
+                              max="48"
+                              value={warehouseUpcomingHours}
+                              onChange={(event) => setWarehouseUpcomingHours(Math.max(1, Number(event.target.value) || 1))}
+                              className="w-14 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-slate-100"
+                            />
+                            horas
+                          </label>
+                          {renderWarehouseOrders(upcomingOrders)}
+                        </StaticSection>
+                        <StaticSection
+                          title={`${warehouse.name}: entregados recientemente`}
+                          icon={<Package className="h-3.5 w-3.5 text-emerald-400" />}
+                          badge={deliveredOrders.length}
+                        >
+                          <label className="flex items-center gap-2 text-[10px] text-slate-400">
+                            Últimas
+                            <input
+                              type="number"
+                              min="1"
+                              max="168"
+                              value={warehouseDeliveredHours}
+                              onChange={(event) => setWarehouseDeliveredHours(Math.max(1, Number(event.target.value) || 1))}
+                              className="w-14 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-slate-100"
+                            />
+                            horas
+                          </label>
+                          {renderWarehouseOrders(deliveredOrders)}
+                        </StaticSection>
+                      </React.Fragment>
+                    );
+                  })}
 
                   {/* SEMÁFORO DE FLOTA */}
-                  <section className="space-y-2 p-3 rounded-2xl border border-slate-800 bg-slate-900/60">
+                  {false && <StaticSection title="Semáforo de flota" icon={<Car className="h-3.5 w-3.5 text-blue-400" />} badge={vehicles.length}>
                     {(() => {
-                      const nowMs = estadoRaw?.marcaTiempoActual ? Date.parse(estadoRaw.marcaTiempoActual) : null;
-                      const startMs = ejecucion?.fechaInicioSimulada ? Date.parse(ejecucion.fechaInicioSimulada) : null;
-                      const simMin = nowMs && startMs ? Math.round((nowMs - startMs) / 60000) : 0;
+                      const currentTimestamp = estadoRaw?.marcaTiempoActual;
+                      const executionStart = ejecucion?.fechaInicioSimulada;
+                      const nowMs = typeof currentTimestamp === 'string'
+                        ? parseBackendSimulatedTime(currentTimestamp)
+                        : null;
+                      const startMs = typeof executionStart === 'string'
+                        ? parseBackendSimulatedTime(executionStart)
+                        : null;
+                      const simMin = nowMs !== null && startMs !== null
+                        ? Math.round(((nowMs ?? 0) - (startMs ?? 0)) / 60000)
+                        : 0;
 
                       const semaforos = vehicles.map((v) => getVehicleSemaforoStatus(v, orders, simMin, umbralesSemaforo));
                       const onTimeCount = semaforos.filter((s) => s.state === 'on_time').length;
@@ -804,116 +1430,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         </>
                       );
                     })()}
-                  </section>
+                  </StaticSection>}
 
-                  {/* ALERTAS Y FALLOS */}
-                  <section className="p-3 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-2">
-                    <button
-                      type="button"
-                      id="btn-toggle-alerts-section"
-                      onClick={() => setIsAlertsCollapsed(!isAlertsCollapsed)}
-                      className="w-full flex justify-between items-center transition-colors text-left cursor-pointer"
-                    >
-                      <span className="text-[10px] font-bold uppercase flex items-center gap-1.5 text-slate-300">
-                        <ShieldAlert className="h-3.5 w-3.5 text-rose-400" /> Alertas y Fallos
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-mono-code px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                          {alertas.length + notifications.length} registros
-                        </span>
-                        {isAlertsCollapsed ? (
-                          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-                        ) : (
-                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-                        )}
-                      </div>
-                    </button>
-
-                    {!isAlertsCollapsed && (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
-                        {alertas.length === 0 && notifications.length === 0 ? (
-                          <div className="text-[11px] italic p-2.5 text-center rounded-xl border border-slate-800 bg-slate-950/40 text-slate-500">
-                            No hay alertas activas en el sistema
-                          </div>
-                        ) : (
-                          <>
-                            {notifications.map((notification) => (
-                              <div
-                                key={notification.id}
-                                className={`p-2 rounded-xl text-[10px] border ${
-                                  notification.type === 'error'
-                                    ? 'bg-rose-950/40 border-rose-500/40 text-rose-100'
-                                    : notification.type === 'warning'
-                                    ? 'bg-amber-950/40 border-amber-500/40 text-amber-100'
-                                    : 'bg-slate-800/60 border-slate-700 text-slate-200'
-                                }`}
-                              >
-                                <div className="flex justify-between items-center mb-0.5">
-                                  <span className="font-bold">{notification.title}</span>
-                                  <span className="text-[9px] font-mono-code text-slate-400">
-                                    {new Date(notification.createdAt).toLocaleTimeString('es-PE', {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
-                                  </span>
-                                </div>
-                                {notification.description && (
-                                  <p className="leading-tight text-slate-300">{notification.description}</p>
-                                )}
-                              </div>
-                            ))}
-                            {alertas.map((alt, idx) => {
-                              const isCritical = alt.tipo.includes('AVERIA') || alt.tipo.includes('INCUMPLIDO');
-                              const timeStr = Number.isFinite(Date.parse(alt.instante))
-                                ? new Date(Date.parse(alt.instante)).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
-                                : alt.instante;
-                              return (
-                                <div
-                                  key={`${alt.instante}-${alt.tipo}-${idx}`}
-                                  onClick={() => {
-                                    if (alt.vehiculoId) {
-                                      setSelectedVehicleId(alt.vehiculoId);
-                                      setActiveTab('fleet');
-                                    }
-                                  }}
-                                  className={`p-2 rounded-xl text-[10px] transition-colors cursor-pointer border ${
-                                    isCritical
-                                      ? 'bg-rose-950/40 border-rose-500/40 text-rose-100'
-                                      : 'bg-amber-950/40 border-amber-500/40 text-amber-100'
-                                  }`}
-                                >
-                                  <div className="flex justify-between items-center mb-0.5">
-                                    <span className="font-bold">{alt.tipo.replace(/_/g, ' ')}</span>
-                                    <span className="text-[9px] font-mono-code text-slate-400">{timeStr}</span>
-                                  </div>
-                                  <p className="leading-tight text-slate-300">{alt.descripcion}</p>
-                                  <div className="mt-1 flex items-center gap-3">
-                                    {alt.vehiculoId && (
-                                      <span className="text-[9px] text-cyan-400 font-mono-code inline-block">
-                                        Ver vehículo {alt.vehiculoId} →
-                                      </span>
-                                    )}
-                                    {alt.pedidoId && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setAlertaDetalle(alt);
-                                        }}
-                                        className="text-[9px] text-slate-300 font-mono-code underline-offset-2 hover:underline inline-block"
-                                      >
-                                        Ver detalle / PDF →
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </section>
                 </div>
               )}
             </div>
@@ -946,17 +1464,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         onConfirmBreakdown={handleConfirmBreakdown}
         isDarkTheme
       />
-      <DelayAlertModal
-        isOpen={Boolean(alertaDetalle)}
-        onClose={() => setAlertaDetalle(null)}
-        order={ordenDetalle}
-        simTime={simTimeGlobal}
-        simMinute={simMinuteGlobal}
-        warehouses={warehouses}
-        vehicles={vehicles}
-        isDarkTheme
-      />
-
     </>
   );
 };

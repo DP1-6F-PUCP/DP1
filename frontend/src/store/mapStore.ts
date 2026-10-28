@@ -12,6 +12,7 @@ interface MapState {
   selectedVehicleId: string | null;
   selectedWarehouseId: string | null;
   selectedRouteId: string | null;
+  selectedOrderId: string | null;
   activeLayers: MapLayersState;
   realtimePositions: Record<string, Point>;
   zoomLevel: number;
@@ -20,6 +21,7 @@ interface MapState {
   setSelectedVehicleId: (id: string | null) => void;
   setSelectedWarehouseId: (id: string | null) => void;
   setSelectedRouteId: (id: string | null) => void;
+  setSelectedOrderId: (id: string | null) => void;
   toggleLayer: (layer: keyof MapLayersState) => void;
   setLayer: (layer: keyof MapLayersState, active: boolean) => void;
   updateRealtimePosition: (vehicleId: string, position: Point) => void;
@@ -33,6 +35,7 @@ export const useMapStore = create<MapState>((set) => ({
   selectedVehicleId: null,
   selectedWarehouseId: null,
   selectedRouteId: null,
+  selectedOrderId: null,
   activeLayers: {
     projectedRoutes: true,
     blockedStreets: true,
@@ -43,16 +46,25 @@ export const useMapStore = create<MapState>((set) => ({
   zoomLevel: 1,
   panOffset: { x: 0, y: 0 },
   setSelectedVehicleId: (id) =>
-    set({
+    set((state) => ({
       selectedVehicleId: id,
-      selectedWarehouseId: id ? null : undefined,
-    }),
+      selectedWarehouseId: id ? null : state.selectedWarehouseId,
+      selectedOrderId: id ? null : state.selectedOrderId,
+    })),
 
   setSelectedWarehouseId: (id) =>
-    set({
+    set((state) => ({
       selectedWarehouseId: id,
-      selectedVehicleId: id ? null : undefined,
-    }),
+      selectedVehicleId: id ? null : state.selectedVehicleId,
+      selectedOrderId: id ? null : state.selectedOrderId,
+    })),
+
+  setSelectedOrderId: (id) =>
+    set((state) => ({
+      selectedOrderId: id,
+      selectedVehicleId: id ? null : state.selectedVehicleId,
+      selectedWarehouseId: id ? null : state.selectedWarehouseId,
+    })),
 
   setSelectedRouteId: (id) => set({ selectedRouteId: id }),
 

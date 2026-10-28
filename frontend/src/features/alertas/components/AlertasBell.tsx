@@ -3,6 +3,7 @@ import { Bell, AlertTriangle, Construction, Wrench, FileSearch } from 'lucide-re
 import { useAlertas } from '../hooks/useAlertas';
 import { useEstadoOperacion } from '../../../hooks/useEstadoOperacion';
 import { useScenarioStore } from '../../../store/scenarioStore';
+import { formatBackendSimulatedTime, parseBackendSimulatedTime } from '../../../utils/backendTime';
 import { DelayAlertModal } from '../../../components/DelayAlertModal';
 import type { EventoDTO } from '../../../types/backend';
 
@@ -35,9 +36,13 @@ export const AlertasBell: React.FC = () => {
     ? orders.find((o) => o.id === alertaSeleccionada.pedidoId) ?? null
     : null;
 
-  const nowMs = estadoRaw?.marcaTiempoActual ? Date.parse(estadoRaw.marcaTiempoActual) : null;
+  const nowMs = estadoRaw?.marcaTiempoActual
+    ? parseBackendSimulatedTime(estadoRaw.marcaTiempoActual)
+    : null;
   const simMinute = nowMs != null && scenarioStartMs != null ? Math.round((nowMs - scenarioStartMs) / 60000) : 0;
-  const simTime = nowMs != null ? new Date(nowMs).toLocaleString('es-PE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '--:--';
+  const simTime = nowMs != null
+    ? formatBackendSimulatedTime(nowMs)
+    : '--:--';
 
   return (
     <div className="relative">

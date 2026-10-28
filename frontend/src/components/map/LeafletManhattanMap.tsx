@@ -1,10 +1,51 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { CarFront, Bike as Bicycle, MapPin } from 'lucide-react';
+import { FaMotorcycle } from 'react-icons/fa';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
 import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
 import { getVehicleSemaforoStatus } from '../../utils/vehicleStatus';
 import { useSemaforoStore } from '../../store/semaforoStore';
 import { simulationEngine } from '../../engine/simulationEngine';
+
+const getVehicleLoadStatus = (vehicle: Vehicle) => {
+  const fillRatio = vehicle.capacity > 0 ? vehicle.currentLoad / vehicle.capacity : 0;
+
+  if (fillRatio >= 0.66) {
+    return { hex: '#16A34A', label: 'capacidad alta' };
+  }
+  if (fillRatio >= 0.33) {
+    return { hex: '#EAB308', label: 'capacidad media' };
+  }
+  return { hex: '#DC2626', label: 'pocos productos' };
+};
+
+const ETIQUETA_ESTADO: Record<string, string> = {
+  idle: 'Inactivo',
+  en_route: 'En ruta',
+  delivering: 'Entregando',
+  on_break: 'Refrigerio',
+  broken: 'Averiado',
+  maintenance: 'Mantenimiento',
+};
+
+const getVehicleIconMarkup = (vehicle: Vehicle) => {
+  const iconProps = {
+    size: 15,
+    strokeWidth: 2.3,
+    color: '#ffffff',
+    'aria-hidden': true,
+  } as const;
+
+  if (vehicle.type === 'bicycle') {
+    return renderToStaticMarkup(<Bicycle {...iconProps} />);
+  }
+  if (vehicle.type === 'motorcycle') {
+    return renderToStaticMarkup(<FaMotorcycle {...iconProps} />);
+  }
+  return renderToStaticMarkup(<CarFront {...iconProps} />);
+};
 
 export interface LeafletManhattanMapProps {
   warehouses?: Warehouse[];
@@ -18,9 +59,11 @@ export interface LeafletManhattanMapProps {
   selectedVehicleId?: string | null;
   selectedWarehouseId?: string | null;
   selectedBlockId?: string | null;
+  selectedOrderId?: string | null;
   onSelectVehicle?: (vehicle: Vehicle | null) => void;
   onSelectWarehouse?: (warehouse: Warehouse | null) => void;
   onSelectBlock?: (block: BlockedStreet | null) => void;
+  onSelectOrder?: (order: Order | null) => void;
   showBlockedStreets?: boolean;
   showProjectedRoutes?: boolean;
   showCoverageZones?: boolean;
@@ -46,9 +89,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   selectedVehicleId = null,
   selectedWarehouseId = null,
   selectedBlockId = null,
+  selectedOrderId = null,
   onSelectVehicle,
   onSelectWarehouse,
   onSelectBlock,
+  onSelectOrder,
   showBlockedStreets = true,
   showProjectedRoutes = true,
   showOrders = false,
@@ -80,28 +125,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // mapa con un loader en vez de dejar ver el estado transitorio (vehiculos "regresando" a la
   // posicion de la ejecucion anterior, etc.) -- ver el efecto de suscripcion mas abajo.
   const [buffering, setBuffering] = useState(true);
-  // Linea de ruta del vehiculo seleccionado (feature de un teammate, portada aqui sobre el motor
-  // centralizado) -- ver el efecto de suscripcion mas abajo y simulationEngine.getRutaVisible.
-  const selectedRouteLineRef = useRef<L.Polyline | null>(null);
-  // Marcadores del destino (anillo, punto y etiqueta) -- se mueven junto con el final de la linea.
-  const selectedRouteEndMarkersRef = useRef<Array<L.Marker | L.CircleMarker>>([]);
-  const selectedVehicleIdRef = useRef<string | null>(selectedVehicleId);
-  selectedVehicleIdRef.current = selectedVehicleId;
-  // Marcador con contador por cada punto con 2+ vehiculos detenidos (ver el efecto de
-  // suscripcion). Sus miembros se sacan de la capa mientras estan agrupados.
-  const groupMarkersRef = useRef<Map<string, { marker: L.Marker; firma: string; ids: string[] }>>(new Map());
+  const routeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
   const vehiclesRef = useRef<Vehicle[]>(vehicles);
   const onSelectVehicleRef = useRef(onSelectVehicle);
   const isDarkThemeRef = useRef(isDarkTheme);
-  const warehousesRef = useRef<Warehouse[]>(warehouses);
   useEffect(() => {
-    warehousesRef.current = warehouses;
     vehiclesRef.current = vehicles;
     onSelectVehicleRef.current = onSelectVehicle;
     isDarkThemeRef.current = isDarkTheme;
-  }, [vehicles, onSelectVehicle, isDarkTheme, warehouses]);
+  }, [vehicles, onSelectVehicle, isDarkTheme]);
 
-  // 1. Initialize Leaflet Map with L.CRS.Simple - Fixed, non-zoomable, adapted to max screen
+  // 1. Initialize Leaflet Map with L.CRS.Simple. Fractional zoom keeps wheel/touch
+  // navigation smooth while fitBounds provides a useful initial view.
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -114,24 +149,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const map = L.map(mapContainerRef.current, {
       crs: L.CRS.Simple,
       attributionControl: false,
-      zoomControl: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      touchZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      dragging: false, // fixed position, perfectly centered
+      zoomControl: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      touchZoom: true,
+      boxZoom: true,
+      keyboard: true,
+      dragging: true,
       zoomSnap: 0, // fractional zoom to fill 100% of container
       zoomDelta: 0.1,
-      // Bug real reportado ("el mapa sobrepasa la dimension de la pantalla", reproducido con Chrome
-      // headless): fitBounds animado competia con invalidateSize en cada cambio de tamaño del
-      // contenedor y el zoom final quedaba calculado para un tamaño viejo -- unas veces la grilla
-      // se salia del contenedor, otras quedaba chica. El mapa es fijo (sin zoom ni arrastre del
-      // usuario), asi que las animaciones no aportan nada: sin ellas el ajuste es inmediato y
-      // determinista.
-      zoomAnimation: false,
-      fadeAnimation: false,
-      markerZoomAnimation: false,
+      zoomAnimation: true,
+      fadeAnimation: true,
+      markerZoomAnimation: true,
     });
 
     mapInstanceRef.current = map;
@@ -141,6 +170,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       onSelectVehicle?.(null);
       onSelectWarehouse?.(null);
       onSelectBlock?.(null);
+      onSelectOrder?.(null);
     });
 
     // Add layer groups to map in correct visual stacking order
@@ -308,7 +338,87 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     });
   }, [showBlockedStreets, blockedStreets, selectedBlockId, onSelectBlock]);
 
-  // 4. Render Projected Routes (Only shown when a vehicle is selected)
+  // 4. Render order destinations
+  useEffect(() => {
+    const group = ordersLayerGroupRef.current;
+    group.clearLayers();
+
+    if (!showOrders) return;
+
+    const statusColors: Record<Order['status'], string> = {
+      on_time: '#10B981',
+      at_risk: '#F59E0B',
+      delayed: '#F43F5E',
+      delivered: '#3B82F6',
+      collapsed: '#991B1B',
+    };
+    const statusLabels: Record<Order['status'], string> = {
+      on_time: 'A tiempo',
+      at_risk: 'En riesgo',
+      delayed: 'Retrasado',
+      delivered: 'Entregado',
+      collapsed: 'Colapsado',
+    };
+
+    orders.forEach((order) => {
+      const isSelected = selectedOrderId === order.id;
+      const color = statusColors[order.status] || '#3B82F6';
+
+      const pinMarkup = renderToStaticMarkup(
+        <MapPin
+          size={isSelected ? 34 : 28}
+          strokeWidth={isSelected ? 2.2 : 1.8}
+          color="#ffffff"
+          fill={color}
+          aria-hidden
+        />
+      );
+
+      const html = isSelected
+        ? `<div style="position: relative; width: 44px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <div style="position: absolute; width: 38px; height: 38px; border-radius: 50%; background: #38bdf8; opacity: 0.35; filter: blur(2px);"></div>
+            <div style="position: absolute; width: 42px; height: 42px; border-radius: 50%; border: 2px dashed #38bdf8;"></div>
+            <div style="position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));">
+              ${pinMarkup}
+            </div>
+          </div>`
+        : `<div style="cursor: pointer; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));">
+            ${pinMarkup}
+          </div>`;
+
+      const marker = L.marker([order.destination.y, order.destination.x], {
+        icon: L.divIcon({
+          className: 'order-destination-marker',
+          html,
+          iconSize: isSelected ? [44, 48] : [28, 28],
+          iconAnchor: isSelected ? [22, 40] : [14, 28],
+        }),
+        zIndexOffset: isSelected ? 3000 : 100,
+      });
+
+      marker.bindTooltip(
+        `<strong>${order.code}</strong><br />${order.clientId || 'Cliente no informado'}<br />${statusLabels[order.status]}<br />(${order.destination.x}, ${order.destination.y})`,
+        {
+          direction: 'top',
+          offset: [0, isSelected ? -36 : -28],
+          opacity: 0.95,
+        }
+      );
+
+      marker.on('click', (e: L.LeafletMouseEvent) => {
+        L.DomEvent.stopPropagation(e);
+        if (selectedOrderId === order.id) {
+          onSelectOrder?.(null);
+        } else {
+          onSelectOrder?.(order);
+        }
+      });
+
+      marker.addTo(group);
+    });
+  }, [orders, showOrders, selectedOrderId, onSelectOrder]);
+
+  // 4. Render projected routes for every vehicle
   //
   // Dos casos:
   //  - Vehiculo en camino a entregar un pedido: ruta activa (in_progress) -> geometria de
@@ -320,126 +430,68 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   useEffect(() => {
     const group = routesLayerGroupRef.current;
     group.clearLayers();
-    selectedRouteLineRef.current = null;
-    selectedRouteEndMarkersRef.current = [];
+    routeLinesRef.current.clear();
 
     if (!showProjectedRoutes) return;
-    if (!selectedVehicleId) return;
 
-    const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
-    if (!selectedVehicle) return;
+    vehicles.forEach((vehicle) => {
+      if (vehicle.status !== 'en_route') return;
 
-    // Mientras entrega no se muestra su siguiente ruta
-    if (selectedVehicle.status === 'delivering') return;
+      const isSelected = selectedVehicleId === vehicle.id;
+      const activeRoute = routes.find(
+        (route) =>
+          route.vehicleId === vehicle.id &&
+          route.status === 'in_progress'
+      );
 
-    const isBroken = selectedVehicle.status === 'broken';
-    const activeRoute = routes.find(
-      (route) =>
-        route.vehicleId === selectedVehicle.id &&
-        route.status === 'in_progress'
-    );
+      const deliveryPath = activeRoute?.waypoints ?? [];
+      const returnPath = vehicle.returnPath ?? [];
+      const isReturning = deliveryPath.length < 2 && returnPath.length > 1;
+      const geometry = deliveryPath.length > 1 ? deliveryPath : isReturning ? returnPath : [];
+      const fallbackDestination = vehicle.destination;
+      const routePath = geometry.length > 1
+        ? geometry
+        : fallbackDestination
+          ? normalizeManhattanPath([vehicle.position, fallbackDestination])
+          : [];
 
-    // Camino hacia un pedido (ruta activa) o de regreso a un almacén (sin ruta activa)
-    const deliveryPath = activeRoute?.waypoints ?? [];
-    const returnPath = selectedVehicle.returnPath ?? [];
-    const isReturning = deliveryPath.length < 2 && returnPath.length > 1;
+      if (routePath.length <= 1) return;
 
-    const geometry = deliveryPath.length > 1
-      ? deliveryPath
-      : isReturning
-        ? returnPath
-        : [];
+      // La ruta seleccionada se resalta; el regreso conserva su semántica con un tono violeta.
+      const accent = isSelected
+        ? isReturning
+          ? '#c084fc'
+          : '#38bdf8'
+        : isReturning
+          ? '#f59e0b'
+          : '#64748b';
 
-    const fallbackDestination = selectedVehicle.destination;
-    const routePath = geometry.length > 1
-      ? geometry
-      : fallbackDestination
-        ? normalizeManhattanPath([selectedVehicle.position, fallbackDestination])
-        : [];
-
-    if (routePath.length > 1) {
-      // Azul = hacia pedido, ámbar = hacia almacén, gris/rojo = averiado
-      const accent = isBroken ? '#94a3b8' : isReturning ? '#f59e0b' : '#38bdf8';
-      const ringAccent = isBroken ? '#ef4444' : accent;
-
-      // La linea sale del motor (simulationEngine.getRutaVisible): continua desde la posicion
-      // interpolada del marcador, por los tramos en cola, hasta el destino planificado. La
-      // geometria de las props queda solo como respaldo si el motor aun no tiene tramos.
-      const desdeMotor = simulationEngine.getRutaVisible(selectedVehicle.id);
-      const destinationPath = desdeMotor && desdeMotor.length > 1
-        ? desdeMotor
-        : normalizeManhattanPath(
-            routePath[0]?.x === selectedVehicle.position.x && routePath[0].y === selectedVehicle.position.y
-              ? routePath
-              : [selectedVehicle.position, ...routePath]
-          );
-      const destination = destinationPath[destinationPath.length - 1];
-
+      const destinationPath = normalizeManhattanPath(
+        routePath[0]?.x === vehicle.position.x && routePath[0].y === vehicle.position.y
+          ? routePath
+          : [vehicle.position, ...routePath]
+      );
+      // El motor puede devolver un punto interpolado seguido de un nodo de otro
+      // segmento (por ejemplo, al cambiar de lote). Normalizar la linea final
+      // evita que Leaflet una esos puntos con una diagonal.
+      const manhattanDestinationPath = normalizeManhattanPath(destinationPath);
       const routeLine = L.polyline(
-        destinationPath.map((point) => [point.y, point.x] as [number, number]),
+        manhattanDestinationPath.map((point) => [point.y, point.x] as [number, number]),
         {
           color: accent,
-          weight: 2.5,
-          opacity: 0.9,
-          dashArray: isReturning ? '2, 8' : '6, 8', // el regreso se ve más punteado
+          weight: isSelected ? 4 : 2.5,
+          opacity: isSelected ? 0.9 : 0.55,
+          dashArray: isReturning ? '2, 8' : isSelected ? undefined : '6, 8',
           lineCap: 'round',
           lineJoin: 'round',
           interactive: false,
         }
       ).addTo(group);
-      selectedRouteLineRef.current = routeLine;
-
-      // Outer dashed ring
-      const anillo = L.circleMarker([destination.y, destination.x], {
-        radius: 7,
-        color: ringAccent,
-        weight: 1.5,
-        dashArray: '3, 2',
-        fill: false,
-        interactive: false,
-      }).addTo(group);
-
-      // Inner solid circle
-      const punto = L.circleMarker([destination.y, destination.x], {
-        radius: 3.5,
-        color: '#ffffff',
-        weight: 1,
-        fillColor: ringAccent,
-        fillOpacity: 1,
-        interactive: false,
-      }).addTo(group);
-
-      // Bug real reportado (captura: confundia este circulo con la posicion del vehiculo --
-      // "me marca el punto azul donde supuestamente deberia estar"): sin ningun texto, este
-      // circulo (que marca hacia DONDE VA el vehiculo, no donde esta -- legitimo que quede lejos
-      // para uno en refrigerio/entregando a mitad de ruta) es indistinguible a simple vista entre
-      // muchos iconos de vehiculo parecidos. Etiqueta chica para que quede inequivoco.
-      const etiqueta = L.marker([destination.y, destination.x], {
-        icon: L.divIcon({
-          className: 'destino-seleccionado-label',
-          html: `
-            <div style="
-              transform: translate(10px, -8px);
-              white-space: nowrap;
-              font-size: 9px;
-              font-family: monospace;
-              font-weight: bold;
-              color: ${isBroken ? '#ef4444' : '#38bdf8'};
-              background: rgba(15,23,42,0.85);
-              padding: 1px 4px;
-              border-radius: 3px;
-              pointer-events: none;
-            ">Destino</div>
-          `,
-          iconSize: [0, 0],
-        }),
-        interactive: false,
-      }).addTo(group);
-      selectedRouteEndMarkersRef.current = [anillo, punto, etiqueta];
-    }
+      routeLinesRef.current.set(vehicle.id, routeLine);
+    });
   }, [showProjectedRoutes, vehicles, routes, selectedVehicleId]);
 
-  // 5. Render Warehouses (No balloon popups - triggers left inspector popup on click)
+  // 5. Render Warehouses (tooltip on hover, left inspector popup on click)
   useEffect(() => {
     const group = warehousesLayerGroupRef.current;
     group.clearLayers();
@@ -499,6 +551,21 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       });
 
       const marker = L.marker([w.coords.y, w.coords.x], { icon: warehouseIcon });
+      const tooltipContent = isInfinite
+        ? '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px;"><strong>Stock:</strong> ilimitado</div>'
+        : `
+          <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 120px;">
+            <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${w.name}</div>
+            <div><strong>Stock:</strong> ${w.currentStock} / ${w.capacity} paq</div>
+            <div><strong>Ocupación:</strong> ${pct}%</div>
+            <div><strong>En tránsito:</strong> ${w.inTransit} paq</div>
+          </div>
+        `;
+      marker.bindTooltip(tooltipContent, {
+        direction: 'top',
+        offset: [0, -14],
+        opacity: 0.95,
+      });
 
       marker.on('click', (e: L.LeafletMouseEvent) => {
         L.DomEvent.stopPropagation(e);
@@ -536,7 +603,15 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     vehicles.forEach((v) => {
       const isSelected = selectedVehicleId === v.id;
       const semaforo = getVehicleSemaforoStatus(v, orders, simMinutes, umbralesSemaforo);
+      const loadStatus = getVehicleLoadStatus(v);
       const isDelayedOrBroken = semaforo.state === 'delayed' || v.status === 'broken';
+      const activeRoute = routes.find(
+        (route) => route.vehicleId === v.id && route.status === 'in_progress'
+      );
+      const isReturning =
+        v.status === 'en_route' &&
+        (activeRoute?.waypoints?.length ?? 0) < 2 &&
+        (v.returnPath?.length ?? 0) > 1;
       // Bug real reportado: un vehiculo en refrigerio (VehiculoDTO.actividad=EN_REFRIGERIO) se
       // veia en el mapa IDENTICO a uno viajando normalmente -- el semaforo solo mira riesgo de
       // SLA, y el badge con la etiqueta "En refrigerio" vive en el panel lateral, no en el mapa.
@@ -544,34 +619,28 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       // leyenda (ver MapLegend).
       const isEnRefrigerio = v.status === 'on_break';
 
-      // Color de la burbuja según semáforo oficial (rojo para avería/retraso, teal para
-      // refrigerio, azul de selección, o color de semáforo)
-      const bubbleFill = isDelayedOrBroken
-        ? '#C62828'
-        : isEnRefrigerio
-        ? '#0D9488'
-        : isSelected
-        ? isDarkTheme
-          ? '#38bdf8'
-          : '#1F3864'
-        : semaforo.hex;
+      // El color del círculo comunica la carga disponible; la selección se mantiene con el aro
+      // exterior y los estados operativos con sus acentos para no ocultar esta información.
+      const bubbleFill = isReturning ? '#6B7280' : loadStatus.hex;
+      const vehicleIconMarkup = getVehicleIconMarkup(v);
 
       const vehicleIcon = L.divIcon({
         className: 'svg-style-vehicle-marker',
         html: `
           <svg
-            width="32"
-            height="36"
-            viewBox="-16 -16 32 36"
+            width="44"
+            height="46"
+            viewBox="-22 -22 44 46"
             style="overflow: visible; cursor: pointer; display: block;"
           >
+            <title>${v.code}: ${v.currentLoad}/${v.capacity} paquetes, ${loadStatus.label}</title>
             <!-- Selection Indicator Ring -->
             ${
               isSelected
                 ? `<circle
                     cx="0"
                     cy="0"
-                    r="10"
+                    r="14"
                     fill="none"
                     stroke="${isDarkTheme ? '#38bdf8' : '#1F3864'}"
                     stroke-width="1.8"
@@ -586,7 +655,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
                 ? `<circle
                     cx="0"
                     cy="0"
-                    r="8.5"
+                    r="10"
                     fill="#C62828"
                     fill-opacity="0.35"
                   />`
@@ -597,11 +666,16 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
             <circle
               cx="0"
               cy="0"
-              r="5.5"
+              r="10.5"
               fill="${bubbleFill}"
               stroke="#ffffff"
-              stroke-width="1.5"
+              stroke-width="1.7"
             />
+
+            <!-- Vehicle icon inside the capacity circle -->
+            <g transform="translate(-7.5 -7.5)">
+              ${vehicleIconMarkup}
+            </g>
 
             <!-- Geometric accent for delayed / broken -->
             ${
@@ -626,40 +700,36 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
                 : ''
             }
 
-            <!-- Vehicle Code Badge placed cleanly below the circle -->
-            <rect
-              x="-13"
-              y="7.5"
-              width="26"
-              height="10.5"
-              rx="3"
-              fill="${isDarkTheme ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.95)'}"
-              stroke="${isDarkTheme ? '#334155' : '#cbd5e1'}"
-              stroke-width="0.8"
-            />
-            <text
-              x="0"
-              y="15.5"
-              text-anchor="middle"
-              font-size="7.5"
-              font-family="monospace"
-              font-weight="bold"
-              fill="${isDarkTheme ? '#f8fafc' : '#0f172a'}"
-            >${v.code}</text>
           </svg>
         `,
-        iconSize: [32, 36],
-        iconAnchor: [16, 16],
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
       });
 
       // Con decenas de unidades detenidas en un mismo almacén, el abanico de separación queda más
       // chico que el propio marcador: una incidencia o la selección quedaban tapadas por el resto.
       const zIndexOffset = isSelected ? 2000 : isDelayedOrBroken ? 1000 : 0;
 
+      const fillRatio = v.capacity > 0 ? v.currentLoad / v.capacity : 0;
+      const pct = Math.round(fillRatio * 100);
+      const estadoTexto = isReturning ? 'Regresando al almacén' : ETIQUETA_ESTADO[v.status] ?? v.status;
+      const tooltipContent = `
+        <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 120px;">
+          <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${v.code}</div>
+          <div><strong>Ocupación:</strong> ${v.currentLoad} / ${v.capacity} paq (${pct}%)</div>
+          <div><strong>Estado:</strong> ${estadoTexto}</div>
+        </div>
+      `;
+
       let marker = markers.get(v.id);
 
       if (!marker) {
         marker = L.marker([v.position.y, v.position.x], { icon: vehicleIcon, zIndexOffset });
+        marker.bindTooltip(tooltipContent, {
+          direction: 'top',
+          offset: [0, -14],
+          opacity: 0.95,
+        });
         marker.on('click', (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
           if (selectedVehicleId === v.id) {
@@ -675,161 +745,33 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         // aunque la posicion no cambie).
         marker.setIcon(vehicleIcon);
         marker.setZIndexOffset(zIndexOffset);
+        marker.setTooltipContent(tooltipContent);
       }
     });
-  }, [vehicles, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, umbralesSemaforo]);
+  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, umbralesSemaforo]);
 
   // Suscripcion al motor de simulacion (engine/simulationEngine.ts): un callback por frame que
   // mueve los marcadores existentes segun la posicion ya interpolada que calcula el motor, y
   // refleja su flag `buffering` -- nunca recalcula nada aca, el componente es puro consumidor.
   // Montado una sola vez (deps []); el motor sigue corriendo (o pausado en segundo plano, ver
   // simulationEngine.ts) independientemente de si este efecto esta montado.
-  //
-  // Para el vehiculo seleccionado tambien redibuja su linea de ruta (simulationEngine.getRutaVisible:
-  // lo que le falta recorrer de su trayectoria real + su camino planificado) y mueve el marcador
-  // de destino al final de esa linea -- feature de un teammate, portada sobre el motor.
   useEffect(() => {
     let bufferingAnterior = true;
     const capa = vehiclesLayerGroupRef.current;
 
-    const ETIQUETA_ESTADO: Record<string, string> = {
-      idle: 'Inactivo',
-      en_route: 'En ruta',
-      delivering: 'Entregando',
-      on_break: 'Refrigerio',
-      broken: 'Averiado',
-      maintenance: 'Mantenimiento',
-    };
-
-    const abrirListaGrupo = (clave: string, punto: { x: number; y: number }) => {
-      const map = mapInstanceRef.current;
-      const entrada = groupMarkersRef.current.get(clave);
-      if (!map || !entrada) return;
-      const oscuro = isDarkThemeRef.current;
-      const porId = new Map(vehiclesRef.current.map((v) => [v.id, v]));
-      const miembros = entrada.ids
-        .map((id) => porId.get(id))
-        .filter((v): v is Vehicle => v != null)
-        .sort((a, b) => a.code.localeCompare(b.code));
-
-      const raiz = document.createElement('div');
-      raiz.style.cssText = `min-width:180px;font-family:system-ui,sans-serif;color:${oscuro ? '#e2e8f0' : '#0f172a'}`;
-      const titulo = document.createElement('div');
-      titulo.textContent = `${miembros.length} vehículos detenidos en (${Math.round(punto.x)}, ${Math.round(punto.y)})`;
-      titulo.style.cssText = 'font-size:12px;font-weight:700;margin-bottom:6px';
-      raiz.appendChild(titulo);
-      const lista = document.createElement('div');
-      lista.style.cssText = 'max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:2px';
-      for (const v of miembros) {
-        const incidencia = v.status === 'broken' || v.status === 'maintenance';
-        const fila = document.createElement('button');
-        fila.type = 'button';
-        fila.style.cssText = `display:flex;justify-content:space-between;gap:12px;width:100%;padding:4px 6px;border:0;border-radius:6px;cursor:pointer;font-size:12px;text-align:left;background:${oscuro ? '#1e293b' : '#f1f5f9'};color:inherit`;
-        const codigo = document.createElement('span');
-        codigo.textContent = v.code;
-        codigo.style.cssText = 'font-family:monospace;font-weight:700';
-        const estado = document.createElement('span');
-        estado.textContent = ETIQUETA_ESTADO[v.status] ?? v.status;
-        estado.style.color = v.status === 'broken' ? '#ef4444' : incidencia ? '#f59e0b' : oscuro ? '#94a3b8' : '#64748b';
-        fila.append(codigo, estado);
-        fila.addEventListener('click', (e) => {
-          e.stopPropagation();
-          map.closePopup();
-          onSelectVehicleRef.current?.(v);
-        });
-        lista.appendChild(fila);
-      }
-      raiz.appendChild(lista);
-      L.popup({ closeButton: true, autoPan: false, className: oscuro ? 'popup-grupo popup-grupo-oscuro' : 'popup-grupo' })
-        .setLatLng([punto.y, punto.x])
-        .setContent(raiz)
-        .openOn(map);
-    };
-
-    const actualizarMarcadorGrupo = (clave: string, punto: { x: number; y: number }, ids: string[]) => {
-      const porId = new Map(vehiclesRef.current.map((v) => [v.id, v]));
-      const averiados = ids.filter((id) => porId.get(id)?.status === 'broken').length;
-      const oscuro = isDarkThemeRef.current;
-      // En un almacén el contador va como insignia arriba a la derecha, para no tapar su ícono.
-      const enAlmacen = warehousesRef.current.some(
-        (w) => Math.abs(w.coords.x - punto.x) < 1e-3 && Math.abs(w.coords.y - punto.y) < 1e-3
-      );
-      const firma = `${ids.join(',')}|${averiados}|${oscuro}|${enAlmacen}`;
-      let entrada = groupMarkersRef.current.get(clave);
-      if (entrada && entrada.firma === firma) return;
-
-      const relleno = averiados > 0 ? '#C62828' : oscuro ? '#334155' : '#475569';
-      const icono = L.divIcon({
-        className: 'svg-style-vehicle-marker',
-        html: `
-          <svg width="40" height="40" viewBox="-20 -20 40 40" style="overflow: visible; cursor: pointer; display: block;">
-            ${averiados > 0 ? '<circle cx="0" cy="0" r="15" fill="#C62828" fill-opacity="0.35" />' : ''}
-            <circle cx="0" cy="0" r="11" fill="${relleno}" stroke="#ffffff" stroke-width="1.8" />
-            <text x="0" y="4" text-anchor="middle" font-size="${ids.length > 99 ? 8 : 10}" font-family="monospace"
-              font-weight="bold" fill="#ffffff">${ids.length}</text>
-          </svg>`,
-        iconSize: [40, 40],
-        iconAnchor: enAlmacen ? [2, 38] : [20, 20],
-      });
-
-      if (!entrada) {
-        const marker = L.marker([punto.y, punto.x], { icon: icono, zIndexOffset: averiados > 0 ? 1000 : 500 });
-        marker.bindTooltip('', { direction: 'top', offset: [0, -14] });
-        marker.on('click', (e: L.LeafletMouseEvent) => {
-          L.DomEvent.stopPropagation(e);
-          abrirListaGrupo(clave, punto);
-        });
-        capa.addLayer(marker);
-        entrada = { marker, firma, ids };
-        groupMarkersRef.current.set(clave, entrada);
-      } else {
-        entrada.marker.setIcon(icono);
-        entrada.marker.setZIndexOffset(averiados > 0 ? 1000 : 500);
-        entrada.firma = firma;
-        entrada.ids = ids;
-      }
-      entrada.marker.setTooltipContent(
-        `${ids.length} vehículos detenidos${averiados > 0 ? ` · ${averiados} averiado${averiados > 1 ? 's' : ''}` : ''} — clic para ver`
-      );
-    };
-
     const unsubscribe = simulationEngine.subscribe((snap) => {
-      // Vehiculos detenidos en un mismo punto (2+, sin contar el seleccionado, que siempre se ve
-      // solo): un marcador con contador en vez de N marcadores encimados.
-      const agrupados = new Set<string>();
-      const gruposVigentes = new Set<string>();
-      for (const g of snap.gruposDetenidos) {
-        const ids = g.ids.filter((id) => id !== selectedVehicleIdRef.current && vehicleMarkersRef.current.has(id));
-        if (ids.length < 2) continue;
-        ids.forEach((id) => agrupados.add(id));
-        gruposVigentes.add(g.clave);
-        actualizarMarcadorGrupo(g.clave, g.punto, ids);
-      }
-      for (const [clave, entrada] of groupMarkersRef.current) {
-        if (!gruposVigentes.has(clave)) {
-          capa.removeLayer(entrada.marker);
-          groupMarkersRef.current.delete(clave);
-        }
-      }
-
       for (const [id, marker] of vehicleMarkersRef.current) {
         const punto = snap.vehiclePositions.get(id);
         if (punto) {
           marker.setLatLng([punto.y, punto.x]);
         }
-        if (agrupados.has(id)) {
-          if (capa.hasLayer(marker)) capa.removeLayer(marker);
-          continue;
-        }
         if (!capa.hasLayer(marker)) capa.addLayer(marker);
 
-        if (id === selectedVehicleIdRef.current && selectedRouteLineRef.current) {
-          const ruta = simulationEngine.getRutaVisible(id);
-          if (ruta && ruta.length > 1) {
-            selectedRouteLineRef.current.setLatLngs(ruta.map((p) => [p.y, p.x] as [number, number]));
-            const fin = ruta[ruta.length - 1];
-            for (const m of selectedRouteEndMarkersRef.current) m.setLatLng([fin.y, fin.x]);
-          }
+        const routeLine = routeLinesRef.current.get(id);
+        const ruta = simulationEngine.getRutaVisible(id);
+        if (routeLine && ruta && ruta.length > 1) {
+          const manhattanRuta = normalizeManhattanPath(ruta);
+          routeLine.setLatLngs(manhattanRuta.map((p) => [p.y, p.x] as [number, number]));
         }
       }
       if (snap.buffering !== bufferingAnterior) {
@@ -837,11 +779,9 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         setBuffering(snap.buffering);
       }
     });
-    const grupos = groupMarkersRef.current;
+
     return () => {
       unsubscribe();
-      for (const entrada of grupos.values()) capa.removeLayer(entrada.marker);
-      grupos.clear();
     };
   }, []);
 

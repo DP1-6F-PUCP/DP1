@@ -45,9 +45,11 @@ public class SimulacionController {
     @PostMapping("/api/escenarios")
     public ResponseEntity<ApiResponseDTO<EjecucionEscenarioDTO>> iniciarEscenario(
             @Valid @RequestBody SeleccionarEscenarioRequestDTO request) {
-        LocalDateTime fechaInicioSimulada = request.fechaInicioSimulada() != null
-                ? LocalDateTime.ofInstant(request.fechaInicioSimulada(), ZoneOffset.UTC)
-                : LocalDateTime.now();
+        LocalDateTime fechaInicioSimulada = request.tipo() == TipoEscenario.DIA_A_DIA
+                ? LocalDateTime.now()
+                : request.fechaInicioSimulada() != null
+                        ? LocalDateTime.ofInstant(request.fechaInicioSimulada(), ZoneOffset.UTC)
+                        : LocalDateTime.now();
         List<SolicitudOperacion> ajustesIniciales = request.ajustesIniciales() == null ? List.of()
                 : request.ajustesIniciales().stream()
                         .map(a -> new SolicitudOperacion(fechaInicioSimulada, a.tipoSolicitud(), a.entidadObjetivo(),
@@ -124,13 +126,17 @@ public class SimulacionController {
                 ejecucion.getIdEjecucion(),
                 ejecucion.getTipoEscenario().name(),
                 ejecucion.getEstado().name(),
-                aInstant(ejecucion.getFechaInicio()),
-                aInstant(ejecucion.getFechaInicioSimulada()),
+                aInstantReal(ejecucion.getFechaInicio()),
+                aInstantSimulado(ejecucion.getFechaInicioSimulada()),
                 ejecucion.getSa(),
                 ejecucion.getK());
     }
 
-    private Instant aInstant(LocalDateTime fecha) {
+    private Instant aInstantReal(LocalDateTime fecha) {
+        return fecha == null ? null : fecha.atZone(java.time.ZoneId.systemDefault()).toInstant();
+    }
+
+    private Instant aInstantSimulado(LocalDateTime fecha) {
         return fecha == null ? null : fecha.toInstant(ZoneOffset.UTC);
     }
 }

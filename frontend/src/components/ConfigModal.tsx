@@ -112,11 +112,21 @@ const VALORES_OFICIALES = {
   } as Record<CampoOperacion, number>,
 };
 
+const CANTIDADES_OFICIALES: Record<string, number> = Object.fromEntries(
+  Object.entries(VALORES_OFICIALES.tipos).map(([id, tipo]) => [id, tipo.cantidad]),
+);
+const CAPACIDAD_ALMACEN_OFICIAL = 1000;
+const FRECUENCIA_RECARGA_OFICIAL = 24;
+
 const desdeConfiguracion = (config: ConfiguracionActualDTO): FormValues => ({
   tipos: Object.fromEntries(
     config.tiposVehiculo.map((t) => [
       t.id,
-      { velocidad: String(t.velocidadKmH), capacidad: String(t.capacidad), cantidad: String(t.cantidadUnidades) },
+      {
+        velocidad: String(t.velocidadKmH),
+        capacidad: String(t.capacidad),
+        cantidad: String(t.cantidadUnidades ?? CANTIDADES_OFICIALES[t.id] ?? 0),
+      },
     ]),
   ),
   almacenes: Object.fromEntries(
@@ -126,8 +136,10 @@ const desdeConfiguracion = (config: ConfiguracionActualDTO): FormValues => ({
         esCentral: a.esCentral,
         x: String(a.posX),
         y: String(a.posY),
-        capacidad: a.esCentral ? '' : String(a.capacidadMaxima),
-        frecuencia: a.esCentral ? '' : String(a.frecuenciaRecargaHoras),
+        capacidad: a.esCentral ? '' : String(a.capacidadMaxima || CAPACIDAD_ALMACEN_OFICIAL),
+        frecuencia: a.esCentral
+          ? ''
+          : String(a.frecuenciaRecargaHoras || FRECUENCIA_RECARGA_OFICIAL),
       },
     ]),
   ),
@@ -450,9 +462,23 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
                       {type.nombre}
                     </legend>
                     <label className="block space-y-0.5">
-                      <span className="text-[10px] text-slate-500">Unidades{enCaliente ? ' (solo al inicio)' : ''}</span>
-                      <input type="number" min="0" step="1" disabled={enCaliente} value={current.tipos[type.id]?.cantidad ?? ''} onChange={(e) => updateTipo(type.id, 'cantidad', e.target.value)} className={`${inputClass} disabled:opacity-50`} />
+                      <span className="text-[10px] font-semibold text-slate-300">
+                        Cantidad de vehículos{enCaliente ? ' (solo al inicio)' : ''}
+                      </span>
+                      <input
+                        aria-label={`Cantidad de vehículos ${type.nombre}`}
+                        type="number"
+                        min="0"
+                        step="1"
+                        disabled={enCaliente}
+                        value={current.tipos[type.id]?.cantidad ?? CANTIDADES_OFICIALES[type.id] ?? ''}
+                        onChange={(e) => updateTipo(type.id, 'cantidad', e.target.value)}
+                        className={`${inputClass} text-left text-sm font-semibold disabled:opacity-50`}
+                      />
                     </label>
+                    <p className="text-[10px] text-slate-500">
+                      Flota actual: <span className="font-semibold text-slate-300">{current.tipos[type.id]?.cantidad ?? 0}</span> vehículos
+                    </p>
                     <label className="block space-y-0.5">
                       <span className="text-[10px] text-slate-500">Velocidad (km/h)</span>
                       <input type="number" min="1" value={current.tipos[type.id]?.velocidad ?? ''} onChange={(e) => updateTipo(type.id, 'velocidad', e.target.value)} className={inputClass} />
@@ -496,8 +522,15 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose }) => 
                             <input type="number" min="1" step="1" value={f.capacidad} onChange={(e) => updateAlmacen(warehouse.nombre, 'capacidad', e.target.value)} className={inputClass} />
                           </label>
                           <label className="block space-y-0.5">
-                            <span className="text-[10px] text-slate-500">Recarga cada (h)</span>
-                            <input type="number" min="1" value={f.frecuencia} onChange={(e) => updateAlmacen(warehouse.nombre, 'frecuencia', e.target.value)} className={inputClass} />
+                            <span className="text-[10px] font-semibold text-slate-300">Recarga cada (h)</span>
+                            <input
+                              aria-label={`Frecuencia de recarga ${warehouse.nombre}`}
+                              type="number"
+                              min="1"
+                              value={f.frecuencia || FRECUENCIA_RECARGA_OFICIAL}
+                              onChange={(e) => updateAlmacen(warehouse.nombre, 'frecuencia', e.target.value)}
+                              className={`${inputClass} text-left font-semibold`}
+                            />
                           </label>
                         </>
                       )}

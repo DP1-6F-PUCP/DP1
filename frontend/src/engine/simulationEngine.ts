@@ -1,5 +1,6 @@
 import { Point, Route, TrajectoryPoint, Vehicle, VehicleStatus } from '../types';
 import { EngineSnapshot, EstadoVisual, FrameData, GrupoDetenido } from './types';
+import { parseBackendSimulatedTime } from '../utils/backendTime';
 
 /**
  * Motor de simulacion del front: singleton fuera del arbol de React, unica fuente de verdad del
@@ -79,6 +80,43 @@ function posicionEn(linea: TrajectoryPoint[], t: number): PosicionEnLinea | null
   };
 }
 
+/**
+ * Inserta una esquina temporal cuando una trayectoria contiene un tramo diagonal. El tiempo se
+ * reparte según la distancia de cada tramo para que la animación siga la grilla sin cambiar su
+ * duración total.
+ */
+function normalizarTrayectoria(linea: TrajectoryPoint[]): TrajectoryPoint[] {
+  if (linea.length < 2) return linea;
+
+  const normalizada: TrajectoryPoint[] = [linea[0]];
+  for (let i = 1; i < linea.length; i++) {
+    const anterior = normalizada[normalizada.length - 1];
+    const actual = linea[i];
+
+    if (anterior.x !== actual.x && anterior.y !== actual.y) {
+      const distanciaHorizontal = Math.abs(actual.x - anterior.x);
+      const distanciaVertical = Math.abs(actual.y - anterior.y);
+      const distanciaTotal = distanciaHorizontal + distanciaVertical;
+      const fraccionHorizontal = distanciaHorizontal / distanciaTotal;
+      const esquina: TrajectoryPoint = {
+        x: actual.x,
+        y: anterior.y,
+        // Con tiempos iguales es un traslado instantáneo: la esquina conserva
+        // el instante y nunca se anima como una diagonal.
+        t: actual.t > anterior.t
+          ? anterior.t + (actual.t - anterior.t) * fraccionHorizontal
+          : anterior.t,
+        act: anterior.act,
+      };
+      normalizada.push(esquina);
+    }
+
+    normalizada.push(actual);
+  }
+
+  return normalizada;
+}
+
 /** Bug real reportado (captura: un vehiculo en refrigerio "no se ve en el mapa"): varios
  * vehiculos DETENIDOS en el mismo punto exacto (tipicamente el almacen central) se dibujan uno
  * encima de otro. Se agrupan por punto para que el mapa los dibuje como un marcador con contador.
@@ -102,9 +140,15 @@ function agruparDetenidos(posiciones: Map<string, Point>, enMovimiento: Set<stri
 }
 
 /** Estado visible de un vehiculo segun lo que hace en su trayectoria en este instante. Averia y
- * mantenimiento mandan sobre la trayectoria (el vehiculo no opera). */
-function statusVisible(base: VehicleStatus, act: TrajectoryPoint['act'] | undefined): VehicleStatus {
+ * mantenimiento mandan sobre la trayectoria (el vehiculo no opera). `moviendo` indica si el
+ * vehiculo se esta desplazando fisicamente en el mapa (x o y cambian entre los dos puntos que lo
+ * encierran) -- un vehiculo que se mueve debe verse como "en ruta" aunque la actividad del tramo
+ * todavia diga INACTIVO (p. ej. al arrancar el primer lote, o en la transicion entre lotes). */
+function statusVisible(base: VehicleStatus, act: TrajectoryPoint['act'] | undefined, moviendo: boolean): VehicleStatus {
   if (base === 'broken' || base === 'maintenance' || !act) return base;
+  // Si el vehiculo se esta moviendo fisicamente, el estado visible debe ser en_route
+  // independientemente de la actividad del tramo -- la animacion y el badge deben coincidir.
+  if (moviendo) return 'en_route';
   switch (act) {
     case 'ENTREGANDO':
       return 'delivering';
@@ -112,8 +156,13 @@ function statusVisible(base: VehicleStatus, act: TrajectoryPoint['act'] | undefi
       return 'on_break';
     case 'VIAJANDO':
       return 'en_route';
+    case 'INACTIVO':
+      // El primer punto de una trayectoria puede conservar la actividad del lote
+      // anterior, aunque el estado actual del backend ya sea EN_RUTA. No degradar
+      // ese estado a inactivo hasta que la fuente operativa confirme que está disponible.
+      return base === 'en_route' ? 'en_route' : 'idle';
     default:
-      return 'idle';
+      return base;
   }
 }
 
@@ -165,7 +214,7 @@ class SimulationEngine {
 
     if (marcaTiempoActual !== this.relojMarcaConocidaValor) {
       this.relojMarcaConocidaValor = marcaTiempoActual;
-      this.relojMarcaConocidaMs = marcaTiempoActual ? Date.parse(marcaTiempoActual) : null;
+      this.relojMarcaConocidaMs = marcaTiempoActual ? parseBackendSimulatedTime(marcaTiempoActual) : null;
       this.relojInstanteConocidoMs = performance.now();
     }
 
@@ -210,7 +259,9 @@ class SimulationEngine {
     }
   }
 
-  /** Encadena la trayectoria del lote recien llegado a la acumulada del vehiculo. */
+  /** Encadena la trayectoria del lote recien llegado a la acumulada del vehiculo. Inserta una
+   * esquina Manhattan en la union si el ultimo punto existente y el primero nuevo forman una
+   * diagonal (misma logica que normalizarTrayectoria, pero para el punto de union entre lotes). */
   private agregarTrayectoria(v: Vehicle): void {
     let linea = this.lineas.get(v.id);
     if (!linea) {
@@ -218,7 +269,7 @@ class SimulationEngine {
       this.lineas.set(v.id, linea);
     }
     const nuevos = v.trajectory.length > 0
-      ? v.trajectory
+      ? normalizarTrayectoria(v.trajectory)
       : this.relojMarcaConocidaMs != null
         ? [{ x: v.position.x, y: v.position.y, t: this.relojMarcaConocidaMs, act: 'INACTIVO' as const }]
         : [];
@@ -226,6 +277,19 @@ class SimulationEngine {
       const ultimo = linea[linea.length - 1];
       if (ultimo && p.t < ultimo.t) continue; // nunca hacia atras
       if (ultimo && p.t === ultimo.t && p.x === ultimo.x && p.y === ultimo.y && p.act === ultimo.act) continue;
+      // Union entre lotes: si el ultimo punto acumulado y el nuevo forman una diagonal,
+      // insertar una esquina Manhattan intermedia para que la interpolacion siga la grilla.
+      if (ultimo && (ultimo.x !== p.x && ultimo.y !== p.y) && p.t > ultimo.t) {
+        const dH = Math.abs(p.x - ultimo.x);
+        const dV = Math.abs(p.y - ultimo.y);
+        const fracH = dH / (dH + dV);
+        linea.push({
+          x: p.x,
+          y: ultimo.y,
+          t: ultimo.t + (p.t - ultimo.t) * fracH,
+          act: ultimo.act,
+        });
+      }
       linea.push(p);
     }
   }
@@ -239,7 +303,12 @@ class SimulationEngine {
       this.claveVisual = '';
       return false;
     }
-    this.cuadros.push({ arrivalMs: performance.now(), marca, marcaMs: marca ? Date.parse(marca) : null, data });
+    this.cuadros.push({
+      arrivalMs: performance.now(),
+      marca,
+      marcaMs: marca ? parseBackendSimulatedTime(marca) : null,
+      data,
+    });
     if (this.cuadros.length > MAX_CUADROS) {
       this.cuadros.splice(0, this.cuadros.length - MAX_CUADROS);
     }
@@ -333,7 +402,7 @@ class SimulationEngine {
     const vehicles = base.data.vehicles.map((v) => {
       const e = estados.get(v.id);
       if (!e) return v;
-      return { ...v, status: statusVisible(v.status, e.act), position: e.nodo };
+      return { ...v, status: statusVisible(v.status, e.act, e.moviendo), position: e.nodo };
     });
     this.estadoVisual = { ...base.data, vehicles, marcaVisibleMs: simNow ?? base.marcaMs };
     for (const fn of this.visualListeners) fn();

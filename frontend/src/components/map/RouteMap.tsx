@@ -17,6 +17,7 @@ export interface RouteMapProps {
   simMinutes?: number;
   onSelectVehicle?: (vehicle: Vehicle) => void;
   onSelectWarehouse?: (warehouse: Warehouse) => void;
+  onSelectOrder?: (order: Order) => void;
   isDarkTheme?: boolean;
 }
 
@@ -29,13 +30,16 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   simMinutes = 0,
   onSelectVehicle,
   onSelectWarehouse,
+  onSelectOrder,
   isDarkTheme = true,
 }) => {
   const selectedVehicleId = useMapStore((s) => s.selectedVehicleId);
   const selectedWarehouseId = useMapStore((s) => s.selectedWarehouseId);
+  const selectedOrderId = useMapStore((s) => s.selectedOrderId);
   const activeLayers = useMapStore((s) => s.activeLayers);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
   const setSelectedWarehouseId = useMapStore((s) => s.setSelectedWarehouseId);
+  const setSelectedOrderId = useMapStore((s) => s.setSelectedOrderId);
   // Mismo queryKey que el resto de la app (React Query dedupea), no dispara un fetch adicional.
   const { configuracion } = useEstadoOperacion();
 
@@ -57,6 +61,15 @@ export const RouteMap: React.FC<RouteMapProps> = ({
     }
   };
 
+  const handleOrderClick = (order: Order | null) => {
+    if (order) {
+      setSelectedOrderId(order.id);
+      onSelectOrder?.(order);
+    } else {
+      setSelectedOrderId(null);
+    }
+  };
+
   return (
     <div className="relative w-full h-full">
       <LeafletManhattanMap
@@ -68,8 +81,10 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         simMinutes={simMinutes}
         selectedVehicleId={selectedVehicleId}
         selectedWarehouseId={selectedWarehouseId}
+        selectedOrderId={selectedOrderId}
         onSelectVehicle={handleVehicleClick}
         onSelectWarehouse={handleWarehouseClick}
+        onSelectOrder={handleOrderClick}
         showBlockedStreets={activeLayers.blockedStreets}
         showProjectedRoutes={activeLayers.projectedRoutes}
         showOrders={activeLayers.orderPins}
