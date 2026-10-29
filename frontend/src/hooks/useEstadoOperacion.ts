@@ -51,8 +51,8 @@ export function useEstadoOperacion() {
   // referencia de `data` mientras no cambie, asi que esto solo recalcula con datos nuevos.
   const adaptado: EstadoAdaptado = useMemo(
     () =>
-      estadoQuery.data && pedidosQuery.data && configuracionQuery.data
-        ? adaptEstadoOperacion(estadoQuery.data, configuracionQuery.data, pedidosQuery.data, scenarioStartMs)
+      estadoQuery.data && configuracionQuery.data
+        ? adaptEstadoOperacion(estadoQuery.data, configuracionQuery.data, pedidosQuery.data ?? [], scenarioStartMs)
         : ESTADO_VACIO,
     [estadoQuery.data, pedidosQuery.data, configuracionQuery.data, scenarioStartMs],
   );

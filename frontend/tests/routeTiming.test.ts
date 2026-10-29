@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import fixture from './fixtures/enero-ruta.json';
+import { adaptEstadoOperacion } from '../src/utils/backendAdapters';
+import { parseBackendSimulatedTime } from '../src/utils/backendTime';
+import { simulationEngine } from '../src/engine/simulationEngine';
+const start=parseBackendSimulatedTime('2026-01-01T00:00:00');
+const adapted=adaptEstadoOperacion(fixture.estado as any,fixture.config as any,[],start);
+const car=adapted.vehicles[0];
+assert.equal(car.trajectory[0].t,parseBackendSimulatedTime('2026-01-01T01:40:00'));
+simulationEngine.ingest({vehicles:adapted.vehicles,routes:adapted.routes,frame:{...adapted,estadoRaw:fixture.estado as any},idEjecucion:'enero',sa:undefined,marcaTiempoActual:fixture.estado.marcaTiempoActual,k:0,avanzando:false});
+simulationEngine.advance();
+const visual=simulationEngine.getEstadoVisual()!;
+assert.equal(visual.vehicles[0].status,'en_route');
+assert.deepEqual(visual.vehicles[0].position,{x:36,y:14});
+assert(visual.routes.some(route=>route.vehicleId==='TA02' && route.status==='in_progress' && route.waypoints.length>1));
+console.log('OK: TA02 en ruta y en (36,14) a las 01:52:30, sin desfase horario.');

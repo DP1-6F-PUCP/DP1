@@ -9,6 +9,8 @@ export interface Order {
   code: string;
   warehouseOriginId: string;
   destination: Point;
+  /** Instante de llegada del pedido en el reloj simulado (convención UTC del backend). */
+  arrivalSimMs?: number;
   createdMinute: number;
   deadlineMinute: number;
   status: OrderStatus;

@@ -113,6 +113,16 @@ public class OrquestadorOperacion {
 
     private final Planificador planificador;
     private final MotorSimulacion motorSimulacion;
+    // Historial de consulta por ejecución; los entregados salen del pool de planificación,
+    // pero siguen disponibles para el mapa y las listas con su estado final.
+    private final java.util.Map<String, Pedido> historialPedidos = new java.util.LinkedHashMap<>();
+
+    public List<Pedido> getPedidosRecibidos() {
+        return historialPedidos.values().stream()
+                .filter(p -> !p.getFechaIngreso().isAfter(contextoProblema.marcaTiempoActual()))
+                .toList();
+    }
+
     private final ReporteDesempeno reporte = new ReporteDesempeno();
 
     private EjecucionEscenario ejecucionActual;
@@ -410,6 +420,8 @@ public class OrquestadorOperacion {
             pedidosDelLote.addAll(liberadosAhora);
             pedidosPorIncorporar.removeAll(liberadosAhora);
         }
+
+        pedidosDelLote.forEach(p -> historialPedidos.put(p.getIdPedido(), p));
 
         // Al planificador se le ofrecen todos los pedidos vigentes salvo los de una ruta protegida
         // (vehículo ENTREGANDO ahora mismo, ver arriba) -- todo lo demás, incluidos los pedidos de

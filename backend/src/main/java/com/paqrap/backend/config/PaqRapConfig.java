@@ -103,6 +103,16 @@ public class PaqRapConfig {
      */
     @Bean
     public CargadorRecursos cargadorRecursos(@Value("${paqrap.datos.carpeta:data}") String carpetaDatos) {
+        // Docker incluye data/; en desarrollo los archivos están en algoritmo/data.
+        // Una ruta configurada explícitamente conserva prioridad.
+        if ("data".equals(carpetaDatos) && !java.nio.file.Files.isDirectory(java.nio.file.Path.of(carpetaDatos))) {
+            for (String candidata : List.of("algoritmo/data", "../algoritmo/data")) {
+                if (java.nio.file.Files.isDirectory(java.nio.file.Path.of(candidata))) {
+                    carpetaDatos = candidata;
+                    break;
+                }
+            }
+        }
         return new CargadorRecursos(carpetaDatos, "config");
     }
 

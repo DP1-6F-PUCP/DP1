@@ -1,5 +1,6 @@
 import { Point, Route, TrajectoryPoint, Vehicle, VehicleStatus } from '../types';
 import { EngineSnapshot, EstadoVisual, FrameData, GrupoDetenido } from './types';
+import { ordersAtSimulatedTime } from '../utils/orderVisibility';
 import { parseBackendSimulatedTime } from '../utils/backendTime';
 
 /**
@@ -178,7 +179,7 @@ export interface IngestParams {
   avanzando: boolean;
 }
 
-class SimulationEngine {
+export class SimulationEngine {
   private renderDelayMs = RENDER_DELAY_RESPALDO_MS;
   private idEjecucionAnterior: string | undefined;
   private buffering = true;
@@ -203,6 +204,8 @@ class SimulationEngine {
   private claveVisual = '';
   private visualListeners = new Set<() => void>();
   private ultimoSimNow: number | null = null;
+  private pedidosConocidos = new Map<string, FrameData['orders'][number]>();
+  private ultimoSnapshot: EngineSnapshot = { vehiclePositions: new Map(), gruposDetenidos: [], buffering: true, nowSimMs: null, segundosDesdeUltimoLote: 0 };
 
   /** Llamado cada vez que cambian los datos en vivo (push WS o poll) -- NUNCA desde el render. */
   ingest(params: IngestParams): void {
@@ -218,13 +221,14 @@ class SimulationEngine {
       this.relojInstanteConocidoMs = performance.now();
     }
 
-    const huboResetDeEjecucion = Boolean(idEjecucion)
-      && this.idEjecucionAnterior != null
-      && this.idEjecucionAnterior !== idEjecucion;
+    const huboResetDeEjecucion = this.idEjecucionAnterior !== idEjecucion;
+    const teniaCuadros = this.cuadros.length > 0;
     if (idEjecucion) {
       this.idEjecucionAnterior = idEjecucion;
     }
     if (huboResetDeEjecucion) {
+      this.pedidosConocidos.clear();
+      this.ultimoSimNow = null;
       this.lineas.clear();
       this.futuros.clear();
       this.cuadros = [];
@@ -232,11 +236,18 @@ class SimulationEngine {
       this.claveVisual = '';
       this.bufferingDesdeMs = performance.now();
       this.buffering = true;
-      // Se espera a que `vehicles` refleje la ejecucion nueva (el refetch/WS lo trae en breve).
-      return;
+      this.ultimoSnapshot = { vehiclePositions: new Map(), gruposDetenidos: [], buffering: true, nowSimMs: null, segundosDesdeUltimoLote: 0 };
+      // Si había datos previos, esperar el refetch de la ejecución nueva.
+      if (teniaCuadros) return;
     }
 
-    const loteNuevo = this.registrarCuadro(frame, marcaTiempoActual);
+    // Ignorar respuestas tardías: el polling y el WebSocket pueden llegar fuera de orden.
+    const marcaMs = marcaTiempoActual ? parseBackendSimulatedTime(marcaTiempoActual) : null;
+    const ultimaMarca = this.cuadros.at(-1)?.marcaMs;
+    if (marcaMs != null && ultimaMarca != null && marcaMs < ultimaMarca) return;
+    for (const pedido of frame.orders) this.pedidosConocidos.set(pedido.id, pedido);
+    const cuadro = { ...frame, orders: [...this.pedidosConocidos.values()] };
+    const loteNuevo = this.registrarCuadro(cuadro, marcaTiempoActual);
 
     const idsActuales = new Set(vehicles.map((v) => v.id));
     for (const id of this.lineas.keys()) {
@@ -257,6 +268,7 @@ class SimulationEngine {
     if (this.cuadros.length >= 2) {
       this.buffering = false;
     }
+    this.advance();
   }
 
   /** Encadena la trayectoria del lote recien llegado a la acumulada del vehiculo. Inserta una
@@ -351,7 +363,9 @@ class SimulationEngine {
       this.buffering = false;
     }
 
-    const simNow = this.relojEnRender(renderTimeMs);
+    const calculado = this.relojEnRender(renderTimeMs);
+    const simNow = calculado == null ? this.ultimoSimNow
+      : this.ultimoSimNow == null ? calculado : Math.max(this.ultimoSimNow, calculado);
     this.ultimoSimNow = simNow;
 
     const vehiclePositions = new Map<string, Point>();
@@ -390,12 +404,15 @@ class SimulationEngine {
       if (enReproduccion) base = enReproduccion;
     }
 
+    const marcaVisibleMs = simNow ?? base.marcaMs;
+    const orders = ordersAtSimulatedTime(base.data.orders, marcaVisibleMs);
     let firma = '';
     for (const v of base.data.vehicles) {
       const e = estados.get(v.id);
-      firma += `${v.id}:${e?.act ?? '-'}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
+      firma += `${v.id}:${e?.moviendo ?? false}:${e?.act ?? '-'}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
     }
-    const clave = `${base.arrivalMs}|${firma}`;
+    // La lista puede cambiar dentro del mismo lote, incluso sin vehículos en movimiento.
+    const clave = JSON.stringify([base.arrivalMs, firma, orders.map((order) => order.id)]);
     if (clave === this.claveVisual) return;
     this.claveVisual = clave;
 
@@ -404,7 +421,7 @@ class SimulationEngine {
       if (!e) return v;
       return { ...v, status: statusVisible(v.status, e.act, e.moviendo), position: e.nodo };
     });
-    this.estadoVisual = { ...base.data, vehicles, marcaVisibleMs: simNow ?? base.marcaMs };
+    this.estadoVisual = { ...base.data, vehicles, orders, marcaVisibleMs };
     for (const fn of this.visualListeners) fn();
   }
 
@@ -420,7 +437,7 @@ class SimulationEngine {
   };
 
   getSnapshotNow(): EngineSnapshot {
-    return this.computeSnapshot();
+    return this.ultimoSnapshot;
   }
 
   /**
@@ -454,11 +471,18 @@ class SimulationEngine {
     return () => this.listeners.delete(fn);
   }
 
-  private tick = (): void => {
+  /** Actualizar desde efectos/eventos o el bucle de animación, nunca durante el render de React. */
+  advance(): EngineSnapshot {
     const snap = this.computeSnapshot();
+    this.ultimoSnapshot = snap;
     for (const fn of this.listeners) {
       fn(snap);
     }
+    return snap;
+  }
+
+  private tick = (): void => {
+    this.advance();
     this.rafId = requestAnimationFrame(this.tick);
   };
 

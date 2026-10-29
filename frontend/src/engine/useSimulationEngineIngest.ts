@@ -33,6 +33,8 @@ export function useSimulationEngineIngest({ vehicles, routes, orders, warehouses
   );
 
   useEffect(() => {
+    // Las consultas se completan por separado; no sustituir una flota válida por un vacío de carga.
+    if (!idEjecucion || !estadoRaw || (estadoRaw.vehiculos.length > 0 && vehicles.length === 0)) return;
     simulationEngine.ingest({ vehicles, routes, frame, idEjecucion, sa, marcaTiempoActual, k, avanzando });
   }, [vehicles, routes, frame, idEjecucion, sa, marcaTiempoActual, k, avanzando]);
 }

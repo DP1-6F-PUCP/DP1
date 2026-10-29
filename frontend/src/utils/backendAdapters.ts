@@ -4,7 +4,6 @@
  * que no se puede derivar honestamente del backend queda undefined/vacio, nunca inventado.
  *
  * Huecos reales del backend que esto no puede resolver (documentados, no se simulan):
- * - PedidoDTO no expone fechaIngreso -- createdMinute/slaHours no son derivables, quedan en 0/undefined.
  * - VehiculoDTO no expone velocidad/capacidad propias -- se resuelven por tipo via TipoVehiculoDTO.
  * - VehiculoDTO no tiene historyPath ni bateria/combustible -- no son conceptos del dominio real.
  * - RutaDTO.geometria ya trae el camino real (CalculadorDistancia, respeta bloqueos); solo se
@@ -215,7 +214,7 @@ export function adaptVehiculo(
     returnPath: normalizeManhattanPath(dto.geometriaRetorno.map(parseNodo)),
     activityRemainingMinutes,
     activitySince: dto.actividadDesde ?? undefined,
-    trajectory: (dto.trayectoria ?? []).map((p) => ({ x: p.x, y: p.y, t: Date.parse(p.instante), act: p.actividad })),
+    trajectory: (dto.trayectoria ?? []).map((p) => ({ x: p.x, y: p.y, t: parseBackendSimulatedTime(p.instante), act: p.actividad })),
     historyPath: [], // no expuesto por el backend
     assignedOrderIds: rutaActiva?.secuenciaEntrega ?? [],
     totalDelivered: 0, // no expuesto por el backend (no hay contador por vehiculo)
@@ -229,8 +228,8 @@ export function adaptPedido(
   scenarioStartMs: number | null,
   nowMs: number | null
 ): Order {
-  const createdMs = Date.parse(dto.fechaIngreso);
-  const deadlineMs = Date.parse(dto.fechaLimite);
+  const createdMs = parseBackendSimulatedTime(dto.fechaIngreso);
+  const deadlineMs = parseBackendSimulatedTime(dto.fechaLimite);
   const createdMinute = scenarioStartMs != null && Number.isFinite(createdMs)
     ? Math.round((createdMs - scenarioStartMs) / 60000)
     : 0;
@@ -256,6 +255,7 @@ export function adaptPedido(
     code: dto.idPedido,
     warehouseOriginId: '', // el backend no indica desde que almacen se atendera
     destination: { x: dto.posX, y: dto.posY },
+    arrivalSimMs: createdMs,
     createdMinute,
     deadlineMinute,
     status,

@@ -128,6 +128,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   const routesLayerGroupRef = useRef<L.LayerGroup>(L.layerGroup());
   const ordersLayerGroupRef = useRef<L.LayerGroup>(L.layerGroup());
   const warehousesLayerGroupRef = useRef<L.LayerGroup>(L.layerGroup());
+  const parkedLayerGroupRef = useRef<L.LayerGroup>(L.layerGroup());
+  const parkedMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const vehiclesLayerGroupRef = useRef<L.LayerGroup>(L.layerGroup());
 
   // Marcadores de vehiculo persistentes entre renders (en vez de destruir y recrear cada vez que
@@ -177,6 +179,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       markerZoomAnimation: true,
     });
 
+    // El almacén conserva prioridad incluso sobre un vehículo seleccionado o averiado.
+    map.createPane('warehouseMarkers').style.zIndex = '625';
     mapInstanceRef.current = map;
 
     // Clicking anywhere on map clears selection
@@ -192,6 +196,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     blockedLayerGroupRef.current.addTo(map);
     routesLayerGroupRef.current.addTo(map);
     ordersLayerGroupRef.current.addTo(map);
+    parkedLayerGroupRef.current.addTo(map);
     warehousesLayerGroupRef.current.addTo(map);
     vehiclesLayerGroupRef.current.addTo(map);
 
@@ -209,12 +214,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const fitTimer = setTimeout(ajustar, 60);
 
     // Resize observer to always adapt fixed map to container changes
+    const markerCache = vehicleMarkersRef.current;
+    const layerGroups = [gridLayerGroupRef.current, blockedLayerGroupRef.current, routesLayerGroupRef.current,
+      ordersLayerGroupRef.current, warehousesLayerGroupRef.current, vehiclesLayerGroupRef.current, parkedLayerGroupRef.current];
     const resizeObserver = new ResizeObserver(ajustar);
     resizeObserver.observe(mapContainerRef.current);
 
     return () => {
       clearTimeout(fitTimer);
       resizeObserver.disconnect();
+      markerCache.clear();
+      parkedMarkersRef.current.clear();
+      layerGroups.forEach((group) => group.clearLayers());
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -350,7 +361,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       hitLine.addTo(group);
       coreLine.addTo(group);
     });
-  }, [showBlockedStreets, blockedStreets, selectedBlockId, onSelectBlock]);
+  }, [showBlockedStreets, blockedStreets, selectedBlockId, onSelectBlock, cityWidth, cityHeight]);
 
   // 4. Render order destinations
   useEffect(() => {
@@ -375,6 +386,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     };
 
     orders.forEach((order) => {
+      // Conservar el historial en las listas; retirar del mapa los destinos ya atendidos.
+      if (order.status === 'delivered') return;
       const isSelected = selectedOrderId === order.id;
       const color = statusColors[order.status] || '#3B82F6';
 
@@ -430,7 +443,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
       marker.addTo(group);
     });
-  }, [orders, showOrders, selectedOrderId, onSelectOrder]);
+  }, [orders, showOrders, selectedOrderId, onSelectOrder, cityWidth, cityHeight]);
 
   // 4. Render projected routes for every vehicle
   //
@@ -503,7 +516,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       ).addTo(group);
       routeLinesRef.current.set(vehicle.id, routeLine);
     });
-  }, [showProjectedRoutes, vehicles, routes, selectedVehicleId]);
+  }, [showProjectedRoutes, vehicles, routes, selectedVehicleId, cityWidth, cityHeight]);
 
   // 5. Render Warehouses (tooltip on hover, left inspector popup on click)
   useEffect(() => {
@@ -564,7 +577,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         iconAnchor: [12, 12],
       });
 
-      const marker = L.marker([w.coords.y, w.coords.x], { icon: warehouseIcon });
+      const marker = L.marker([w.coords.y, w.coords.x], { icon: warehouseIcon, pane: 'warehouseMarkers' });
       const tooltipContent = isInfinite
         ? '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px;"><strong>Stock:</strong> ilimitado</div>'
         : `
@@ -592,7 +605,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
       marker.addTo(group);
     });
-  }, [warehouses, selectedWarehouseId, isDarkTheme, onSelectWarehouse]);
+  }, [warehouses, selectedWarehouseId, isDarkTheme, onSelectWarehouse, cityWidth, cityHeight]);
 
   // 6. Render Vehicles (No balloon popups - triggers left inspector popup on click)
   //
@@ -792,12 +805,14 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       } else {
         // El icono se refresca siempre (color de semaforo, seleccion, averia pueden cambiar
         // aunque la posicion no cambie).
-        marker.setIcon(vehicleIcon);
+        if ((marker.getIcon().options as L.DivIconOptions).html !== vehicleIcon.options.html) {
+          marker.setIcon(vehicleIcon);
+        }
         marker.setZIndexOffset(zIndexOffset);
         marker.setTooltipContent(tooltipContent);
       }
     });
-  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, umbralesSemaforo]);
+  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, umbralesSemaforo, cityWidth, cityHeight]);
 
   // Suscripcion al motor de simulacion (engine/simulationEngine.ts): un callback por frame que
   // mueve los marcadores existentes segun la posicion ya interpolada que calcula el motor, y
@@ -809,12 +824,76 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const capa = vehiclesLayerGroupRef.current;
 
     const unsubscribe = simulationEngine.subscribe((snap) => {
+      const groupedIds = new Set(snap.gruposDetenidos.flatMap((group) => group.ids));
+      const activeGroups = new Set(snap.gruposDetenidos.map((group) => group.clave));
+      for (const [key, groupMarker] of parkedMarkersRef.current) {
+        if (!activeGroups.has(key)) {
+          parkedLayerGroupRef.current.removeLayer(groupMarker);
+          parkedMarkersRef.current.delete(key);
+        }
+      }
+      for (const group of snap.gruposDetenidos) {
+        const members = group.ids.map((id) => vehiclesRef.current.find((v) => v.id === id))
+          .filter((v): v is Vehicle => Boolean(v));
+        if (members.length < 2) continue;
+        let groupMarker = parkedMarkersRef.current.get(group.clave);
+        if (!groupMarker) {
+          groupMarker = L.marker([group.punto.y, group.punto.x], {
+            zIndexOffset: 1500,
+            keyboard: true,
+            // La bolita queda al lado del almacén, sin tapar su icono ni su tooltip.
+            icon: L.divIcon({ className: 'parked-vehicles-marker', html: '', iconSize: [24, 24], iconAnchor: [-12, 28] }),
+          });
+          groupMarker.bindPopup('', { className: 'popup-grupo', maxWidth: 320, minWidth: 260, closeOnClick: false, autoClose: false });
+          groupMarker.addTo(parkedLayerGroupRef.current);
+          parkedMarkersRef.current.set(group.clave, groupMarker);
+        }
+        const label = `${members.length} vehículos detenidos`;
+        const html = `<div title="${label}" aria-label="${label}" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F3864;border:2px solid #ffffff;color:#ffffff;font:700 11px system-ui;box-shadow:0 2px 5px #0006;cursor:pointer">${members.length}</div>`;
+        if ((groupMarker.getIcon().options as L.DivIconOptions).html !== html) {
+          groupMarker.setIcon(L.divIcon({ className: 'parked-vehicles-marker', html, iconSize: [24, 24], iconAnchor: [-12, 28] }));
+        }
+        const groupPosition = groupMarker.getLatLng();
+        if (groupPosition.lat !== group.punto.y || groupPosition.lng !== group.punto.x) {
+          groupMarker.setLatLng([group.punto.y, group.punto.x]);
+        }
+        const signature = JSON.stringify([isDarkThemeRef.current, members.map((v) => [v.id, v.status, v.currentLoad, v.capacity, v.breakdownType])]);
+        const popup = groupMarker.getPopup()!;
+        const oldContent = popup.getContent();
+        if (!(oldContent instanceof HTMLElement) || oldContent.dataset.signature !== signature) {
+          const content = document.createElement('div');
+          content.dataset.signature = signature;
+          content.style.cssText = `font:12px system-ui;max-height:260px;overflow-y:auto;color:${isDarkThemeRef.current ? '#e2e8f0' : '#1e293b'}`;
+          const title = document.createElement('strong');
+          title.textContent = `Vehículos detenidos (${members.length})`;
+          title.style.cssText = 'display:block;margin-bottom:8px';
+          content.appendChild(title);
+          for (const vehicle of members) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            const state = vehicle.status === 'broken' && vehicle.breakdownType
+              ? BREAKDOWN_LABELS[vehicle.breakdownType] : ETIQUETA_ESTADO[vehicle.status];
+            button.textContent = `${vehicle.code} · ${state} · ${vehicle.currentLoad}/${vehicle.capacity} paq`;
+            button.style.cssText = 'display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid #64748b55;background:transparent;color:inherit;cursor:pointer;font:inherit';
+            button.addEventListener('click', () => {
+              const current = vehiclesRef.current.find((v) => v.id === vehicle.id);
+              if (current) onSelectVehicleRef.current?.(current);
+              mapInstanceRef.current?.closePopup();
+            });
+            content.appendChild(button);
+          }
+          popup.options.className = `popup-grupo ${isDarkThemeRef.current ? 'popup-grupo-oscuro' : ''}`;
+          groupMarker.setPopupContent(content);
+        }
+      }
       for (const [id, marker] of vehicleMarkersRef.current) {
         const punto = snap.vehiclePositions.get(id);
         if (punto) {
           marker.setLatLng([punto.y, punto.x]);
         }
-        if (!capa.hasLayer(marker)) capa.addLayer(marker);
+        if (groupedIds.has(id)) {
+          if (capa.hasLayer(marker)) capa.removeLayer(marker);
+        } else if (!capa.hasLayer(marker)) capa.addLayer(marker);
 
         const routeLine = routeLinesRef.current.get(id);
         const ruta = simulationEngine.getRutaVisible(id);

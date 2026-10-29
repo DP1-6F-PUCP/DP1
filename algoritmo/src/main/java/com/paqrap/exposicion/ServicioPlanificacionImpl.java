@@ -130,7 +130,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
     private void publicarEstado(OrquestadorOperacion orquestador) {
         ContextoProblema contexto = orquestador.getContextoProblema();
-        pedidosPublicados = contexto.pedidos().stream().map(EnsambladorRespuestas::aPedidoDTO).toList();
+        pedidosPublicados = orquestador.getPedidosRecibidos().stream().map(EnsambladorRespuestas::aPedidoDTO).toList();
         estadoPublicado = EnsambladorRespuestas.ensamblarEstado(contexto, orquestador.getUltimasRutas(),
                 orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte());
     }

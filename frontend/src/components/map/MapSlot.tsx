@@ -7,16 +7,17 @@ interface MapSlotProps {
 
 export const MapSlot: React.FC<MapSlotProps> = ({ className }) => {
   const mapSlotContext = useContext(MapSlotContext);
+  const setSlot = mapSlotContext?.setSlot;
   const slotRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const slot = slotRef.current;
-    if (!mapSlotContext || !slot) return;
-    mapSlotContext.setSlot(slot);
+    if (!setSlot || !slot) return;
+    setSlot(slot);
     return () => {
-      mapSlotContext.setSlot((currentSlot) => (currentSlot === slot ? null : currentSlot));
+      setSlot((currentSlot) => (currentSlot === slot ? null : currentSlot));
     };
-  }, [mapSlotContext]);
+  }, [setSlot]);
 
   return <div ref={slotRef} className={className} />;
 };
