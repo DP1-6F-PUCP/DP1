@@ -1,121 +1,26 @@
 import React from 'react';
-import { Circle, AlertTriangle, AlertOctagon, MinusCircle } from 'lucide-react';
-import { Vehicle, Order } from '../types';
-import { UMBRALES_SEMAFORO_DEFAULT, UmbralesSemaforo } from '../store/semaforoStore';
+import { AlertOctagon, MinusCircle } from 'lucide-react';
+import {
+  VehicleSemaforoConfig,
+  VehicleSemaforoState,
+  BreakdownLevelConfig,
+  BREAKDOWN_LEVEL_CONFIGS,
+  getBreakdownLevelConfig,
+  VEHICLE_TYPE_META,
+  SEMAFORO_CONFIGS,
+  getVehicleSemaforoStatus,
+} from './vehicleBreakdown';
 
-export type VehicleSemaforoState = 'on_time' | 'at_risk' | 'delayed' | 'inactive';
-
-export interface VehicleSemaforoConfig {
-  state: VehicleSemaforoState;
-  hex: string;
-  label: string;
-  shortLabel: string;
-  description: string;
-  iconName: 'circle' | 'triangle' | 'warning' | 'inactive';
-}
-
-export const SEMAFORO_CONFIGS: Record<VehicleSemaforoState, VehicleSemaforoConfig> = {
-  on_time: {
-    state: 'on_time',
-    hex: '#2E7D32',
-    label: 'En ruta / a tiempo',
-    shortLabel: 'A tiempo',
-    description: 'El vehículo avanza dentro del tiempo estimado de la ruta',
-    iconName: 'circle',
-  },
-  at_risk: {
-    state: 'at_risk',
-    hex: '#F9A825',
-    label: 'En riesgo de retraso',
-    shortLabel: 'En riesgo',
-    description: 'El vehículo presenta una desviación que pone en riesgo el ETA',
-    iconName: 'triangle',
-  },
-  delayed: {
-    state: 'delayed',
-    hex: '#C62828',
-    label: 'Retrasado / incidencia',
-    shortLabel: 'Retrasado',
-    description: 'El vehículo está retrasado, detenido o presenta una avería',
-    iconName: 'warning',
-  },
-  inactive: {
-    state: 'inactive',
-    hex: '#9E9E9E',
-    label: 'Sin asignar / inactivo',
-    shortLabel: 'Inactivo',
-    description: 'El vehículo no tiene una ruta activa asignada',
-    iconName: 'inactive',
-  },
+export {
+  type VehicleSemaforoConfig,
+  type VehicleSemaforoState,
+  type BreakdownLevelConfig,
+  BREAKDOWN_LEVEL_CONFIGS,
+  getBreakdownLevelConfig,
+  VEHICLE_TYPE_META,
+  SEMAFORO_CONFIGS,
+  getVehicleSemaforoStatus,
 };
-
-export function getVehicleSemaforoStatus(
-  vehicle: Vehicle,
-  orders: Order[],
-  simMinutes: number,
-  umbrales: UmbralesSemaforo = UMBRALES_SEMAFORO_DEFAULT
-): VehicleSemaforoConfig {
-
-  // 1. Una avería es una incidencia crítica inmediata -> Retrasado / incidencia (#C62828).
-  if (vehicle.status === 'broken') {
-    return SEMAFORO_CONFIGS.delayed;
-  }
-  // El mantenimiento preventivo es PROGRAMADO, no un retraso: la unidad queda fuera de servicio sin
-  // pedidos -> Sin asignar / inactivo (#9E9E9E). Antes contaba como "Retraso" en el semáforo de flota
-  // sin que hubiera ningún pedido atrasado (reportado: "veo uno en retraso pero no en la pantalla").
-  if (vehicle.status === 'maintenance') {
-    return SEMAFORO_CONFIGS.inactive;
-  }
-
-  // 2. Si no tiene pedidos asignados o estado inactivo -> Sin asignar / inactivo (#9E9E9E)
-  if (
-    vehicle.status === 'idle' ||
-    !vehicle.assignedOrderIds ||
-    vehicle.assignedOrderIds.length === 0
-  ) {
-    return SEMAFORO_CONFIGS.inactive;
-  }
-
-  // 3. Revisar pedidos asignados activos
-  const activeOrders = orders.filter(
-    (o) =>
-      (vehicle.assignedOrderIds.includes(o.id) || o.assignedVehicleId === vehicle.id) &&
-      o.status !== 'delivered'
-  );
-
-  if (activeOrders.length === 0) {
-    return SEMAFORO_CONFIGS.inactive;
-  }
-
-  // 4. Evaluar la holgura frente al plazo contra los rangos configurados (store/semaforoStore).
-  //    Superar el plazo detiene la simulación, así que el rojo tiene que avisar ANTES de que ocurra.
-  let hasDanger = false;
-  let hasWarning = false;
-
-  for (const order of activeOrders) {
-    const marginMinutes = order.deadlineMinute - simMinutes;
-
-    if (order.status === 'delayed' || order.status === 'collapsed' || marginMinutes <= umbrales.retrasoMinutos) {
-      hasDanger = true;
-      break;
-    }
-
-    if (order.status === 'at_risk' || marginMinutes <= umbrales.riesgoMinutos) {
-      hasWarning = true;
-    }
-  }
-
-  if (hasDanger) {
-    return SEMAFORO_CONFIGS.delayed;
-  }
-
-  if (hasWarning) {
-    return SEMAFORO_CONFIGS.at_risk;
-  }
-
-  // 5. En ruta a tiempo dentro del ETA -> Verde (#2E7D32)
-  return SEMAFORO_CONFIGS.on_time;
-}
 
 interface SemaforoBadgeProps {
   status: VehicleSemaforoConfig;

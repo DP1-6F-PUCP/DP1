@@ -904,11 +904,18 @@ public class OrquestadorOperacion {
     private void liberarAveriasVencidas(LocalDateTime instante) {
         for (UnidadTransporte unidad : contextoProblema.vehiculos()) {
             Averia averia = unidad.getAveriaActual();
-            if (unidad.getEstado() == EstadoUnidad.AVERIADO && averia != null
-                    && !instante.isBefore(averia.fechaFinEstimada())) {
-                unidad.setAveriaActual(null);
-                unidad.setEstado(EstadoUnidad.DISPONIBLE);
-                unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
+            if (unidad.getEstado() == EstadoUnidad.AVERIADO && averia != null) {
+                if (averia.fechaTrasladoAlmacen() != null && !instante.isBefore(averia.fechaTrasladoAlmacen())) {
+                    contextoProblema.almacenes().stream()
+                            .filter(AlmacenCentral.class::isInstance)
+                            .findFirst()
+                            .ifPresent(central -> unidad.setPosicion(central.getPosicion()));
+                }
+                if (!instante.isBefore(averia.fechaFinEstimada())) {
+                    unidad.setAveriaActual(null);
+                    unidad.setEstado(EstadoUnidad.DISPONIBLE);
+                    unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
+                }
             }
         }
     }
@@ -919,7 +926,10 @@ public class OrquestadorOperacion {
                 .findFirst()
                 .ifPresent(unidad -> {
                     TipoAveria tipo = TipoAveria.valueOf(solicitud.valorNuevo());
-                    LocalDateTime ahora = solicitud.tiempoSimuladoProgramado();
+                    LocalDateTime marcaActual = contextoProblema.marcaTiempoActual();
+                    LocalDateTime ahora = marcaActual != null && marcaActual.isAfter(solicitud.tiempoSimuladoProgramado())
+                            ? marcaActual
+                            : solicitud.tiempoSimuladoProgramado();
                     LocalDateTime fin = contextoProblema.configuracionOperacion().finIndisponibilidadAveria(tipo, ahora);
                     // Si la unidad ya venía con una ruta EN_EJECUCION, la avería la abandona: se
                     // marca REEMPLAZADA y sus paradas aún no cumplidas quedan REASIGNADA, para que
@@ -937,22 +947,19 @@ public class OrquestadorOperacion {
                                 (int) liberadas, "avería " + tipo);
                     }
 
-                    unidad.setAveriaActual(new Averia(tipo, ahora, fin, 0, ahora));
+                    // Tipo 1 permanece 2h en el lugar y se repara ahí mismo. Tipo 2 y Tipo 3
+                    // permanecen 4h en el lugar de la avería y, cumplidas esas 4h, son llevadas de
+                    // manera instantánea al almacén central junto con los paquetes no trasvasados.
+                    int permanenciaEnSitioHoras = tipo == TipoAveria.TIPO_1 ? 2 : 4;
+                    LocalDateTime fechaTraslado = tipo == TipoAveria.TIPO_1
+                            ? null
+                            : ahora.plusHours(permanenciaEnSitioHoras);
+                    unidad.setAveriaActual(new Averia(tipo, ahora, fin, permanenciaEnSitioHoras, fechaTraslado));
                     unidad.setEstado(EstadoUnidad.AVERIADO);
                     unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
                     reporte.incrementarAverias();
                     motorSimulacion.registrarAveriaVehiculo(0.0, contextoProblema, unidad.getIdUnidad(),
                             unidad.getPosicion(), tipo.name());
-
-                    // Tipo 2/3: la unidad y los paquetes no trasvasados se llevan de "manera
-                    // instantánea" al almacén central (simplificación explícita del curso — no se
-                    // modela tiempo de remolque). Tipo 1 permanece en el lugar de la avería.
-                    if (tipo == TipoAveria.TIPO_2 || tipo == TipoAveria.TIPO_3) {
-                        contextoProblema.almacenes().stream()
-                                .filter(AlmacenCentral.class::isInstance)
-                                .findFirst()
-                                .ifPresent(central -> unidad.setPosicion(central.getPosicion()));
-                    }
                 });
     }
 

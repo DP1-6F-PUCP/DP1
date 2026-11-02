@@ -5,7 +5,12 @@ import { FaMotorcycle } from 'react-icons/fa';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
 import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
-import { getVehicleSemaforoStatus } from '../../utils/vehicleStatus';
+import {
+  getVehicleSemaforoStatus,
+  BREAKDOWN_LEVEL_CONFIGS,
+  getBreakdownLevelConfig,
+  VEHICLE_TYPE_META,
+} from '../../utils/vehicleStatus';
 import { useSemaforoStore } from '../../store/semaforoStore';
 import { simulationEngine } from '../../engine/simulationEngine';
 
@@ -706,44 +711,43 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
               stroke-width="1.7"
             />
 
-            <!-- The breakdown badge replaces the vehicle icon so the type remains legible. -->
-            ${
-              v.status === 'broken'
-                ? ''
-                : `<g transform="translate(-7.5 -7.5)">
-                    ${vehicleIconMarkup}
-                  </g>`
-            }
+            <!-- Always render the vehicle type icon (Auto, Moto, Bici) so the transport unit type is immediately identifiable even when broken -->
+            <g transform="translate(-7.5 -7.5)">
+              ${vehicleIconMarkup}
+            </g>
 
-            <!-- Geometric accent for delayed / broken -->
+            <!-- Geometric accent / corner badge for delayed or broken vehicles -->
             ${
               isDelayedOrBroken
                 ? v.status === 'broken'
                   ? `<circle
-                    cx="0"
-                    cy="0"
-                    r="5.2"
+                    cx="8.2"
+                    cy="-8.2"
+                    r="5.8"
                     fill="#ffffff"
-                    fill-opacity="0.95"
+                    stroke="${breakdownColor}"
+                    stroke-width="1.5"
                   />
                   <text
-                    x="0"
-                    y="0.5"
+                    x="8.2"
+                    y="-7.7"
                     text-anchor="middle"
                     dominant-baseline="middle"
                     font-family="system-ui, -apple-system, sans-serif"
-                    font-size="5.8"
+                    font-size="5.6"
                     font-weight="800"
                     fill="${breakdownColor}"
                   >${breakdownBadge}</text>`
                   : `<rect
-                    x="-1.8"
-                    y="-1.8"
-                    width="3.6"
-                    height="3.6"
-                    rx="0.4"
-                    fill="#ffffff"
-                    transform="rotate(45)"
+                    x="6.2"
+                    y="-10.2"
+                    width="3.8"
+                    height="3.8"
+                    rx="0.5"
+                    fill="#C62828"
+                    stroke="#ffffff"
+                    stroke-width="0.9"
+                    transform="rotate(45 8.1 -8.3)"
                   />`
                 : ''
             }
@@ -769,17 +773,20 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const fillRatio = v.capacity > 0 ? v.currentLoad / v.capacity : 0;
       const pct = Math.round(fillRatio * 100);
       const estadoTexto = isReturning ? 'Regresando al almacén' : ETIQUETA_ESTADO[v.status] ?? v.status;
+      const typeMeta = VEHICLE_TYPE_META[v.type];
+      const breakdownCfg = v.status === 'broken' ? getBreakdownLevelConfig(breakdownType) : null;
       const averiaTexto = v.status === 'broken'
-        ? (breakdownType
-          ? BREAKDOWN_LABELS[breakdownType]
+        ? (breakdownCfg
+          ? `${breakdownCfg.label}<br/><span style="font-size:10px;opacity:0.9">${breakdownCfg.unavailableText} · ${breakdownCfg.siteStayText}</span>`
           : 'Avería: tipo no informado')
         : '';
       const tooltipContent = `
-        <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 120px;">
-          <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${v.code}</div>
+        <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 145px;">
+          <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${v.code} · ${typeMeta.shortLabel}</div>
+          <div><strong>Tipo:</strong> ${typeMeta.label}</div>
           <div><strong>Ocupación:</strong> ${v.currentLoad} / ${v.capacity} paq (${pct}%)</div>
           <div><strong>Estado:</strong> ${estadoTexto}</div>
-          ${averiaTexto ? `<div><strong>${averiaTexto}</strong></div>` : ''}
+          ${averiaTexto ? `<div style="margin-top:2px;color:${breakdownColor};"><strong>${averiaTexto}</strong></div>` : ''}
         </div>
       `;
 
@@ -848,8 +855,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
           groupMarker.addTo(parkedLayerGroupRef.current);
           parkedMarkersRef.current.set(group.clave, groupMarker);
         }
-        const label = `${members.length} vehículos detenidos`;
-        const html = `<div title="${label}" aria-label="${label}" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F3864;border:2px solid #ffffff;color:#ffffff;font:700 11px system-ui;box-shadow:0 2px 5px #0006;cursor:pointer">${members.length}</div>`;
+        const brokenMembers = members.filter((m) => m.status === 'broken');
+        const topBreakdownType = brokenMembers.reduce<number | undefined>(
+          (max, m) => (m.breakdownType && (!max || m.breakdownType > max) ? m.breakdownType : max),
+          undefined
+        );
+        const groupBorderColor = brokenMembers.length > 0
+          ? (topBreakdownType ? BREAKDOWN_COLORS[topBreakdownType] : '#EF4444')
+          : '#ffffff';
+        const label = brokenMembers.length > 0
+          ? `${members.length} vehículos detenidos (${brokenMembers.length} con avería)`
+          : `${members.length} vehículos detenidos`;
+        const html = `<div title="${label}" aria-label="${label}" style="position:relative;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F3864;border:2.5px solid ${groupBorderColor};color:#ffffff;font:700 11px system-ui;box-shadow:0 2px 5px #0006;cursor:pointer">${members.length}${brokenMembers.length > 0 ? `<span style="position:absolute;top:-5px;right:-6px;background:${groupBorderColor};color:#fff;border-radius:999px;padding:0 3.5px;font:800 8px system-ui;line-height:12px;border:1px solid #fff">!${brokenMembers.length}</span>` : ''}</div>`;
         if ((groupMarker.getIcon().options as L.DivIconOptions).html !== html) {
           groupMarker.setIcon(L.divIcon({ className: 'parked-vehicles-marker', html, iconSize: [24, 24], iconAnchor: [-12, 28] }));
         }
@@ -857,7 +874,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         if (groupPosition.lat !== group.punto.y || groupPosition.lng !== group.punto.x) {
           groupMarker.setLatLng([group.punto.y, group.punto.x]);
         }
-        const signature = JSON.stringify([isDarkThemeRef.current, members.map((v) => [v.id, v.status, v.currentLoad, v.capacity, v.breakdownType])]);
+        const signature = JSON.stringify([isDarkThemeRef.current, members.map((v) => [v.id, v.type, v.status, v.currentLoad, v.capacity, v.breakdownType])]);
         const popup = groupMarker.getPopup()!;
         const oldContent = popup.getContent();
         if (!(oldContent instanceof HTMLElement) || oldContent.dataset.signature !== signature) {
@@ -865,16 +882,23 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
           content.dataset.signature = signature;
           content.style.cssText = `font:12px system-ui;max-height:260px;overflow-y:auto;color:${isDarkThemeRef.current ? '#e2e8f0' : '#1e293b'}`;
           const title = document.createElement('strong');
-          title.textContent = `Vehículos detenidos (${members.length})`;
+          title.textContent = brokenMembers.length > 0
+            ? `Vehículos detenidos (${members.length} · ${brokenMembers.length} averiado${brokenMembers.length > 1 ? 's' : ''})`
+            : `Vehículos detenidos (${members.length})`;
           title.style.cssText = 'display:block;margin-bottom:8px';
           content.appendChild(title);
           for (const vehicle of members) {
             const button = document.createElement('button');
             button.type = 'button';
-            const state = vehicle.status === 'broken' && vehicle.breakdownType
-              ? BREAKDOWN_LABELS[vehicle.breakdownType] : ETIQUETA_ESTADO[vehicle.status];
-            button.textContent = `${vehicle.code} · ${state} · ${vehicle.currentLoad}/${vehicle.capacity} paq`;
-            button.style.cssText = 'display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid #64748b55;background:transparent;color:inherit;cursor:pointer;font:inherit';
+            const vTypeLabel = VEHICLE_TYPE_META[vehicle.type]?.shortLabel ?? vehicle.type;
+            const bCfg = vehicle.status === 'broken' ? getBreakdownLevelConfig(vehicle.breakdownType) : null;
+            const state = bCfg
+              ? `${bCfg.code} · ${bCfg.label}`
+              : vehicle.status === 'broken'
+                ? 'Averiado'
+                : ETIQUETA_ESTADO[vehicle.status];
+            button.textContent = `${vehicle.code} [${vTypeLabel}] · ${state} · ${vehicle.currentLoad}/${vehicle.capacity} paq`;
+            button.style.cssText = `display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid #64748b55;background:transparent;color:${bCfg ? bCfg.hex : 'inherit'};font-weight:${vehicle.status === 'broken' ? '700' : '400'};cursor:pointer;font-family:inherit;font-size:11.5px`;
             button.addEventListener('click', () => {
               const current = vehiclesRef.current.find((v) => v.id === vehicle.id);
               if (current) onSelectVehicleRef.current?.(current);

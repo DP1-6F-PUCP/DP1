@@ -20,15 +20,20 @@ import {
   ConfiguracionActualDTO,
 } from '../types/backend';
 import { Order, OrderStatus, OrderUrgency } from '../types/order';
-import { BreakdownType, Vehicle, VehicleType, VehicleStatus } from '../types/vehicle';
+import { BreakdownInfo, BreakdownType, Vehicle, VehicleType, VehicleStatus } from '../types/vehicle';
 import { Route, Warehouse, BlockedStreet, Point } from '../types/route';
 import { generateManhattanPath, isSegmentBlocked, normalizeManhattanPath } from './manhattan';
 import { parseBackendSimulatedTime } from './backendTime';
+import { BREAKDOWN_LEVEL_CONFIGS } from './vehicleBreakdown';
 
 const TIPO_A_VEHICLE_TYPE: Record<string, VehicleType> = {
   AUTO: 'car',
+  TA: 'car',
   MOTO: 'motorcycle',
+  TM: 'motorcycle',
   BICI: 'bicycle',
+  BICICLETA: 'bicycle',
+  TB: 'bicycle',
 };
 
 const ESTADO_UNIDAD_A_STATUS: Record<string, VehicleStatus> = {
@@ -198,6 +203,22 @@ export function adaptVehiculo(
       ? minutosRestantesActividad(dto.actividadDesde, config.operacion.duracionRefrigerioHoras, nowMs)
       : undefined;
 
+  const breakdownType = parseBreakdownType(dto.tipoAveria);
+  const breakdownCfg = breakdownType ? BREAKDOWN_LEVEL_CONFIGS[breakdownType] : undefined;
+  const breakdownInfo: BreakdownInfo | undefined = breakdownType && breakdownCfg
+    ? {
+        type: breakdownType,
+        typeName: breakdownCfg.label,
+        reason: `${breakdownCfg.unavailableText} · ${breakdownCfg.siteStayText}`,
+        startMinute: 0,
+        locationAtBreakdown: position,
+        maxSiteStayMinutes: breakdownType === 1 ? 120 : 240,
+        towedToCentral: breakdownType === 2 || breakdownType === 3,
+        returnToOperationMinute: 0,
+        returnShiftDescription: breakdownCfg.unavailableText,
+      }
+    : undefined;
+
   return {
     id: dto.idUnidad,
     code: dto.idUnidad,
@@ -208,7 +229,11 @@ export function adaptVehiculo(
     status: (dto.estado === 'EN_RUTA' && ACTIVIDAD_A_STATUS[dto.actividad])
       || ESTADO_UNIDAD_A_STATUS[dto.estado]
       || 'idle',
-    breakdownType: parseBreakdownType(dto.tipoAveria),
+    breakdownType,
+    breakdownInfo,
+    breakdownReason: breakdownCfg
+      ? `${breakdownCfg.unavailableText} · ${breakdownCfg.siteStayText}`
+      : undefined,
     position,
     destination,
     returnPath: normalizeManhattanPath(dto.geometriaRetorno.map(parseNodo)),
