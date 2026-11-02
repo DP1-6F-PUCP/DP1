@@ -11,11 +11,19 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { Order, Vehicle, VehicleStatus, VehicleType, Warehouse } from '../../../types';
-import { getVehicleSemaforoStatus, SemaforoBadge } from '../../../utils/vehicleStatus';
+import { FaMotorcycle } from 'react-icons/fa';
+import { BreakdownType, Order, Vehicle, VehicleStatus, VehicleType, Warehouse } from '../../../types';
+import {
+  BREAKDOWN_LEVEL_CONFIGS,
+  getBreakdownLevelConfig,
+  getVehicleSemaforoStatus,
+  SemaforoBadge,
+  VEHICLE_TYPE_META,
+} from '../../../utils/vehicleStatus';
 import { UmbralesSemaforo } from '../../../store/semaforoStore';
 
 type TypeFilter = 'all' | VehicleType;
+type BreakdownFilter = 'all' | BreakdownType;
 type LoadFilter = 'all' | 'optimal' | 'medium' | 'critical';
 type TimeFilter = 'all' | 15 | 30 | 45 | 60;
 type SortOption = 'load-desc' | 'load-asc' | 'departure' | 'eta';
@@ -98,6 +106,7 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
   const [search, setSearch] = useState('');
   const [type, setType] = useState<TypeFilter>('all');
   const [status, setStatus] = useState<VehicleStatus | 'all'>('all');
+  const [breakdownFilter, setBreakdownFilter] = useState<BreakdownFilter>('all');
   const [load, setLoad] = useState<LoadFilter>('all');
   const [warehouse, setWarehouse] = useState('all');
   const [eta, setEta] = useState<TimeFilter>('all');
@@ -135,6 +144,10 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
           || vehicle.driverId?.toLowerCase().includes(normalizedSearch);
         const matchesType = type === 'all' || vehicle.type === type;
         const matchesStatus = status === 'all' || vehicle.status === status;
+        const vehicleBreakdownType = vehicle.breakdownType ?? vehicle.breakdownInfo?.type;
+        const matchesBreakdown = status !== 'broken'
+          || breakdownFilter === 'all'
+          || vehicleBreakdownType === breakdownFilter;
         const matchesWarehouse = warehouse === 'all' || vehicle.homeWarehouseId === warehouse;
         const matchesLoad = load === 'all'
           || (load === 'optimal' && loadPercent < 70)
@@ -142,7 +155,7 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
           || (load === 'critical' && loadPercent >= 90);
         const matchesEta = eta === 'all' || etaMinutes <= eta;
         const matchesDeparture = departure === 'all' || departureMinutes <= departure;
-        return matchesSearch && matchesType && matchesStatus && matchesWarehouse
+        return matchesSearch && matchesType && matchesStatus && matchesBreakdown && matchesWarehouse
           && matchesLoad && matchesEta && matchesDeparture;
       })
       .sort((left, right) => {
@@ -151,13 +164,13 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
         if (sort === 'departure') return left.departureMinutes - right.departureMinutes;
         return left.etaMinutes - right.etaMinutes;
       });
-  }, [vehicleData, search, type, status, warehouse, load, eta, departure, sort]);
+  }, [vehicleData, search, type, status, breakdownFilter, warehouse, load, eta, departure, sort]);
 
   const totalCapacity = vehicles.reduce((sum, vehicle) => sum + vehicle.capacity, 0);
   const totalLoad = vehicles.reduce((sum, vehicle) => sum + vehicle.currentLoad, 0);
   const occupancy = totalCapacity ? Math.round((totalLoad / totalCapacity) * 100) : 0;
   const activeVehicles = vehicles.filter((vehicle) => !['idle', 'broken', 'maintenance'].includes(vehicle.status)).length;
-  const hasFilters = Boolean(search || type !== 'all' || status !== 'all' || load !== 'all'
+  const hasFilters = Boolean(search || type !== 'all' || status !== 'all' || breakdownFilter !== 'all' || load !== 'all'
     || warehouse !== 'all' || eta !== 'all' || departure !== 'all');
   const occupancyTone = occupancy >= 90
     ? { text: 'text-rose-300', bar: 'bg-rose-500', label: 'Crítica', dot: 'bg-rose-500' }
@@ -169,6 +182,7 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
     setSearch('');
     setType('all');
     setStatus('all');
+    setBreakdownFilter('all');
     setLoad('all');
     setWarehouse('all');
     setEta('all');
@@ -242,12 +256,58 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <SelectField label="Estado operativo" value={status} onChange={(value) => setStatus(value as VehicleStatus | 'all')}>
+          <SelectField
+            label="Estado operativo"
+            value={status}
+            onChange={(value) => {
+              const nextStatus = value as VehicleStatus | 'all';
+              setStatus(nextStatus);
+              if (nextStatus !== 'broken') setBreakdownFilter('all');
+            }}
+          >
             {statusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </SelectField>
           <SelectField label="Semáforo de carga" value={load} onChange={(value) => setLoad(value as LoadFilter)}>
             <option value="all">Cualquier color</option><option value="optimal">🟢 Óptimo (&lt; 70%)</option><option value="medium">🟡 Medio (70-90%)</option><option value="critical">🔴 Saturado (≥ 90%)</option>
           </SelectField>
+          {status === 'broken' && (
+            <div className="col-span-2 rounded-xl border border-slate-700/80 bg-slate-950/60 p-2">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Subfiltro por Tipo de Avería
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setBreakdownFilter('all')}
+                  className={`rounded-lg px-2 py-1.5 text-[10px] font-bold transition ${
+                    breakdownFilter === 'all'
+                      ? 'bg-red-600 text-white'
+                      : 'border border-slate-700 bg-slate-900 text-slate-300 hover:border-slate-500'
+                  }`}
+                >
+                  Todas (A1, A2, A3)
+                </button>
+                {([1, 2, 3] as BreakdownType[]).map((bt) => {
+                  const cfg = BREAKDOWN_LEVEL_CONFIGS[bt];
+                  const active = breakdownFilter === bt;
+                  return (
+                    <button
+                      key={bt}
+                      type="button"
+                      onClick={() => setBreakdownFilter(bt)}
+                      style={active ? { backgroundColor: cfg.hex, color: '#fff', borderColor: cfg.hex } : undefined}
+                      className={`flex items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-bold transition ${
+                        active ? cfg.activeFilterClass : `${cfg.badgeClass} hover:opacity-90`
+                      }`}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: active ? '#fff' : cfg.hex }} />
+                      Tipo {bt} · {cfg.severityLabel}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <SelectField label="Almacén base" value={warehouse} onChange={setWarehouse}>
             <option value="all">Todos</option>
             {warehouses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -275,7 +335,11 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
       ) : filteredVehicles.map(({ vehicle, assignedOrders, loadPercent, etaMinutes, departureMinutes, semaforo }) => {
         const isSelected = selectedVehicleId === vehicle.id;
         const isBroken = vehicle.status === 'broken';
-        const Icon = vehicle.type === 'car' ? Car : Bike;
+        const Icon = vehicle.type === 'car' ? Car : vehicle.type === 'motorcycle' ? FaMotorcycle : Bike;
+        const typeMeta = VEHICLE_TYPE_META[vehicle.type] ?? VEHICLE_TYPE_META.car;
+        const breakdownCfg = isBroken
+          ? getBreakdownLevelConfig(vehicle.breakdownType ?? vehicle.breakdownInfo?.type)
+          : null;
         const warehouseName = warehouses.find((item) => item.id === vehicle.homeWarehouseId)?.name;
         return (
           <article
@@ -292,7 +356,15 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="rounded-lg bg-blue-500/15 p-1.5 text-blue-300"><Icon className="h-4 w-4" /></span>
-                <div><p className="font-mono text-sm font-bold text-white">{vehicle.code}</p><p className="text-[10px] text-slate-500">{vehicle.type === 'car' ? 'Auto / camioneta' : vehicle.type === 'motorcycle' ? 'Moto' : 'Bicicleta'}</p></div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-mono text-sm font-bold text-white">{vehicle.code}</p>
+                    <span className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[9px] font-bold text-slate-300">
+                      {typeMeta.shortLabel}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500">{typeMeta.label}</p>
+                </div>
               </div>
               <SemaforoBadge status={semaforo} size="sm" />
             </div>
@@ -307,7 +379,28 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
               <span>{warehouseName ?? 'Base no informada'}</span>
             </div>
             <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-500"><span>ETA: {formatMinutes(etaMinutes)}</span><span>Salida: {formatMinutes(departureMinutes)}</span><span>Conductor: {vehicle.driverId ?? '—'}</span></div>
-            {isBroken && <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-950/40 p-2 text-[10px] text-rose-200"><span className="inline-flex items-center gap-1 font-bold"><AlertOctagon className="h-3.5 w-3.5" /> Avería Tipo {vehicle.breakdownType ?? vehicle.breakdownInfo?.type ?? '—'}</span><p className="mt-0.5">{vehicle.breakdownReason ?? vehicle.breakdownInfo?.reason ?? 'Motivo no informado'}</p></div>}
+            {isBroken && (
+              <div
+                className={`mt-2 rounded-lg border p-2 text-[10px] ${
+                  breakdownCfg
+                    ? breakdownCfg.panelClass
+                    : 'border-rose-500/30 bg-rose-950/40 text-rose-200'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1 font-bold">
+                  <AlertOctagon className="h-3.5 w-3.5" />
+                  {breakdownCfg ? `${breakdownCfg.label} (${breakdownCfg.code})` : `Avería Tipo ${vehicle.breakdownType ?? vehicle.breakdownInfo?.type ?? '—'}`}
+                </span>
+                <p className="mt-0.5 text-slate-200">
+                  {vehicle.breakdownReason ?? vehicle.breakdownInfo?.reason ?? breakdownCfg?.unavailableText ?? 'Motivo no informado'}
+                </p>
+                {breakdownCfg && (
+                  <p className="mt-0.5 text-[9px] opacity-80">
+                    {breakdownCfg.siteStayText} · {breakdownCfg.transferText}
+                  </p>
+                )}
+              </div>
+            )}
             {isSelected && <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2 text-[10px]"><span className="inline-flex items-center gap-1 text-slate-300"><Package className="h-3.5 w-3.5" /> {assignedOrders.length} pedidos asignados</span>{!isBroken && onReportBreakdown && <button type="button" onClick={(event) => { event.stopPropagation(); onReportBreakdown(vehicle.id); }} className="inline-flex items-center gap-1 rounded-lg border border-rose-500/40 px-2 py-1 font-semibold text-rose-300 hover:bg-rose-950/50"><Wrench className="h-3 w-3" /> Crear avería</button>}</div>}
           </article>
         );

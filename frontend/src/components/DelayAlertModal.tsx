@@ -3,6 +3,7 @@ import { Order, Warehouse, Vehicle } from '../types';
 import { AlertOctagon, Clock, X, MapPin, Package, CheckCircle2, Download } from 'lucide-react';
 import { Button } from './ui/Button';
 import { jsPDF } from 'jspdf';
+import { getBreakdownLevelConfig } from '../utils/vehicleStatus';
 
 interface DelayAlertModalProps {
   isOpen: boolean;
@@ -121,11 +122,22 @@ export const DelayAlertModal: React.FC<DelayAlertModalProps> = ({
     currY += 8;
 
     if (assignedVehicle) {
+      const breakdownCfg = assignedVehicle.status === 'broken'
+        ? getBreakdownLevelConfig(assignedVehicle.breakdownType ?? assignedVehicle.breakdownInfo?.type)
+        : null;
       addRow('Código de Vehículo:', assignedVehicle.code);
       addRow('Tipo de Unidad:', assignedVehicle.type === 'car' ? 'Automóvil (TA)' : assignedVehicle.type === 'motorcycle' ? 'Motocicleta (TM)' : 'Bicicleta (TB)');
       addRow('Capacidad y Carga:', `${assignedVehicle.currentLoad} / ${assignedVehicle.capacity} paquetes`);
       addRow('Velocidad Nominal:', `${assignedVehicle.speed} km/h`);
-      addRow('Estado de la Unidad:', assignedVehicle.status === 'broken' ? 'Averiado / En mantenimiento' : assignedVehicle.status.toUpperCase(), assignedVehicle.status === 'broken');
+      addRow(
+        'Estado de la Unidad:',
+        assignedVehicle.status === 'broken'
+          ? breakdownCfg
+            ? `${breakdownCfg.label} (${breakdownCfg.unavailableText})`
+            : 'Averiado / En mantenimiento'
+          : assignedVehicle.status.toUpperCase(),
+        assignedVehicle.status === 'broken',
+      );
     } else {
       addRow('Unidad Asignada:', 'Sin vehículo asignado (En espera de flota disponible)');
     }
@@ -346,7 +358,15 @@ export const DelayAlertModal: React.FC<DelayAlertModalProps> = ({
                           : assignedVehicle.type === 'bicycle'
                           ? 'Bicicleta · TB'
                           : 'Moto · TM'
-                      })`
+                      })${
+                        assignedVehicle.status === 'broken'
+                          ? ` · ${
+                              getBreakdownLevelConfig(
+                                assignedVehicle.breakdownType ?? assignedVehicle.breakdownInfo?.type,
+                              )?.shortLabel ?? 'Averiado'
+                            }`
+                          : ''
+                      }`
                     : 'Sin asignar / en espera'}
                 </span>
               </div>
