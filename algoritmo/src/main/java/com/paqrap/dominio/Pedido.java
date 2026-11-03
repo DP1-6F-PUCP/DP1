@@ -20,6 +20,11 @@ public class Pedido {
     // cantidadEntregadaTotal/actualizarEstado o al armar PedidoDTO) -- mismo patrón de riesgo que
     // causó el ConcurrentModificationException real en UnidadTransporte.rutas.
     private final List<ParadaPlanificada> entregasParciales = new CopyOnWriteArrayList<>();
+    // Último despacho que lo llevó (nodo e instante de salida). Se guarda en el pedido porque las
+    // rutas FINALIZADAS dejan de exponerse en el estado, y sin esto un pedido entregado pierde su
+    // almacén de origen en el panel de almacenes.
+    private volatile Nodo nodoDespacho;
+    private volatile LocalDateTime fechaDespacho;
 
     public Pedido(String idPedido, String idCliente, Nodo destino, int cantidadSolicitada, int horasLimite,
             LocalDateTime fechaIngreso) {
@@ -69,6 +74,19 @@ public class Pedido {
         return entregasParciales;
     }
 
+    public Nodo getNodoDespacho() {
+        return nodoDespacho;
+    }
+
+    public LocalDateTime getFechaDespacho() {
+        return fechaDespacho;
+    }
+
+    public void registrarDespacho(Nodo nodo, LocalDateTime instante) {
+        this.nodoDespacho = nodo;
+        this.fechaDespacho = instante;
+    }
+
     /**
      * Recalcula el estado del pedido según lo entregado hasta el momento y el instante actual.
      *
@@ -86,6 +104,22 @@ public class Pedido {
         } else {
             estado = EstadoPedido.PENDIENTE;
         }
+    }
+
+    /**
+     * Instante de la última entrega parcial cumplida, o null si el pedido aún no está
+     * {@code ENTREGADA}.
+     */
+    public LocalDateTime fechaEntregaFinal() {
+        if (estado != EstadoPedido.ENTREGADA) {
+            return null;
+        }
+        return entregasParciales.stream()
+                .filter(parada -> parada.getEstado() == EstadoParada.CUMPLIDA)
+                .map(ParadaPlanificada::getFechaEntregada)
+                .filter(java.util.Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
     }
 
     /**

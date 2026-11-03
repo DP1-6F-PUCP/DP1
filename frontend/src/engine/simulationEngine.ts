@@ -54,6 +54,8 @@ interface PosicionEnLinea {
   nodo: Point;
   act: TrajectoryPoint['act'];
   moviendo: boolean;
+  /** Grados desde el norte (+y) en sentido horario, del tramo que recorre; solo si `moviendo`. */
+  rumbo?: number;
 }
 
 /** Posicion de un vehiculo en su trayectoria en el instante simulado `t`. Los puntos consecutivos
@@ -79,6 +81,7 @@ function posicionEn(linea: TrajectoryPoint[], t: number): PosicionEnLinea | null
     nodo: { x: a.x, y: a.y },
     act: a.act,
     moviendo,
+    rumbo: moviendo ? (Math.atan2(b.x - a.x, b.y - a.y) * 180) / Math.PI : undefined,
   };
 }
 
@@ -209,6 +212,8 @@ export class SimulationEngine {
   private preparandoReproduccion = false;
   private retrasoPreparadoMs = 0;
   private pedidosConocidos = new Map<string, FrameData['orders'][number]>();
+  /** Último rumbo conocido por vehículo: al detenerse conserva hacia dónde iba (como en un GPS). */
+  private rumbos = new Map<string, number>();
   private ultimoSnapshot: EngineSnapshot = { vehiclePositions: new Map(), gruposDetenidos: [], buffering: true, nowSimMs: null, segundosDesdeUltimoLote: 0 };
 
   /** Descartar completamente el estado visual de una ejecución cerrada. */
@@ -298,6 +303,7 @@ export class SimulationEngine {
       this.pedidosConocidos.clear();
       this.ultimoSimNow = null;
       this.lineas.clear();
+      this.rumbos.clear();
       this.futuros.clear();
       this.cuadros = [];
       this.estadoVisual = null;
@@ -329,6 +335,7 @@ export class SimulationEngine {
       if (!idsActuales.has(id)) {
         this.lineas.delete(id);
         this.futuros.delete(id);
+        this.rumbos.delete(id);
       }
     }
 
@@ -455,6 +462,7 @@ export class SimulationEngine {
         vehiclePositions.set(id, pos.punto);
         estados.set(id, pos);
         if (pos.moviendo) enMovimiento.add(id);
+        if (pos.rumbo !== undefined) this.rumbos.set(id, pos.rumbo);
       }
     }
 
@@ -462,7 +470,15 @@ export class SimulationEngine {
     this.actualizarEstadoVisual(renderTimeMs, simNow, estados);
 
     const segundosDesdeUltimoLote = Math.round((ahoraReal - this.relojInstanteConocidoMs) / 1000);
-    return { vehiclePositions, gruposDetenidos, buffering: this.buffering, nowSimMs: simNow, segundosDesdeUltimoLote };
+    return {
+      vehiclePositions,
+      vehicleHeadings: new Map(this.rumbos),
+      vehiclesMoving: enMovimiento,
+      gruposDetenidos,
+      buffering: this.buffering,
+      nowSimMs: simNow,
+      segundosDesdeUltimoLote,
+    };
   }
 
   /**

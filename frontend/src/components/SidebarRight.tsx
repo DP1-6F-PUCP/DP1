@@ -18,7 +18,6 @@ import {
   X,
   SlidersHorizontal,
   Coffee,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
   Timer,
@@ -29,7 +28,7 @@ import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useEscenario } from '../features/escenario/hooks/useEscenario';
 import { useMapStore } from '../store/mapStore';
 import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
-import { BreakdownType } from '../types';
+import { BreakdownType, Order } from '../types';
 import { BreakdownModal } from './BreakdownModal';
 import { ConfigModal } from './ConfigModal';
 import { useToast } from './ToastProvider';
@@ -41,6 +40,7 @@ import {
 } from '../utils/vehicleStatus';
 import { FaMotorcycle } from 'react-icons/fa';
 import { useSemaforoStore } from '../store/semaforoStore';
+import { getWarehouseStockStatus } from '../utils/warehouseStock';
 import { useScenarioStore } from '../store/scenarioStore';
 import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
 import { Vehicle } from '../types/vehicle';
@@ -59,6 +59,22 @@ type FleetSortKey =
   | 'dist_traveled_desc';
 
 type DistanceSearchMode = 'none' | 'to_dest' | 'to_origin';
+
+/**
+ * Rangos del filtro de flota por distancia por recorrer al destino (rúbrica E11), semiabiertos
+ * [min, max[ en km. La grilla es de 1 km por celda, así que basta con la distancia Manhattan.
+ */
+const FLEET_DISTANCE_RANGES = [
+  { key: '0-10', label: '0–10', min: 0, max: 10 },
+  { key: '10-20', label: '10–20', min: 10, max: 20 },
+  { key: '20-40', label: '20–40', min: 20, max: 40 },
+  { key: '40-200', label: '40–200', min: 40, max: 200 },
+] as const;
+
+type FleetDistanceFilter = 'all' | (typeof FLEET_DISTANCE_RANGES)[number]['key'];
+
+/** Ventana fija (h) de "por salir" y "entregados" en la card de cada almacén (rúbrica E21/E22). */
+const WAREHOUSE_WINDOW_HOURS = 4;
 
 function manhattanDist(ax: number, ay: number, bx: number, by: number): number {
   return Math.abs(ax - bx) + Math.abs(ay - by);
@@ -149,38 +165,109 @@ const SemaforoBarra: React.FC<{ load: number; capacity: number }> = ({ load, cap
 const isVehicleReturning = (vehicle: Vehicle) =>
   vehicle.status === 'en_route' && vehicle.returnPath.length > 1;
 
+/** Criterios de orden de la flota; cada uno tiene su variante _asc y _desc en FleetSortKey. */
+const FLEET_SORT_OPTIONS = [
+  { base: 'occupancy', label: 'Ocupación' },
+  { base: 'departure', label: 'Salida' },
+  { base: 'arrival', label: 'Llegada' },
+  { base: 'dist_remaining', label: 'Distancia por recorrer' },
+  { base: 'dist_traveled', label: 'Distancia recorrida' },
+] as const;
+
+const FLEET_STATUS_OPTIONS = [
+  { key: 'all', label: 'Todos', dot: undefined },
+  { key: 'idle', label: 'Inactivos', dot: '#94A3B8' },
+  { key: 'en_route', label: 'En ruta', dot: '#38BDF8' },
+  { key: 'delivering', label: 'Entregando', dot: '#34D399' },
+  { key: 'on_break', label: 'Refrigerio', dot: '#FBBF24' },
+  { key: 'broken', label: 'Averiados', dot: '#F43F5E' },
+  { key: 'maintenance', label: 'Mantenimiento', dot: '#A78BFA' },
+] as const;
+
+/** Fila de filtro: etiqueta fija a la izquierda y controles a la derecha. */
+const FilterRow: React.FC<{ label: string; hint?: React.ReactNode; children: React.ReactNode }> = ({
+  label,
+  hint,
+  children,
+}) => (
+  <div className="grid grid-cols-[4.5rem_1fr] items-start gap-2">
+    <div className="pt-1.5 leading-tight">
+      <span className="text-[10px] font-semibold text-slate-400">{label}</span>
+      {hint && <span className="block text-[9px] text-slate-500">{hint}</span>}
+    </div>
+    <div className="min-w-0">{children}</div>
+  </div>
+);
+
+/**
+ * Control segmentado: una sola opción activa. Con `columns` las opciones se reparten en una
+ * grilla de varias filas (para etiquetas largas que no entran en una sola línea del panel).
+ */
+function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+  columns,
+}: {
+  options: readonly { value: T; label: React.ReactNode; title?: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  columns?: number;
+}) {
+  return (
+    <div
+      className={`${columns ? 'grid gap-0.5' : 'flex'} rounded-lg border border-slate-700/70 bg-slate-950/60 p-0.5`}
+      style={columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}
+    >
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          type="button"
+          title={option.title}
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={`flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[10.5px] font-medium transition-colors cursor-pointer ${
+            value === option.value
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const SortButton: React.FC<{
-  label: string;
-  ascKey: FleetSortKey;
-  descKey: FleetSortKey;
   current: FleetSortKey;
   onChange: (k: FleetSortKey) => void;
-}> = ({ label, ascKey, descKey, current, onChange }) => {
-  const isAsc = current === ascKey;
-  const isDesc = current === descKey;
-  const isActive = isAsc || isDesc;
+}> = ({ current, onChange }) => {
+  const base = current.replace(/_(asc|desc)$/, '');
+  const isDesc = current.endsWith('_desc');
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (!isActive || isDesc) onChange(ascKey);
-        else onChange(descKey);
-      }}
-      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium shrink-0 transition-all cursor-pointer ${
-        isActive
-          ? 'bg-blue-600 text-white'
-          : 'bg-slate-800/80 border border-slate-700/50 text-slate-400 hover:text-slate-200'
-      }`}
-    >
-      <span>{label}</span>
-      {isAsc ? (
-        <ArrowUp className="h-2.5 w-2.5" />
-      ) : isDesc ? (
-        <ArrowDown className="h-2.5 w-2.5" />
-      ) : (
-        <ArrowUpDown className="h-2.5 w-2.5 opacity-50" />
-      )}
-    </button>
+    <div className="flex items-center gap-1.5">
+      <select
+        value={base}
+        onChange={(event) => onChange(`${event.target.value}_${isDesc ? 'desc' : 'asc'}` as FleetSortKey)}
+        aria-label="Ordenar vehículos por"
+        className="min-w-0 flex-1 cursor-pointer rounded-lg border border-slate-700/70 bg-slate-950/60 px-2 py-1.5 text-[11px] text-slate-200 focus:border-blue-500 focus:outline-none"
+      >
+        {FLEET_SORT_OPTIONS.map((option) => (
+          <option key={option.base} value={option.base}>{option.label}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => onChange(`${base}_${isDesc ? 'asc' : 'desc'}` as FleetSortKey)}
+        title={isDesc ? 'De mayor a menor (clic para invertir)' : 'De menor a mayor (clic para invertir)'}
+        aria-label={isDesc ? 'Orden descendente' : 'Orden ascendente'}
+        className="flex h-[30px] shrink-0 items-center gap-1 rounded-lg border border-slate-700/70 bg-slate-950/60 px-2 text-[10.5px] font-medium text-slate-300 hover:border-blue-500 hover:text-white cursor-pointer"
+      >
+        {isDesc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+        {isDesc ? 'Mayor' : 'Menor'}
+      </button>
+    </div>
   );
 };
 
@@ -195,7 +282,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 }) => {
   // Estado retrasado al mismo instante que el mapa (ver engine/useEstadoVisual): antes el panel
   // mostraba el dato en vivo, ~sa segundos reales por delante de lo que se veía en el mapa.
-  const { warehouses, vehicles, orders, estadoRaw } = useEstadoVisual();
+  const { warehouses, vehicles, orders, estadoRaw, marcaVisibleMs } = useEstadoVisual();
   const { ejecucion } = useEscenario();
   const selectedVehicleId = useMapStore((s) => s.selectedVehicleId);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
@@ -217,21 +304,23 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   >('all');
   const [fleetFilterBreakdownType, setFleetFilterBreakdownType] = useState<'all' | BreakdownType>('all');
   const [fleetSortKey, setFleetSortKey] = useState<FleetSortKey>('occupancy_desc');
+  const [fleetFilterDistance, setFleetFilterDistance] = useState<FleetDistanceFilter>('all');
+  const [isFleetFiltersOpen, setIsFleetFiltersOpen] = useState(true);
   const [distSearchMode, setDistSearchMode] = useState<DistanceSearchMode>('none');
   const [distSearchMinutes, setDistSearchMinutes] = useState('');
   const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
-  const [warehouseUpcomingHours, setWarehouseUpcomingHours] = useState(3);
-  const [warehouseDeliveredHours, setWarehouseDeliveredHours] = useState(6);
+  const [warehouseInspectorTab, setWarehouseInspectorTab] = useState<'transit' | 'upcoming' | 'delivered'>('transit');
+  const [expandedWarehouseId, setExpandedWarehouseId] = useState<string | null>(null);
   const [shipmentSearchTerm, setShipmentSearchTerm] = useState('');
   const [shipmentStatusFilter, setShipmentStatusFilter] = useState<
     'all' | 'on_time' | 'at_risk' | 'delayed' | 'delivered'
   >('all');
-  const [shipmentWarehouseFilter, setShipmentWarehouseFilter] = useState('all');
 
   const previousSelectedVehicleId = useRef<string | null>(selectedVehicleId);
   const previousSelectedOrderId = useRef<string | null>(selectedOrderId);
   const vehicleCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const orderCardRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const warehouseCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
 
   useEffect(() => {
@@ -261,7 +350,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     setActiveTab('shipments');
     setShipmentSearchTerm('');
     setShipmentStatusFilter('all');
-    setShipmentWarehouseFilter('all');
     if (isCollapsed) onToggleCollapse();
 
     requestAnimationFrame(() => {
@@ -272,7 +360,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     });
   }, [selectedOrderId, isCollapsed, onToggleCollapse]);
 
-  const targetWarehouse = warehouses.find((w) => w && w.id === selectedWarehouseId);
   const currentSimulationMinute = estadoRaw?.marcaTiempoActual && ejecucion?.fechaInicioSimulada
     ? Math.max(
         0,
@@ -283,6 +370,62 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       )
     : 0;
 
+  // Seleccionar un almacén en el mapa despliega su propia card en "Almacenes y capacidad" (no se
+  // abre una card aparte): cambia a la pestaña Operación, abre el panel y la trae a la vista.
+  const previousSelectedWarehouseId = useRef<string | null>(selectedWarehouseId);
+  useEffect(() => {
+    const warehouseSelectionChanged = previousSelectedWarehouseId.current !== selectedWarehouseId;
+    previousSelectedWarehouseId.current = selectedWarehouseId;
+    if (!selectedWarehouseId || !warehouseSelectionChanged) return;
+
+    setActiveTab('operation');
+    setExpandedWarehouseId(selectedWarehouseId);
+    if (isCollapsed) onToggleCollapse();
+
+    requestAnimationFrame(() => {
+      warehouseCardRefs.current.get(selectedWarehouseId)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+  }, [selectedWarehouseId, isCollapsed, onToggleCollapse]);
+
+  // Envíos de un almacén, partidos por las tres ventanas de su card (fijas en 4 h, rúbrica
+  // E20-E22). Se clasifican por sus instantes contra el instante VISIBLE del mapa, no contra
+  // marcaTiempoActual ni por status/departed: esos describen el FINAL del lote, y el mapa va
+  // animando dentro de él -- así un pedido que sale o se entrega más tarde en el lote no aparece
+  // "en tránsito" o desaparece antes de tiempo.
+  const nowSimMs = marcaVisibleMs;
+  const getWarehouseShipments = (warehouseId: string) => {
+    if (nowSimMs === null) return { transit: [], upcoming: [], delivered: [] };
+    const fromWarehouse = orders.filter((order) => order.warehouseOriginId === warehouseId);
+    const isDeliveredByNow = (order: Order) =>
+      order.deliveredSimMs !== undefined && order.deliveredSimMs <= nowSimMs;
+    const hasLeftByNow = (order: Order) =>
+      order.departed === true && (order.departureSimMs === undefined || order.departureSimMs <= nowSimMs);
+    return {
+      transit: fromWarehouse.filter((order) => !isDeliveredByNow(order) && hasLeftByNow(order)),
+      upcoming: fromWarehouse
+        .filter(
+          (order) =>
+            !isDeliveredByNow(order) &&
+            !hasLeftByNow(order) &&
+            order.departureSimMs !== undefined &&
+            order.departureSimMs <= nowSimMs + WAREHOUSE_WINDOW_HOURS * 3600000
+        )
+        .sort((a, b) => (a.departureSimMs ?? 0) - (b.departureSimMs ?? 0)),
+      delivered: fromWarehouse
+        .filter(
+          (order) =>
+            isDeliveredByNow(order) &&
+            nowSimMs - (order.deliveredSimMs ?? 0) <= WAREHOUSE_WINDOW_HOURS * 3600000
+        )
+        .sort((a, b) => (b.deliveredSimMs ?? 0) - (a.deliveredSimMs ?? 0)),
+    };
+  };
+  const formatSimClock = (ms: number | undefined) =>
+    ms === undefined ? '--:--' : formatBackendSimulatedTime(ms, false);
+
   const getVehicleOrders = (vehicle: Vehicle) =>
     orders.filter(
       (order) =>
@@ -290,9 +433,29 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
         order.assignedVehicleId === vehicle.id
     );
 
+  // Destino vigente del vehículo: su parada pendiente; si ya entregó todo y vuelve, el almacén al
+  // que regresa (fin de returnPath); si no, ninguno. Antes caía en la dirección de cualquier
+  // pedido asignado, aunque ya estuviera entregado, y daba un "destino" a vehículos sin ruta.
+  const getVehicleDestination = (vehicle: Vehicle) => {
+    const hasPendingStop = getVehicleOrders(vehicle).some((order) => order.status !== 'delivered');
+    if (hasPendingStop) {
+      return vehicle.destination
+        ?? getVehicleOrders(vehicle).find((order) => order.status !== 'delivered')?.destination;
+    }
+    return vehicle.returnPath.length ? vehicle.returnPath[vehicle.returnPath.length - 1] : undefined;
+  };
+
   const getVehicleDistanceToDestination = (vehicle: Vehicle) => {
-    const destination = vehicle.destination ?? getVehicleOrders(vehicle)[0]?.destination;
+    const destination = getVehicleDestination(vehicle);
     return destination ? manhattanDist(vehicle.position.x, vehicle.position.y, destination.x, destination.y) : 0;
+  };
+
+  // Rango de distancia por recorrer del vehículo, o null si no tiene destino (inactivo / sin
+  // ruta): esos no caen en ningún rango, para no inflar [0–10[ como si estuvieran a 0 km.
+  const getVehicleDistanceRange = (vehicle: Vehicle): FleetDistanceFilter | null => {
+    if (!getVehicleDestination(vehicle)) return null;
+    const km = getVehicleDistanceToDestination(vehicle);
+    return FLEET_DISTANCE_RANGES.find((range) => km >= range.min && km < range.max)?.key ?? null;
   };
 
   const getVehicleDistanceToOrigin = (vehicle: Vehicle) => {
@@ -361,8 +524,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     ? 'bg-amber-500'
     : 'bg-emerald-500';
 
-  // Filtrado de vehículos
-  const filteredVehicles = vehicles.filter((v) => {
+  // Filtrado de vehículos: primero todo menos el rango de distancia (sobre esto se cuentan los
+  // chips de distancia), luego el rango y el orden.
+  const vehiclesBeforeDistanceFilter = vehicles.filter((v) => {
     const matchesType = fleetFilterType === 'all' || v.type === fleetFilterType;
     const matchesStatus = fleetFilterStatus === 'all' || v.status === fleetFilterStatus;
     const matchesBreakdownType =
@@ -381,7 +545,13 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       !distSearchMinutes.trim() ||
       (Number.isFinite(maxMinutes) && kmToMinutes(distance, v.speed) <= maxMinutes);
     return matchesType && matchesStatus && matchesBreakdownType && matchesSearch && matchesDistance;
-  }).sort((a, b) => {
+  });
+  const vehicleDistanceRanges = new Map(
+    vehiclesBeforeDistanceFilter.map((v) => [v.id, getVehicleDistanceRange(v)] as const)
+  );
+  const filteredVehicles = vehiclesBeforeDistanceFilter.filter(
+    (v) => fleetFilterDistance === 'all' || vehicleDistanceRanges.get(v.id) === fleetFilterDistance
+  ).sort((a, b) => {
     const value = (vehicle: Vehicle) => {
       const assignedOrders = getVehicleOrders(vehicle);
       switch (fleetSortKey) {
@@ -406,19 +576,54 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     return fleetSortKey.endsWith('_desc') ? -difference : difference;
   });
 
+  // Filtros activos de la flota, como etiquetas que se pueden quitar una a una (visibles aun con
+  // el panel de filtros plegado).
+  const distSearchMinutesValue = Number(distSearchMinutes);
+  const activeFleetFilterPills = [
+    fleetFilterType !== 'all' && {
+      key: 'type',
+      label: VEHICLE_TYPE_META[fleetFilterType].shortLabel,
+      onClear: () => setFleetFilterType('all'),
+    },
+    fleetFilterStatus !== 'all' && {
+      key: 'status',
+      label: FLEET_STATUS_OPTIONS.find((status) => status.key === fleetFilterStatus)?.label ?? fleetFilterStatus,
+      onClear: () => {
+        setFleetFilterStatus('all');
+        setFleetFilterBreakdownType('all');
+      },
+    },
+    fleetFilterBreakdownType !== 'all' && {
+      key: 'breakdown',
+      label: `Avería T${fleetFilterBreakdownType}`,
+      onClear: () => setFleetFilterBreakdownType('all'),
+    },
+    fleetFilterDistance !== 'all' && {
+      key: 'distance',
+      label: `${FLEET_DISTANCE_RANGES.find((range) => range.key === fleetFilterDistance)?.label} km`,
+      onClear: () => setFleetFilterDistance('all'),
+    },
+    distSearchMode !== 'none' && distSearchMinutes.trim() !== '' && Number.isFinite(distSearchMinutesValue) && {
+      key: 'time',
+      label: `≤ ${distSearchMinutesValue} min ${distSearchMode === 'to_dest' ? 'al destino' : 'al origen'}`,
+      onClear: () => {
+        setDistSearchMode('none');
+        setDistSearchMinutes('');
+      },
+    },
+  ].filter((pill): pill is { key: string; label: string; onClear: () => void } => Boolean(pill));
+  const activeFleetFilterCount = activeFleetFilterPills.length;
+  const clearFleetFilters = () => activeFleetFilterPills.forEach((pill) => pill.onClear());
+
   const filteredOrders = orders.filter((order) => {
     const search = shipmentSearchTerm.trim().toLowerCase();
-    const warehouseMatches =
-      shipmentWarehouseFilter === 'all' ||
-      order.warehouseOriginId === shipmentWarehouseFilter ||
-      (shipmentWarehouseFilter === 'central' && !order.warehouseOriginId);
     const statusMatches = shipmentStatusFilter === 'all' || order.status === shipmentStatusFilter;
     const searchMatches =
       !search ||
       [order.code, order.id, order.clientId, 'pedido de cliente'].some((value) =>
         value?.toLowerCase().includes(search)
       );
-    return warehouseMatches && statusMatches && searchMatches;
+    return statusMatches && searchMatches;
   });
 
   const formatShipmentTime = (minute: number) => {
@@ -593,75 +798,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
             {/* CUERPO CONTEXTUAL CON SCROLL */}
             <div className="flex-1 overflow-y-auto p-3 space-y-3.5 text-xs bg-[var(--color-sidebar-background)]">
-              {/* Panel de Inspección de Almacén Seleccionado en el Mapa */}
-              {targetWarehouse && (
-                <div
-                  id="sidebar-warehouse-inspector"
-                  className="p-3.5 rounded-2xl border border-blue-500/60 bg-blue-950/40 shadow-xl space-y-2.5 fade-in"
-                >
-                  <div className="flex items-start justify-between gap-2 border-b border-blue-800/40 pb-2">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="p-2 rounded-xl text-white shadow-md shrink-0"
-                        style={{ backgroundColor: targetWarehouse.color || '#2E5B9A' }}
-                      >
-                        <WarehouseIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-white">{targetWarehouse.name}</h4>
-                          <span className="text-[10px] font-mono-code px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                            {targetWarehouse.code}
-                          </span>
-                        </div>
-                        <span className="text-[11px] font-medium text-slate-300">
-                          {targetWarehouse.id === 'central'
-                            ? '🏢 Almacén Central'
-                            : '🏬 Almacén Intermedio'}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedWarehouseId(null)}
-                      className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 text-xs cursor-pointer"
-                      title="Cerrar inspección"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">Capacidad y Stock</span>
-                      <span
-                        className={`font-mono-code font-bold ${
-                          !Number.isFinite(targetWarehouse.capacity)
-                            ? 'text-emerald-400'
-                            : targetWarehouse.currentStock / targetWarehouse.capacity >= 0.65
-                            ? 'text-emerald-400'
-                            : targetWarehouse.currentStock / targetWarehouse.capacity >= 0.3
-                            ? 'text-amber-400'
-                            : 'text-rose-400'
-                        }`}
-                      >
-                        {!Number.isFinite(targetWarehouse.capacity)
-                          ? 'Infinita (∞)'
-                          : `${targetWarehouse.currentStock}/${targetWarehouse.capacity} (${Math.round(
-                              (targetWarehouse.currentStock / targetWarehouse.capacity) * 100
-                            )}%)`}
-                      </span>
-                    </div>
-                    <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block mb-0.5">Ubicación</span>
-                      <span className="font-mono-code font-bold text-cyan-300">
-                        X={targetWarehouse.coords.x}, Y={targetWarehouse.coords.y}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* PESTAÑA: ENVÍOS */}
               {activeTab === 'shipments' ? (
                 <div className="space-y-3 fade-in">
@@ -712,17 +848,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                       </button>
                     ))}
                   </div>
-
-                  <select
-                    value={shipmentWarehouseFilter}
-                    onChange={(event) => setShipmentWarehouseFilter(event.target.value)}
-                    className="w-full rounded-xl border border-slate-700/80 bg-slate-900 px-3 py-2 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="all">Todos los almacenes</option>
-                    {warehouses.map((warehouse) => (
-                      <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
-                    ))}
-                  </select>
 
                   {filteredOrders.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-slate-400">
@@ -799,239 +924,194 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               ) : activeTab === 'fleet' ? (
                 <div className="space-y-3 fade-in">
 
-                  {/* Input de Búsqueda */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={fleetSearchTerm}
-                      onChange={(e) => setFleetSearchTerm(e.target.value)}
-                      placeholder="Buscar por código (TA01, TM03, TB02)..."
-                      className="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-slate-900 border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                    />
-                    {fleetSearchTerm && (
-                      <button
-                        type="button"
-                        onClick={() => setFleetSearchTerm('')}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white"
-                        title="Limpiar"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Filtros por tipo de vehículo */}
-                  <div className="space-y-1">
-                    <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                      Tipo de Vehículo
-                    </div>
-                    <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] pb-1 scrollbar-none">
-                      {(['all', 'car', 'motorcycle', 'bicycle'] as const).map((type) => {
-                        const count =
-                          type === 'all'
-                            ? vehicles.length
-                            : vehicles.filter((v) => v.type === type).length;
-                        const label =
-                          type === 'all'
-                            ? 'Todos'
-                            : type === 'car'
-                            ? 'Autos (TA)'
-                            : type === 'motorcycle'
-                            ? 'Motos (TM)'
-                            : 'Bicis (TB)';
-                        return (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => setFleetFilterType(type)}
-                            className={`px-2.5 py-1.5 rounded-xl font-medium transition-all cursor-pointer shrink-0 flex items-center gap-1 ${
-                              fleetFilterType === type
-                                ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                                : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-700 border border-slate-700/50'
-                            }`}
-                          >
-                            <span>{label}</span>
-                            <span className="text-[10px] opacity-80 font-mono">({count})</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Filtros por Estado */}
-                  <div className="space-y-1.5">
-                    <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center justify-between">
-                      <span>Filtrar por Estado</span>
-                      {fleetFilterStatus !== 'all' && (
+                  {/* Búsqueda por código + botón que pliega el panel de filtros */}
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative min-w-0 flex-1">
+                      <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500" />
+                      <input
+                        type="text"
+                        value={fleetSearchTerm}
+                        onChange={(e) => setFleetSearchTerm(e.target.value)}
+                        placeholder="Buscar por código (TA01, TM03…)"
+                        className="w-full rounded-lg border border-slate-700/70 bg-slate-950/60 py-1.5 pl-8 pr-7 text-[11px] text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                      />
+                      {fleetSearchTerm && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setFleetFilterStatus('all');
-                            setFleetFilterBreakdownType('all');
-                          }}
-                          className="text-[10px] text-blue-400 hover:text-blue-300 normal-case font-medium cursor-pointer"
+                          onClick={() => setFleetSearchTerm('')}
+                          className="absolute right-2 top-2 text-slate-400 hover:text-white"
+                          title="Limpiar búsqueda"
                         >
-                          Limpiar filtro
+                          <X className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] pb-1 scrollbar-none">
-                      {[
-                        { key: 'all' as const, label: 'Todos', count: vehicles.filter((v) => fleetFilterType === 'all' || v.type === fleetFilterType).length },
-                        { key: 'idle' as const, label: 'Inactivos', count: vehicles.filter((v) => v.status === 'idle' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
-                        { key: 'en_route' as const, label: 'En ruta', count: vehicles.filter((v) => v.status === 'en_route' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
-                        { key: 'delivering' as const, label: 'Entregando', count: vehicles.filter((v) => v.status === 'delivering' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
-                        { key: 'on_break' as const, label: 'Refrigerio', count: vehicles.filter((v) => v.status === 'on_break' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
-                        { key: 'broken' as const, label: 'Averiados', count: vehicles.filter((v) => v.status === 'broken' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
-                        { key: 'maintenance' as const, label: 'Mantenimiento', count: vehicles.filter((v) => v.status === 'maintenance' && (fleetFilterType === 'all' || v.type === fleetFilterType)).length },
-                      ].map((st) => (
-                        <button
-                          key={st.key}
-                          type="button"
-                          onClick={() => {
-                            setFleetFilterStatus(st.key);
-                            if (st.key !== 'broken') {
-                              setFleetFilterBreakdownType('all');
-                            }
-                          }}
-                          className={`px-2.5 py-1 rounded-xl font-medium transition-all cursor-pointer shrink-0 flex items-center gap-1 ${
-                            fleetFilterStatus === st.key
-                              ? st.key === 'broken'
-                                ? 'bg-rose-600 text-white shadow-sm font-semibold'
-                                : st.key === 'delivering'
-                                ? 'bg-emerald-600 text-white shadow-sm font-semibold'
-                                : st.key === 'en_route'
-                                ? 'bg-sky-600 text-white shadow-sm font-semibold'
-                                : 'bg-blue-600 text-white shadow-sm font-semibold'
-                              : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 border border-slate-700/50'
-                          }`}
-                        >
-                          <span>{st.label}</span>
-                          <span className="text-[10px] opacity-80 font-mono">({st.count})</span>
-                        </button>
-                      ))}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsFleetFiltersOpen(!isFleetFiltersOpen)}
+                      aria-expanded={isFleetFiltersOpen}
+                      className={`flex h-[30px] shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium cursor-pointer transition-colors ${
+                        isFleetFiltersOpen || activeFleetFilterCount > 0
+                          ? 'border-blue-500/60 bg-blue-600/15 text-blue-200'
+                          : 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      Filtros
+                      {activeFleetFilterCount > 0 && (
+                        <span className="rounded-full bg-blue-600 px-1.5 text-[9.5px] font-bold leading-4 text-white">
+                          {activeFleetFilterCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
 
-                    {/* Subfiltro por Tipo de Avería (visible cuando se filtra por Averiados) */}
-                    {fleetFilterStatus === 'broken' && (
-                      <div
-                        id="fleet-breakdown-type-subfilter"
-                        className="space-y-1.5 rounded-xl border border-rose-500/30 bg-slate-900/75 p-2.5 fade-in"
-                      >
-                        <div className="text-[10px] uppercase font-bold text-slate-300 tracking-wider flex items-center justify-between">
-                          <span>Subfiltro: Tipo de Avería</span>
-                          {fleetFilterBreakdownType !== 'all' && (
+                  {isFleetFiltersOpen && (
+                    <div className="space-y-2.5 rounded-xl border border-slate-800 bg-slate-900/50 p-2.5 fade-in">
+                      <FilterRow label="Tipo">
+                        <Segmented
+                          value={fleetFilterType}
+                          onChange={setFleetFilterType}
+                          options={[
+                            { value: 'all', label: 'Todos' },
+                            { value: 'car', label: <><Car className="h-3 w-3" />Autos</>, title: 'Autos / camionetas (TA)' },
+                            { value: 'motorcycle', label: <><FaMotorcycle className="h-3 w-3" />Motos</>, title: 'Motocicletas (TM)' },
+                            { value: 'bicycle', label: <><Bike className="h-3 w-3" />Bicis</>, title: 'Bicicletas (TB)' },
+                          ]}
+                        />
+                      </FilterRow>
+
+                      <FilterRow label="Estado">
+                        <div className="flex flex-wrap gap-1">
+                          {FLEET_STATUS_OPTIONS.map((status) => (
                             <button
+                              key={status.key}
                               type="button"
-                              onClick={() => setFleetFilterBreakdownType('all')}
-                              className="text-[10px] text-blue-400 hover:text-blue-300 normal-case font-medium cursor-pointer"
-                            >
-                              Ver todas
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] pb-0.5 scrollbar-none">
-                          {[
-                            {
-                              key: 'all' as const,
-                              label: 'Todas',
-                              activeClass: 'bg-rose-600 text-white border-rose-400 shadow-sm font-semibold',
-                              dotHex: undefined,
-                              count: vehicles.filter(
-                                (v) =>
-                                  v.status === 'broken' &&
-                                  (fleetFilterType === 'all' || v.type === fleetFilterType)
-                              ).length,
-                            },
-                            ...([1, 2, 3] as const).map((lvl) => {
-                              const cfg = BREAKDOWN_LEVEL_CONFIGS[lvl];
-                              return {
-                                key: lvl,
-                                label: `Tipo ${lvl} · ${cfg.severityLabel}`,
-                                activeClass: cfg.activeFilterClass,
-                                dotHex: cfg.hex,
-                                count: vehicles.filter(
-                                  (v) =>
-                                    v.status === 'broken' &&
-                                    v.breakdownType === lvl &&
-                                    (fleetFilterType === 'all' || v.type === fleetFilterType)
-                                ).length,
-                              };
-                            }),
-                          ].map((sub) => (
-                            <button
-                              key={String(sub.key)}
-                              type="button"
-                              onClick={() => setFleetFilterBreakdownType(sub.key)}
-                              className={`px-2.5 py-1 rounded-xl font-medium transition-all cursor-pointer shrink-0 flex items-center gap-1.5 border ${
-                                fleetFilterBreakdownType === sub.key
-                                  ? sub.activeClass
-                                  : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-700/60'
+                              aria-pressed={fleetFilterStatus === status.key}
+                              onClick={() => {
+                                setFleetFilterStatus(status.key);
+                                if (status.key !== 'broken') setFleetFilterBreakdownType('all');
+                              }}
+                              className={`flex items-center gap-1 rounded-md border px-1.5 py-1 text-[10.5px] font-medium transition-colors cursor-pointer ${
+                                fleetFilterStatus === status.key
+                                  ? 'border-blue-500 bg-blue-600 text-white'
+                                  : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:text-slate-200'
                               }`}
                             >
-                              {sub.dotHex && (
-                                <span
-                                  className="h-2 w-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: sub.dotHex }}
-                                />
-                              )}
-                              <span>{sub.label}</span>
-                              <span className="text-[10px] opacity-85 font-mono">({sub.count})</span>
+                              {status.dot && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: status.dot }} />}
+                              {status.label}
                             </button>
                           ))}
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      </FilterRow>
 
-                  <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/50 p-2.5">
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      <Navigation className="h-3.5 w-3.5 text-cyan-400" />
-                      Distancia por recorrer
-                    </div>
-                    <div className="flex gap-1.5">
-                      {([
-                        ['none', 'Sin filtro'],
-                        ['to_dest', 'Al destino'],
-                        ['to_origin', 'Al origen'],
-                      ] as const).map(([mode, label]) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => setDistSearchMode(mode)}
-                          className={`rounded-lg px-2 py-1 text-[10px] font-medium ${
-                            distSearchMode === mode ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    {distSearchMode !== 'none' && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          value={distSearchMinutes}
-                          onChange={(event) => setDistSearchMinutes(event.target.value)}
-                          placeholder="Máx. minutos"
-                          className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-[11px] text-slate-100 focus:border-cyan-500 focus:outline-none"
+                      {/* Subfiltro por tipo de avería: solo al filtrar Averiados */}
+                      {fleetFilterStatus === 'broken' && (
+                        <FilterRow label="Avería">
+                          <Segmented
+                            value={fleetFilterBreakdownType}
+                            onChange={setFleetFilterBreakdownType}
+                            columns={2}
+                            options={[
+                              { value: 'all' as const, label: 'Todas' },
+                              ...([1, 2, 3] as const).map((lvl) => ({
+                                value: lvl,
+                                title: BREAKDOWN_LEVEL_CONFIGS[lvl].label,
+                                label: (
+                                  <>
+                                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: BREAKDOWN_LEVEL_CONFIGS[lvl].hex }} />
+                                    T{lvl} · {BREAKDOWN_LEVEL_CONFIGS[lvl].severityLabel}
+                                  </>
+                                ),
+                              })),
+                            ]}
+                          />
+                        </FilterRow>
+                      )}
+
+                      {/* Filtro permanente por distancia por recorrer al destino (rúbrica E11). Se
+                          combina con tipo, estado, búsqueda y orden. */}
+                      <FilterRow label="Distancia" hint="km al destino">
+                        <Segmented
+                          value={fleetFilterDistance}
+                          onChange={setFleetFilterDistance}
+                          options={[
+                            { value: 'all' as FleetDistanceFilter, label: 'Todas', title: 'Sin filtro de distancia' },
+                            ...FLEET_DISTANCE_RANGES.map((range) => ({
+                              value: range.key as FleetDistanceFilter,
+                              label: range.label,
+                              title: `Desde ${range.min} km hasta menos de ${range.max} km`,
+                            })),
+                          ]}
                         />
-                        <span className="text-[10px] text-slate-500">estimados</span>
-                      </div>
-                    )}
-                  </div>
+                        <p className="mt-1 text-[9.5px] text-slate-500">
+                          {[...vehicleDistanceRanges.values()].filter((range) => range === null).length} sin ruta (no entran en ningún rango)
+                        </p>
+                      </FilterRow>
 
-                  <div className="space-y-1.5">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ordenar lista</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <SortButton label="Ocupación" ascKey="occupancy_asc" descKey="occupancy_desc" current={fleetSortKey} onChange={setFleetSortKey} />
-                      <SortButton label="Salida" ascKey="departure_asc" descKey="departure_desc" current={fleetSortKey} onChange={setFleetSortKey} />
-                      <SortButton label="Llegada" ascKey="arrival_asc" descKey="arrival_desc" current={fleetSortKey} onChange={setFleetSortKey} />
-                      <SortButton label="Por recorrer" ascKey="dist_remaining_asc" descKey="dist_remaining_desc" current={fleetSortKey} onChange={setFleetSortKey} />
-                      <SortButton label="Recorrida" ascKey="dist_traveled_asc" descKey="dist_traveled_desc" current={fleetSortKey} onChange={setFleetSortKey} />
+                      {/* Búsqueda por tiempo estimado: distinta del filtro por distancia */}
+                      <FilterRow label="Tiempo" hint="máx. estimado">
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={distSearchMode}
+                            onChange={(event) => setDistSearchMode(event.target.value as DistanceSearchMode)}
+                            aria-label="Buscar por tiempo estimado hasta"
+                            className="min-w-0 flex-1 cursor-pointer rounded-lg border border-slate-700/70 bg-slate-950/60 px-2 py-1.5 text-[11px] text-slate-200 focus:border-blue-500 focus:outline-none"
+                          >
+                            <option value="none">Sin búsqueda</option>
+                            <option value="to_dest">Al destino</option>
+                            <option value="to_origin">Al origen</option>
+                          </select>
+                          <div className="relative w-[5.5rem] shrink-0">
+                            <input
+                              type="number"
+                              min="0"
+                              value={distSearchMinutes}
+                              onChange={(event) => setDistSearchMinutes(event.target.value)}
+                              disabled={distSearchMode === 'none'}
+                              placeholder="—"
+                              aria-label="Minutos máximos"
+                              className="w-full rounded-lg border border-slate-700/70 bg-slate-950/60 py-1.5 pl-2 pr-8 text-[11px] text-slate-100 placeholder-slate-600 focus:border-blue-500 focus:outline-none disabled:opacity-40"
+                            />
+                            <span className="pointer-events-none absolute right-2 top-1.5 text-[10px] text-slate-500">min</span>
+                          </div>
+                        </div>
+                      </FilterRow>
+
+                      <div className="border-t border-slate-800 pt-2.5">
+                        <FilterRow label="Ordenar">
+                          <SortButton current={fleetSortKey} onChange={setFleetSortKey} />
+                        </FilterRow>
+                      </div>
                     </div>
+                  )}
+
+                  {/* Resultado + filtros activos (siempre visibles, aun con el panel plegado) */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] text-slate-400">
+                    <span className="font-mono-code">
+                      <span className="font-bold text-slate-200">{filteredVehicles.length}</span> de {vehicles.length} vehículos
+                    </span>
+                    {activeFleetFilterPills.map((pill) => (
+                      <button
+                        key={pill.key}
+                        type="button"
+                        onClick={pill.onClear}
+                        title={`Quitar filtro: ${pill.label}`}
+                        className="flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-950/40 px-2 py-0.5 font-medium text-blue-200 hover:border-blue-400 cursor-pointer"
+                      >
+                        {pill.label}
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    ))}
+                    {activeFleetFilterPills.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={clearFleetFilters}
+                        className="ml-auto text-blue-400 hover:text-blue-300 cursor-pointer"
+                      >
+                        Limpiar todo
+                      </button>
+                    )}
                   </div>
 
                   {/* Lista de Vehículos */}
@@ -1336,34 +1416,59 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
                       {warehouses.map((w) => {
                         const isInfinite = !Number.isFinite(w.capacity);
-                        const pct = isInfinite ? 100 : Math.round((w.currentStock / w.capacity) * 100);
+                        // Mismo semáforo (+ vacío) que el ícono del almacén en el mapa.
+                        const stock = getWarehouseStockStatus(w);
+                        const pct = stock.pct;
 
-                        const colorClass = isInfinite
-                          ? 'text-emerald-400'
-                          : pct >= 65
-                          ? 'text-emerald-400'
-                          : pct >= 30
-                          ? 'text-amber-400'
-                          : 'text-rose-400';
+                        const colorClass = {
+                          central: 'text-emerald-400',
+                          high: 'text-emerald-400',
+                          medium: 'text-amber-400',
+                          low: 'text-rose-400',
+                          empty: 'text-slate-400',
+                        }[stock.level];
 
-                        const bgBar = isInfinite
-                          ? 'bg-emerald-500'
-                          : pct >= 65
-                          ? 'bg-emerald-500'
-                          : pct >= 30
-                          ? 'bg-amber-500'
-                          : 'bg-rose-500';
+                        const bgBar = {
+                          central: 'bg-emerald-500',
+                          high: 'bg-emerald-500',
+                          medium: 'bg-amber-500',
+                          low: 'bg-rose-500',
+                          empty: 'bg-slate-500',
+                        }[stock.level];
+
+                        const isExpanded = expandedWarehouseId === w.id;
+                        const shipments = isExpanded ? getWarehouseShipments(w.id) : null;
 
                         return (
                           <div
                             key={w.id}
-                            onClick={() => setSelectedWarehouseId(selectedWarehouseId === w.id ? null : w.id)}
-                            className="p-2 rounded-xl bg-slate-950/50 border border-slate-800/80 hover:border-blue-500/40 transition-colors cursor-pointer space-y-1"
+                            ref={(el) => {
+                              if (el) warehouseCardRefs.current.set(w.id, el);
+                              else warehouseCardRefs.current.delete(w.id);
+                            }}
+                            className={`rounded-xl bg-slate-950/50 border transition-colors ${
+                              isExpanded ? 'border-blue-500/60' : 'border-slate-800/80 hover:border-blue-500/40'
+                            }`}
+                          >
+                          <div
+                            onClick={() => {
+                              // Plegar la card también suelta la selección del almacén en el mapa.
+                              if (isExpanded) {
+                                setExpandedWarehouseId(null);
+                                if (selectedWarehouseId === w.id) setSelectedWarehouseId(null);
+                              } else {
+                                setExpandedWarehouseId(w.id);
+                              }
+                            }}
+                            className="p-2 cursor-pointer space-y-1"
                           >
                             <div className="flex justify-between text-[11px]">
                               <span className="font-medium text-slate-100 flex items-center gap-1.5">
                                 <span className={`h-1.5 w-1.5 rounded-full ${bgBar}`} />
                                 {w.name}
+                                {isExpanded
+                                  ? <ChevronUp className="h-3 w-3 text-slate-500" />
+                                  : <ChevronDown className="h-3 w-3 text-slate-500" />}
                               </span>
                               <span className={`font-mono-code font-bold ${colorClass}`}>
                                 {isInfinite ? 'Infinita (∞)' : `${pct}% (${w.currentStock}/${w.capacity})`}
@@ -1382,112 +1487,84 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                             <div className="text-[9px] font-mono-code text-slate-500 flex justify-between items-center pt-0.5">
                               <span>{w.code}</span>
                               <span className={colorClass}>
-                                {isInfinite
-                                  ? 'Oficina Principal'
-                                  : pct >= 90
-                                  ? 'Lleno'
-                                  : pct >= 65
-                                  ? 'Abastecido'
-                                  : pct >= 30
-                                  ? 'Nivel medio'
-                                  : 'Por agotarse'}
+                                {stock.level === 'high' && pct >= 90 ? 'Lleno' : stock.label}
                               </span>
                             </div>
+                          </div>
+
+                          {/* Envíos del almacén: en tránsito / por salir en x h / entregados en las últimas x h */}
+                          {shipments && (
+                            <div className="space-y-2 border-t border-slate-800/80 p-2">
+                              <div className="grid grid-cols-3 gap-1">
+                                {([
+                                  ['transit', 'En tránsito', shipments.transit, Navigation, 'text-sky-400'],
+                                  ['upcoming', 'Por salir', shipments.upcoming, Clock, 'text-amber-400'],
+                                  ['delivered', 'Entregados', shipments.delivered, Package, 'text-emerald-400'],
+                                ] as const).map(([key, label, items, Icon, iconColor]) => (
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setWarehouseInspectorTab(key)}
+                                    className={`rounded-xl px-1.5 py-1.5 text-center cursor-pointer ${
+                                      warehouseInspectorTab === key
+                                        ? 'bg-blue-600/30 border border-blue-500/60'
+                                        : 'bg-slate-900/90 border border-slate-800 hover:border-slate-600'
+                                    }`}
+                                  >
+                                    <span className="flex items-center justify-center gap-1 text-[10px] text-slate-300">
+                                      <Icon className={`h-3 w-3 ${iconColor}`} />
+                                      {label}
+                                    </span>
+                                    <span className="block font-mono-code text-sm font-bold text-white">{items.length}</span>
+                                    <span className="block text-[9px] text-slate-500">
+                                      {items.reduce((sum, order) => sum + (order.quantity ?? 0), 0)} paq.
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              {warehouseInspectorTab !== 'transit' && (
+                                <p className="text-[10px] text-slate-400">
+                                  {warehouseInspectorTab === 'upcoming'
+                                    ? `Salen en las próximas ${WAREHOUSE_WINDOW_HOURS} horas`
+                                    : `Entregados en las últimas ${WAREHOUSE_WINDOW_HOURS} horas`}
+                                </p>
+                              )}
+
+                              {shipments[warehouseInspectorTab].length ? (
+                                <div className="max-h-56 space-y-1 overflow-y-auto pr-0.5">
+                                  {shipments[warehouseInspectorTab].map((order) => (
+                                    <div
+                                      key={order.id}
+                                      onClick={() => setSelectedOrderId(order.id)}
+                                      className="cursor-pointer rounded-lg border border-slate-800 bg-slate-950/60 p-2 text-[10px] hover:border-blue-500/40"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="font-mono-code font-semibold text-blue-300">{order.code}</span>
+                                        <span className="text-slate-400">{order.quantity ?? 0} paq.</span>
+                                      </div>
+                                      <div className="mt-1 flex justify-between text-slate-500">
+                                        <span>Destino X={Math.round(order.destination.x)}, Y={Math.round(order.destination.y)}</span>
+                                        <span>
+                                          {warehouseInspectorTab === 'delivered'
+                                            ? `Entregado ${formatSimClock(order.deliveredSimMs)}`
+                                            : order.assignedVehicleId ?? 'Sin UT'}
+                                          {warehouseInspectorTab === 'upcoming' && ` · sale ${formatSimClock(order.departureSimMs)}`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-[10px] italic text-slate-500">Sin envíos en este periodo.</p>
+                              )}
+                            </div>
+                          )}
                           </div>
                         );
                       })}
                     </div>
                   </StaticSection>
-
-                  {false && warehouses.map((warehouse) => {
-                    const warehouseOrders = orders.filter(
-                      (order) => order.warehouseOriginId === warehouse.id || (!order.warehouseOriginId && warehouse.id === 'central')
-                    );
-                    const inTransitOrders = warehouseOrders.filter(
-                      (order) => order.status !== 'delivered' && order.assignedVehicleId
-                    );
-                    const upcomingOrders = warehouseOrders.filter(
-                      (order) =>
-                        order.status !== 'delivered' &&
-                        order.createdMinute >= currentSimulationMinute &&
-                        order.createdMinute <= currentSimulationMinute + warehouseUpcomingHours * 60
-                    );
-                    const deliveredOrders = warehouseOrders.filter(
-                      (order) =>
-                        order.status === 'delivered' &&
-                        order.deliveredMinute !== undefined &&
-                        currentSimulationMinute - order.deliveredMinute <= warehouseDeliveredHours * 60
-                    );
-                    const renderWarehouseOrders = (items: typeof orders) =>
-                      items.length ? (
-                        <div className="space-y-1">
-                          {items.map((order) => (
-                            <div key={order.id} className="rounded-lg border border-slate-800 bg-slate-950/60 p-2 text-[10px]">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="font-mono-code font-semibold text-blue-300">{order.code}</span>
-                                <span className="text-slate-400">{order.quantity ?? 0} productos</span>
-                              </div>
-                              <div className="mt-1 flex justify-between text-slate-500">
-                                <span>Destino X={Math.round(order.destination.x)}, Y={Math.round(order.destination.y)}</span>
-                                <span>{order.assignedVehicleId ?? 'Sin UT'}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[10px] italic text-slate-500">Sin registros para este periodo.</p>
-                      );
-
-                    return (
-                      <React.Fragment key={warehouse.id}>
-                        <StaticSection
-                          title={`${warehouse.name}: en tránsito`}
-                          icon={<Navigation className="h-3.5 w-3.5 text-sky-400" />}
-                          badge={inTransitOrders.length}
-                        >
-                          {renderWarehouseOrders(inTransitOrders)}
-                        </StaticSection>
-                        <StaticSection
-                          title={`${warehouse.name}: próximos a salir`}
-                          icon={<Clock className="h-3.5 w-3.5 text-amber-400" />}
-                          badge={upcomingOrders.length}
-                        >
-                          <label className="flex items-center gap-2 text-[10px] text-slate-400">
-                            Próximas
-                            <input
-                              type="number"
-                              min="1"
-                              max="48"
-                              value={warehouseUpcomingHours}
-                              onChange={(event) => setWarehouseUpcomingHours(Math.max(1, Number(event.target.value) || 1))}
-                              className="w-14 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-slate-100"
-                            />
-                            horas
-                          </label>
-                          {renderWarehouseOrders(upcomingOrders)}
-                        </StaticSection>
-                        <StaticSection
-                          title={`${warehouse.name}: entregados recientemente`}
-                          icon={<Package className="h-3.5 w-3.5 text-emerald-400" />}
-                          badge={deliveredOrders.length}
-                        >
-                          <label className="flex items-center gap-2 text-[10px] text-slate-400">
-                            Últimas
-                            <input
-                              type="number"
-                              min="1"
-                              max="168"
-                              value={warehouseDeliveredHours}
-                              onChange={(event) => setWarehouseDeliveredHours(Math.max(1, Number(event.target.value) || 1))}
-                              className="w-14 rounded border border-slate-700 bg-slate-950 px-1.5 py-1 text-slate-100"
-                            />
-                            horas
-                          </label>
-                          {renderWarehouseOrders(deliveredOrders)}
-                        </StaticSection>
-                      </React.Fragment>
-                    );
-                  })}
 
                   {/* SEMÁFORO DE FLOTA */}
                   {false && <StaticSection title="Semáforo de flota" icon={<Car className="h-3.5 w-3.5 text-blue-400" />} badge={vehicles.length}>

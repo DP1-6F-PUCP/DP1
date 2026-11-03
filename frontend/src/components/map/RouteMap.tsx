@@ -3,6 +3,8 @@ import { useMapStore } from '../../store/mapStore';
 import { Vehicle, Warehouse, BlockedStreet, Order, Route } from '../../types';
 import { LeafletManhattanMap } from './LeafletManhattanMap';
 import { useEstadoOperacion } from '../../hooks/useEstadoOperacion';
+import { useScenarioStore } from '../../store/scenarioStore';
+import { IndicadoresGlobalesMapa } from './IndicadoresGlobalesMapa';
 
 export interface RouteMapProps {
   warehouses?: Warehouse[];
@@ -42,6 +44,8 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   const setSelectedOrderId = useMapStore((s) => s.setSelectedOrderId);
   // Mismo queryKey que el resto de la app (React Query dedupea), no dispara un fetch adicional.
   const { configuracion } = useEstadoOperacion();
+  const hasActiveExecution = useScenarioStore((s) =>
+    Boolean(s.ejecucion && ['INICIADA', 'EN_CURSO', 'PAUSADA'].includes(s.ejecucion.estado)));
 
   const handleVehicleClick = (vehicle: Vehicle | null) => {
     if (vehicle) {
@@ -93,6 +97,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         isDarkTheme={isDarkTheme}
         className="w-full h-full"
       />
+      {hasActiveExecution && <IndicadoresGlobalesMapa vehicles={vehicles} warehouses={warehouses} />}
     </div>
   );
 };

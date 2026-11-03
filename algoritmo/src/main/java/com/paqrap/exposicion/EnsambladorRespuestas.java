@@ -80,7 +80,10 @@ public final class EnsambladorRespuestas {
         return new PedidoDTO(pedido.getIdPedido(), pedido.getIdCliente(), pedido.getEstado().name(),
                 pedido.getDestino().x(), pedido.getDestino().y(), pedido.getCantidadSolicitada(),
                 pedido.cantidadEntregadaTotal(), pedido.getFechaIngreso(), pedido.getHorasLimite(),
-                pedido.getFechaLimite());
+                pedido.getFechaLimite(), pedido.fechaEntregaFinal(),
+                pedido.getNodoDespacho() != null ? pedido.getNodoDespacho().x() : null,
+                pedido.getNodoDespacho() != null ? pedido.getNodoDespacho().y() : null,
+                pedido.getFechaDespacho());
     }
 
     public static RutaDTO aRutaDTO(Ruta ruta, Ciudad ciudad, List<Bloqueo> bloqueos, LocalDateTime instante) {
@@ -89,9 +92,12 @@ public final class EnsambladorRespuestas {
                 .map(Pedido::getIdPedido)
                 .toList();
         List<String> geometria = calcularGeometriaRuta(ruta, ciudad, bloqueos, instante);
+        Nodo origen = ruta.getNodoDespacho() != null ? ruta.getNodoDespacho() : ruta.getUnidadTransporte().getPosicion();
+        LocalDateTime horaSalida = ruta.getFechaDespacho() != null ? ruta.getFechaDespacho()
+                : ruta.getHoraInicioPlanificada();
         return new RutaDTO(ruta.getIdRuta(), ruta.getUnidadTransporte().getIdUnidad(),
                 ruta.getUnidadTransporte().getTipoVehiculo().getId(), ruta.getEstado().name(), secuencia,
-                ruta.getCostoEstimado(), ruta.getDuracionEstimada(), geometria);
+                ruta.getCostoEstimado(), ruta.getDuracionEstimada(), geometria, origen.x(), origen.y(), horaSalida);
     }
 
     /**

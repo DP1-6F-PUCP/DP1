@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { CarFront, Bike as Bicycle, MapPin } from 'lucide-react';
+import { CarFront, Bike as Bicycle, MapPin, Warehouse as WarehouseGlyph } from 'lucide-react';
 import { FaMotorcycle } from 'react-icons/fa';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
@@ -12,6 +12,7 @@ import {
   VEHICLE_TYPE_META,
 } from '../../utils/vehicleStatus';
 import { useSemaforoStore } from '../../store/semaforoStore';
+import { getWarehouseStockStatus } from '../../utils/warehouseStock';
 import { simulationEngine } from '../../engine/simulationEngine';
 
 const getVehicleLoadStatus = (vehicle: Vehicle) => {
@@ -531,65 +532,66 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     warehouses.forEach((w) => {
       const isSelected = selectedWarehouseId === w.id;
       const isInfinite = !Number.isFinite(w.capacity);
-      // w.occupancyPct viene de AlmacenDTO.nivelOcupacion (el backend ya lo calcula) -- antes se
-      // recalculaba aqui mismo con currentStock/capacity, una formula paralela que podia divergir
-      // de la real si alguna vez cambia el criterio del backend (p. ej. redondeo).
-      const pct = Math.round(w.occupancyPct);
-      const isDanger = !isInfinite && pct > 85;
+      // Semáforo de stock (+ vacío) compartido con la lista de almacenes del panel. El % sale de
+      // w.occupancyPct (AlmacenDTO.nivelOcupacion), no se recalcula aqui con currentStock/capacity.
+      const stock = getWarehouseStockStatus(w);
+      const pct = stock.pct;
+      const isEmpty = stock.level === 'empty';
 
-      const borderColor = isSelected ? '#38bdf8' : isDanger ? '#ef4444' : w.color;
+      // El recuadro y el trazo del glifo (Warehouse de lucide) llevan el color del semáforo.
+      // Vacío = gris con borde punteado. Seleccionado = borde celeste más grueso (el glifo
+      // conserva su color de semáforo para no perder el estado al seleccionar).
+      const borderColor = isSelected ? '#38bdf8' : stock.hex;
       const baseFill = isDarkTheme ? '#0f172a' : '#ffffff';
-
-      // Exact replica of the SVG Warehouse Building Icon
+      const glyphColor = stock.hex;
+      const glyph = renderToStaticMarkup(
+        <WarehouseGlyph size={16} strokeWidth={2.2} color={glyphColor} aria-hidden />
+      );
       const warehouseIcon = L.divIcon({
         className: 'svg-style-warehouse-marker',
         html: `
-          <svg
-            width="24"
-            height="24"
-            viewBox="-1.8 -1.8 3.6 3.6"
-            style="cursor: pointer; filter: drop-shadow(0 2px 5px rgba(0,0,0,0.3)); display: block;"
-          >
-            <!-- Warehouse Base Card -->
-            <rect
-              x="-1.5"
-              y="-1.5"
-              width="3"
-              height="3"
-              rx="0.6"
-              fill="${baseFill}"
-              stroke="${borderColor}"
-              stroke-width="${isSelected ? '0.32' : '0.2'}"
-            />
-            <!-- Hub Icon Graphic -->
-            <rect
-              x="-1"
-              y="-1"
-              width="2"
-              height="2"
-              rx="0.35"
-              fill="${w.color}"
-              fill-opacity="0.2"
-            />
-            <path
-              d="M -0.75 0.5 L -0.75 -0.4 L 0 -0.85 L 0.75 -0.4 L 0.75 0.5 Z"
-              fill="${w.color}"
-            />
-            <rect x="-0.25" y="0.05" width="0.5" height="0.45" fill="#ffffff" />
-          </svg>
+          <div style="
+            position: relative;
+            width: 28px;
+            height: 28px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 7px;
+            background: ${baseFill};
+            border: ${isSelected ? 3 : 2.5}px ${isEmpty && !isSelected ? 'dashed' : 'solid'} ${borderColor};
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            cursor: pointer;
+          ">
+            ${glyph}
+            ${isInfinite ? `<span style="
+              position: absolute;
+              top: -7px;
+              right: -7px;
+              width: 13px;
+              height: 13px;
+              border-radius: 50%;
+              background: #3b82f6;
+              border: 1.5px solid ${baseFill};
+              color: #ffffff;
+              font: 700 8px/10px system-ui, sans-serif;
+              text-align: center;
+            ">P</span>` : ''}
+          </div>
         `,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
       });
 
       const marker = L.marker([w.coords.y, w.coords.x], { icon: warehouseIcon, pane: 'warehouseMarkers' });
       const tooltipContent = isInfinite
-        ? '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px;"><strong>Stock:</strong> ilimitado</div>'
+        ? '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px;"><strong>Oficina principal</strong><br/><strong>Stock:</strong> ilimitado</div>'
         : `
           <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 120px;">
             <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${w.name}</div>
             <div><strong>Stock:</strong> ${w.currentStock} / ${w.capacity} paq</div>
-            <div><strong>Ocupación:</strong> ${pct}%</div>
+            <div><strong>Ocupación:</strong> ${pct}% · <span style="color: ${stock.hex}; font-weight: 700;">${stock.label}</span></div>
             <div><strong>En tránsito:</strong> ${w.inTransit} paq</div>
           </div>
         `;
@@ -701,6 +703,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
                 : ''
             }
 
+            <!-- Indicador de rumbo (como en un GPS): flecha en el borde del circulo. Oculto hasta
+                 conocer el rumbo; el bucle de frames (suscripcion a simulationEngine) lo rota. -->
+            <g class="vehicle-heading" display="none">
+              <path
+                d="M0 -18.5 L5.2 -10.2 Q0 -12.6 -5.2 -10.2 Z"
+                fill="${bubbleFill}"
+                stroke="#ffffff"
+                stroke-width="1.3"
+                stroke-linejoin="round"
+              />
+            </g>
+
             <!-- Vehicle Body Bubble centered exactly at (0, 0) -->
             <circle
               cx="0"
@@ -712,8 +726,12 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
             />
 
             <!-- Always render the vehicle type icon (Auto, Moto, Bici) so the transport unit type is immediately identifiable even when broken -->
-            <g transform="translate(-7.5 -7.5)">
-              ${vehicleIconMarkup}
+            <!-- El bucle de frames rota este grupo con el rumbo: el auto se ve de frente (avanza
+                 "hacia arriba"); moto y bici se ven de perfil (avanzan "hacia la derecha"). -->
+            <g class="vehicle-glyph" data-adelante="${v.type === 'car' ? 'arriba' : 'derecha'}">
+              <g transform="translate(-7.5 -7.5)">
+                ${vehicleIconMarkup}
+              </g>
             </g>
 
             <!-- Geometric accent / corner badge for delayed or broken vehicles -->
@@ -775,13 +793,17 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const estadoTexto = isReturning ? 'Regresando al almacén' : ETIQUETA_ESTADO[v.status] ?? v.status;
       const typeMeta = VEHICLE_TYPE_META[v.type];
       const breakdownCfg = v.status === 'broken' ? getBreakdownLevelConfig(breakdownType) : null;
+      // Solo el tipo y cuánto tiempo no estará disponible: el detalle completo (tiempo en el sitio,
+      // turno de retorno) está en su card del panel. Con todo junto la tooltip tapaba el mapa.
       const averiaTexto = v.status === 'broken'
         ? (breakdownCfg
-          ? `${breakdownCfg.label}<br/><span style="font-size:10px;opacity:0.9">${breakdownCfg.unavailableText} · ${breakdownCfg.siteStayText}</span>`
+          ? `${breakdownCfg.label}<br/><span style="font-size:10px;font-weight:500;opacity:0.9">${breakdownCfg.unavailableText.split(' · ')[0]}</span>`
           : 'Avería: tipo no informado')
         : '';
+      // Las tooltips de Leaflet no parten líneas (white-space: nowrap): se limita el ancho y se
+      // permite el salto de línea para que un texto largo no estire la tooltip sobre el mapa.
       const tooltipContent = `
-        <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 145px;">
+        <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 145px; max-width: 200px; white-space: normal;">
           <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${v.code} · ${typeMeta.shortLabel}</div>
           <div><strong>Tipo:</strong> ${typeMeta.label}</div>
           <div><strong>Ocupación:</strong> ${v.currentLoad} / ${v.capacity} paq (${pct}%)</div>
@@ -914,6 +936,36 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         const punto = snap.vehiclePositions.get(id);
         if (punto) {
           marker.setLatLng([punto.y, punto.x]);
+        }
+        // Rumbo: CRS.Simple tiene +y hacia arriba y el SVG rota en sentido horario, asi que el
+        // angulo desde el norte se aplica tal cual. Detenido conserva el ultimo rumbo, atenuado.
+        const rumbo = snap.vehicleHeadings?.get(id);
+        const glifo = marker.getElement()?.querySelector<SVGGElement>('.vehicle-glyph');
+        if (glifo && rumbo !== undefined) {
+          const r = Math.round(rumbo);
+          // Un icono de perfil se refleja al ir hacia el oeste en vez de quedar de cabeza.
+          const transform = glifo.dataset.adelante === 'arriba'
+            ? `rotate(${r})`
+            : r >= 0 && r <= 180
+              ? `rotate(${r - 90})`
+              : `rotate(${r + 90}) scale(-1 1)`;
+          if (glifo.getAttribute('transform') !== transform) glifo.setAttribute('transform', transform);
+        }
+        const flecha = marker.getElement()?.querySelector<SVGGElement>('.vehicle-heading');
+        if (flecha) {
+          const estado = rumbo === undefined
+            ? 'oculto'
+            : `${Math.round(rumbo)}|${snap.vehiclesMoving?.has(id) ? 1 : 0}`;
+          if (flecha.dataset.estado !== estado) {
+            flecha.dataset.estado = estado;
+            if (rumbo === undefined) {
+              flecha.setAttribute('display', 'none');
+            } else {
+              flecha.setAttribute('display', 'inline');
+              flecha.setAttribute('transform', `rotate(${Math.round(rumbo)})`);
+              flecha.setAttribute('opacity', snap.vehiclesMoving?.has(id) ? '1' : '0.45');
+            }
+          }
         }
         if (groupedIds.has(id)) {
           if (capa.hasLayer(marker)) capa.removeLayer(marker);

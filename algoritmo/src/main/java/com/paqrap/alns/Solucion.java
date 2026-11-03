@@ -89,6 +89,7 @@ public final class Solucion {
         copia.setEstado(original.getEstado());
         copia.setCostoEstimado(original.getCostoEstimado());
         copia.setDuracionEstimada(original.getDuracionEstimada());
+        copia.registrarDespacho(original.getNodoDespacho(), original.getFechaDespacho());
         for (ParadaPlanificada parada : original.getSecuenciaParadas()) {
             ParadaPlanificada paradaCopia = new ParadaPlanificada(parada.getPedido(), parada.getCantidadAEntregar());
             paradaCopia.setEstado(parada.getEstado());

@@ -247,11 +247,25 @@ export function adaptVehiculo(
   };
 }
 
+function almacenMasCercano(warehouses: Warehouse[], x: number, y: number): Warehouse | undefined {
+  let mejor: Warehouse | undefined;
+  let mejorDist = Infinity;
+  for (const w of warehouses) {
+    const dist = Math.abs(w.coords.x - x) + Math.abs(w.coords.y - y);
+    if (dist < mejorDist) {
+      mejor = w;
+      mejorDist = dist;
+    }
+  }
+  return mejor;
+}
+
 export function adaptPedido(
   dto: PedidoDTO,
   rutas: RutaDTO[],
   scenarioStartMs: number | null,
-  nowMs: number | null
+  nowMs: number | null,
+  warehouses: Warehouse[] = []
 ): Order {
   const createdMs = parseBackendSimulatedTime(dto.fechaIngreso);
   const deadlineMs = parseBackendSimulatedTime(dto.fechaLimite);
@@ -274,11 +288,34 @@ export function adaptPedido(
   }
 
   const rutaConPedido = rutas.find((r) => r.secuenciaEntrega.includes(dto.idPedido));
+  // Para atribuir el pedido a su almacen de salida se prefiere la ruta que realmente lo lleva
+  // (EN_EJECUCION/FINALIZADA) sobre una PLANIFICADA o REEMPLAZADA que tambien lo liste.
+  const rutaOrigen = ['EN_EJECUCION', 'FINALIZADA', 'PLANIFICADA']
+    .map((estado) => rutas.find((r) => r.estado === estado && r.secuenciaEntrega.includes(dto.idPedido)))
+    .find(Boolean);
+  // Si el pedido ya se despacho, su propio origen manda (la ruta FINALIZADA deja de venir en el
+  // estado); si no -- o si tras un replan vuelve a esperar en una ruta PLANIFICADA -- se usa el de
+  // esa ruta.
+  const despachado = dto.origenX != null && dto.origenY != null && rutaOrigen?.estado !== 'PLANIFICADA';
+  const origenX = despachado ? dto.origenX : rutaOrigen?.origenX;
+  const origenY = despachado ? dto.origenY : rutaOrigen?.origenY;
+  const almacenOrigen = origenX != null && origenY != null
+    ? almacenMasCercano(warehouses, origenX, origenY)
+    : undefined;
+  const salida = despachado ? dto.fechaSalida : rutaOrigen?.horaSalida;
+  const departureMs = salida ? parseBackendSimulatedTime(salida) : NaN;
+  const deliveredMs = dto.fechaEntrega ? parseBackendSimulatedTime(dto.fechaEntrega) : NaN;
 
   return {
     id: dto.idPedido,
     code: dto.idPedido,
-    warehouseOriginId: '', // el backend no indica desde que almacen se atendera
+    warehouseOriginId: almacenOrigen?.id ?? '',
+    departureSimMs: Number.isFinite(departureMs) ? departureMs : undefined,
+    departed: despachado || rutaOrigen?.estado === 'EN_EJECUCION' || rutaOrigen?.estado === 'FINALIZADA',
+    deliveredSimMs: Number.isFinite(deliveredMs) ? deliveredMs : undefined,
+    deliveredMinute: scenarioStartMs != null && Number.isFinite(deliveredMs)
+      ? Math.round((deliveredMs - scenarioStartMs) / 60000)
+      : undefined,
     destination: { x: dto.posX, y: dto.posY },
     arrivalSimMs: createdMs,
     createdMinute,
@@ -363,12 +400,13 @@ export function adaptEstadoOperacion(
   const pedidosById = new Map(pedidos.map((p) => [p.idPedido, p]));
   const vehiculosById = new Map(estado.vehiculos.map((v) => [v.idUnidad, v]));
   const blockedStreets = estado.bloqueos.filter((b) => b.vigente).flatMap(adaptBloqueo);
+  const warehouses = estado.almacenes.map(adaptAlmacen);
 
   return {
     vehicles: estado.vehiculos.map((v) =>
       adaptVehiculo(v, config, estado.rutas, pedidosById, nowMs)
     ),
-    orders: pedidos.map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs)),
+    orders: pedidos.map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs, warehouses)),
     routes: estado.rutas.map((r) =>
       adaptRuta(
         r,
@@ -379,7 +417,7 @@ export function adaptEstadoOperacion(
         config.ciudad.alto
       )
     ),
-    warehouses: estado.almacenes.map(adaptAlmacen),
+    warehouses,
     blockedStreets,
   };
 }

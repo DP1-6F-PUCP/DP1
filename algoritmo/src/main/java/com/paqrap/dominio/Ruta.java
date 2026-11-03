@@ -45,6 +45,10 @@ public class Ruta {
     private final LocalDateTime horaInicioPlanificada;
     private final List<ParadaPlanificada> secuenciaParadas = new ArrayList<>();
     private final UnidadTransporte unidadTransporte;
+    // Nodo e instante reales en que el vehículo salió a cumplir la ruta (null mientras siga
+    // PLANIFICADA) -- el panel de almacenes los usa para atribuir envíos a su almacén de salida.
+    private Nodo nodoDespacho;
+    private LocalDateTime fechaDespacho;
 
     public Ruta(String idRuta, LocalDateTime horaInicioPlanificada, UnidadTransporte unidadTransporte) {
         this.idRuta = idRuta;
@@ -91,6 +95,19 @@ public class Ruta {
 
     public UnidadTransporte getUnidadTransporte() {
         return unidadTransporte;
+    }
+
+    public Nodo getNodoDespacho() {
+        return nodoDespacho;
+    }
+
+    public LocalDateTime getFechaDespacho() {
+        return fechaDespacho;
+    }
+
+    public void registrarDespacho(Nodo nodo, LocalDateTime instante) {
+        this.nodoDespacho = nodo;
+        this.fechaDespacho = instante;
     }
 
     /**

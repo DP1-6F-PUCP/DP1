@@ -234,6 +234,11 @@ public class MotorSimulacion {
         if (esDespachoNuevo) {
             unidad.setEstado(EstadoUnidad.EN_RUTA);
             ruta.setEstado(EstadoRuta.EN_EJECUCION);
+            LocalDateTime instanteDespacho = contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0));
+            ruta.registrarDespacho(nodoActual, instanteDespacho);
+            for (ParadaPlanificada pendiente : paradasPendientes) {
+                pendiente.getPedido().registrarDespacho(nodoActual, instanteDespacho);
+            }
             eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.DESPACHO_VEHICULO,
                     unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
                     String.format("Vehículo despachado desde %s con %d pedidos", nodoActual, paradasPendientes.size()),

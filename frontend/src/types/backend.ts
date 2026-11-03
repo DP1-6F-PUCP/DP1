@@ -35,6 +35,12 @@ export interface PedidoDTO {
   fechaIngreso: string; // LocalDateTime ISO (sin zona)
   horasLimite: number;
   fechaLimite: string; // LocalDateTime ISO (sin zona)
+  fechaEntrega?: string | null; // última entrega cumplida; null mientras no esté ENTREGADA
+  // Nodo e instante de su último despacho (null si aún no salió). Sobrevive a que la ruta
+  // FINALIZADA deje de venir en EstadoOperacionDTO.rutas.
+  origenX?: number | null;
+  origenY?: number | null;
+  fechaSalida?: string | null;
 }
 
 export interface VehiculoDTO {
@@ -78,6 +84,11 @@ export interface RutaDTO {
   // bloqueos vigentes), cada nodo como "x,y". Puede venir mas corta que secuenciaEntrega si algun
   // tramo quedo sin camino transitable; nunca se recalcula localmente como aproximacion.
   geometria: string[];
+  // Nodo de salida (donde se despacho, o la posicion actual si sigue PLANIFICADA) e instante de
+  // salida (real si ya se despacho, planificado si no).
+  origenX?: number;
+  origenY?: number;
+  horaSalida?: string | null;
 }
 
 export interface AlmacenDTO {

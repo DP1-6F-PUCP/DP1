@@ -36,6 +36,11 @@ export interface EngineSnapshot {
    * significa "todavia no hay datos para este vehiculo" -- el consumidor no debe mover su
    * marcador. */
   vehiclePositions: Map<string, Point>;
+  /** Rumbo de cada vehiculo en grados desde el norte (+y), sentido horario: el del tramo que
+   * recorre, o el ultimo que recorrio si esta detenido. Ausente si nunca se movio. */
+  vehicleHeadings?: Map<string, number>;
+  /** Vehiculos que en este instante estan recorriendo un tramo. */
+  vehiclesMoving?: Set<string>;
   /** Vehiculos detenidos en un mismo punto (2 o mas), p. ej. en un almacen: el mapa los dibuja
    * como un solo marcador con contador. */
   gruposDetenidos: GrupoDetenido[];

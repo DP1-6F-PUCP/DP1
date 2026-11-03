@@ -71,7 +71,7 @@ export const OperacionTopbar: React.FC = () => {
   };
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 overflow-x-auto border-b border-slate-700 bg-[#0f172a] px-3 text-slate-300">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-3 overflow-x-auto border-b border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] px-3 text-slate-300">
       <div className="flex items-center gap-2 shrink-0">
         <EventLogButton />
       </div>

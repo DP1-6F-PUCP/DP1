@@ -17,6 +17,12 @@ export interface Order {
   assignedVehicleId?: string;
   urgency: OrderUrgency;
   deliveredMinute?: number;
+  /** Instante simulado de la entrega final (PedidoDTO.fechaEntrega), si ya fue entregado. */
+  deliveredSimMs?: number;
+  /** Instante simulado de salida de su ruta: real si ya se despachó, planificado si no. */
+  departureSimMs?: number;
+  /** true cuando la ruta que lo lleva ya salió del almacén (EN_EJECUCION o FINALIZADA). */
+  departed?: boolean;
   clientId?: string;
   quantity?: number;
   slaHours?: number;

@@ -1,5 +1,6 @@
 package com.paqrap.exposicion;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -12,8 +13,12 @@ import java.util.List;
  *         formato que {@code BloqueoDTO.secuenciaNodos}. Puede terminar antes de la última parada
  *         si algún tramo queda sin camino transitable (bloqueo total); vacía solo si ni el primer
  *         tramo tiene camino.
+ * @param origenX nodo de salida de la ruta: donde se despachó, o la posición actual de la unidad
+ *         si sigue PLANIFICADA
+ * @param origenY ver {@code origenX}
+ * @param horaSalida instante real de despacho, o el planificado si sigue PLANIFICADA
  */
 public record RutaDTO(String idRuta, String vehiculoId, String tipoVehiculo, String estado,
         List<String> secuenciaEntrega, double costoEstimado, double duracionEstimadaHoras,
-        List<String> geometria) {
+        List<String> geometria, int origenX, int origenY, LocalDateTime horaSalida) {
 }
