@@ -33,7 +33,13 @@ import { BreakdownType } from '../types';
 import { BreakdownModal } from './BreakdownModal';
 import { ConfigModal } from './ConfigModal';
 import { useToast } from './ToastProvider';
-import { getVehicleSemaforoStatus } from '../utils/vehicleStatus';
+import {
+   getVehicleSemaforoStatus,
+  BREAKDOWN_LEVEL_CONFIGS,
+  getBreakdownLevelConfig,
+  VEHICLE_TYPE_META,
+} from '../utils/vehicleStatus';
+import { FaMotorcycle } from 'react-icons/fa';
 import { useSemaforoStore } from '../store/semaforoStore';
 import { useScenarioStore } from '../store/scenarioStore';
 import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
@@ -209,6 +215,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const [fleetFilterStatus, setFleetFilterStatus] = useState<
     'all' | 'idle' | 'en_route' | 'delivering' | 'on_break' | 'broken' | 'maintenance'
   >('all');
+  const [fleetFilterBreakdownType, setFleetFilterBreakdownType] = useState<'all' | BreakdownType>('all');
   const [fleetSortKey, setFleetSortKey] = useState<FleetSortKey>('occupancy_desc');
   const [distSearchMode, setDistSearchMode] = useState<DistanceSearchMode>('none');
   const [distSearchMinutes, setDistSearchMinutes] = useState('');
@@ -358,6 +365,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const filteredVehicles = vehicles.filter((v) => {
     const matchesType = fleetFilterType === 'all' || v.type === fleetFilterType;
     const matchesStatus = fleetFilterStatus === 'all' || v.status === fleetFilterStatus;
+    const matchesBreakdownType =
+      fleetFilterStatus !== 'broken' ||
+      fleetFilterBreakdownType === 'all' ||
+      v.breakdownType === fleetFilterBreakdownType;
     const matchesSearch =
       v.code.toLowerCase().includes(fleetSearchTerm.toLowerCase()) ||
       v.id.toLowerCase().includes(fleetSearchTerm.toLowerCase());
@@ -369,7 +380,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
       distSearchMode === 'none' ||
       !distSearchMinutes.trim() ||
       (Number.isFinite(maxMinutes) && kmToMinutes(distance, v.speed) <= maxMinutes);
-    return matchesType && matchesStatus && matchesSearch && matchesDistance;
+    return matchesType && matchesStatus && matchesBreakdownType && matchesSearch && matchesDistance;
   }).sort((a, b) => {
     const value = (vehicle: Vehicle) => {
       const assignedOrders = getVehicleOrders(vehicle);
@@ -849,13 +860,16 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                   </div>
 
                   {/* Filtros por Estado */}
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center justify-between">
                       <span>Filtrar por Estado</span>
                       {fleetFilterStatus !== 'all' && (
                         <button
                           type="button"
-                          onClick={() => setFleetFilterStatus('all')}
+                          onClick={() => {
+                            setFleetFilterStatus('all');
+                            setFleetFilterBreakdownType('all');
+                          }}
                           className="text-[10px] text-blue-400 hover:text-blue-300 normal-case font-medium cursor-pointer"
                         >
                           Limpiar filtro
@@ -875,7 +889,12 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         <button
                           key={st.key}
                           type="button"
-                          onClick={() => setFleetFilterStatus(st.key)}
+                          onClick={() => {
+                            setFleetFilterStatus(st.key);
+                            if (st.key !== 'broken') {
+                              setFleetFilterBreakdownType('all');
+                            }
+                          }}
                           className={`px-2.5 py-1 rounded-xl font-medium transition-all cursor-pointer shrink-0 flex items-center gap-1 ${
                             fleetFilterStatus === st.key
                               ? st.key === 'broken'
@@ -893,6 +912,77 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         </button>
                       ))}
                     </div>
+
+                    {/* Subfiltro por Tipo de Avería (visible cuando se filtra por Averiados) */}
+                    {fleetFilterStatus === 'broken' && (
+                      <div
+                        id="fleet-breakdown-type-subfilter"
+                        className="space-y-1.5 rounded-xl border border-rose-500/30 bg-slate-900/75 p-2.5 fade-in"
+                      >
+                        <div className="text-[10px] uppercase font-bold text-slate-300 tracking-wider flex items-center justify-between">
+                          <span>Subfiltro: Tipo de Avería</span>
+                          {fleetFilterBreakdownType !== 'all' && (
+                            <button
+                              type="button"
+                              onClick={() => setFleetFilterBreakdownType('all')}
+                              className="text-[10px] text-blue-400 hover:text-blue-300 normal-case font-medium cursor-pointer"
+                            >
+                              Ver todas
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] pb-0.5 scrollbar-none">
+                          {[
+                            {
+                              key: 'all' as const,
+                              label: 'Todas',
+                              activeClass: 'bg-rose-600 text-white border-rose-400 shadow-sm font-semibold',
+                              dotHex: undefined,
+                              count: vehicles.filter(
+                                (v) =>
+                                  v.status === 'broken' &&
+                                  (fleetFilterType === 'all' || v.type === fleetFilterType)
+                              ).length,
+                            },
+                            ...([1, 2, 3] as const).map((lvl) => {
+                              const cfg = BREAKDOWN_LEVEL_CONFIGS[lvl];
+                              return {
+                                key: lvl,
+                                label: `Tipo ${lvl} · ${cfg.severityLabel}`,
+                                activeClass: cfg.activeFilterClass,
+                                dotHex: cfg.hex,
+                                count: vehicles.filter(
+                                  (v) =>
+                                    v.status === 'broken' &&
+                                    v.breakdownType === lvl &&
+                                    (fleetFilterType === 'all' || v.type === fleetFilterType)
+                                ).length,
+                              };
+                            }),
+                          ].map((sub) => (
+                            <button
+                              key={String(sub.key)}
+                              type="button"
+                              onClick={() => setFleetFilterBreakdownType(sub.key)}
+                              className={`px-2.5 py-1 rounded-xl font-medium transition-all cursor-pointer shrink-0 flex items-center gap-1.5 border ${
+                                fleetFilterBreakdownType === sub.key
+                                  ? sub.activeClass
+                                  : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-700/60'
+                              }`}
+                            >
+                              {sub.dotHex && (
+                                <span
+                                  className="h-2 w-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: sub.dotHex }}
+                                />
+                              )}
+                              <span>{sub.label}</span>
+                              <span className="text-[10px] opacity-85 font-mono">({sub.count})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/50 p-2.5">
@@ -955,6 +1045,16 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                       filteredVehicles.map((v) => {
                         const isSelected = selectedVehicleId === v.id;
                         const isBroken = v.status === 'broken';
+                        const breakdownCfg = isBroken ? getBreakdownLevelConfig(v.breakdownType) : null;
+                        const typeMeta = VEHICLE_TYPE_META[v.type];
+                        const centralWarehouse = warehouses.find(
+                          (w) => w.id === 'central' || w.name.toLowerCase().includes('central')
+                        );
+                        const isAtCentralWarehouse = Boolean(
+                          centralWarehouse &&
+                            Math.round(v.position.x) === Math.round(centralWarehouse.coords.x) &&
+                            Math.round(v.position.y) === Math.round(centralWarehouse.coords.y)
+                        );
                         const isReturning = isVehicleReturning(v);
                         const vehicleOrders = getVehicleOrders(v);
                         const distanceToDestination = getVehicleDistanceToDestination(v);
@@ -990,14 +1090,22 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex items-center gap-2">
                                 <div className={`p-1.5 rounded-lg flex items-center justify-center ${
-                                  isReturning ? 'bg-slate-600/30 text-slate-300' : 'bg-blue-600/20 text-blue-400'
+                                  isReturning ? 'bg-slate-600/30 text-slate-300' : typeMeta.badgeClass
                                 }`}>
-                                  {v.type === 'car' ? <Car className="h-4 w-4" /> : <Bike className="h-4 w-4" />}
+                                  {v.type === 'car' ? (
+                                    <Car className="h-4 w-4" />
+                                  ) : v.type === 'motorcycle' ? (
+                                    <FaMotorcycle className="h-4 w-4" />
+                                  ) : (
+                                    <Bike className="h-4 w-4" />
+                                  )}
                                 </div>
-                                <div className="flex items-baseline gap-1.5">
+                                <div className="flex items-center gap-1.5">
                                   <span className="font-mono-code font-bold text-sm text-white">{v.code}</span>
-                                  <span className="text-[10px] text-slate-400 font-semibold uppercase">
-                                    {v.type === 'car' ? 'CAR' : v.type === 'motorcycle' ? 'MOTO' : 'BICI'}
+                                  <span
+                                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${typeMeta.badgeClass}`}
+                                  >
+                                    {typeMeta.shortLabel}
                                   </span>
                                 </div>
                               </div>
@@ -1033,12 +1141,47 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                     <Coffee className="h-3 w-3 text-teal-400" /> Refrigerio
                                   </span>
                                 ) : (
-                                  <span className="border border-rose-500/60 bg-rose-950/70 text-rose-300 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-bold animate-pulse">
-                                    <AlertTriangle className="h-3 w-3 text-rose-400" /> Averiado
+                                  <span
+                                    className={`border text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-bold ${
+                                      breakdownCfg
+                                        ? breakdownCfg.badgeClass
+                                        : 'border-rose-500/60 bg-rose-950/70 text-rose-300'
+                                    }`}
+                                  >
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    {breakdownCfg ? breakdownCfg.shortLabel : 'Averiado'}
                                   </span>
                                 )}
                               </div>
                             </div>
+
+                            {/* Resumen visible inmediato cuando el vehículo está averiado */}
+                            {isBroken && (
+                              <div
+                                className={`mb-2 rounded-xl border p-2 text-[10px] space-y-0.5 ${
+                                  breakdownCfg
+                                    ? breakdownCfg.panelClass
+                                    : 'border-rose-500/40 bg-rose-950/35 text-rose-100'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between font-bold">
+                                  <span>{breakdownCfg ? breakdownCfg.label : 'Avería activa'}</span>
+                                  <span className="font-mono-code">
+                                    ({Math.round(v.position.x)}, {Math.round(v.position.y)})
+                                  </span>
+                                </div>
+                                <p className="opacity-90">
+                                  {breakdownCfg ? breakdownCfg.unavailableText : 'Unidad fuera de servicio temporalmente'}
+                                </p>
+                                <p className="opacity-80">
+                                  {v.breakdownType === 2 || v.breakdownType === 3
+                                    ? isAtCentralWarehouse
+                                      ? '📍 Trasladada al Almacén Central (tras 4h en sitio)'
+                                      : '⏱ En lugar de la avería (permanece 4h antes de traslado a Central)'
+                                    : '📍 Permanece en el lugar de la avería (2h)'}
+                                </p>
+                              </div>
+                            )}
 
                             {/* Métricas: Velocidad, Carga, Entregas */}
                             <div className="grid grid-cols-3 gap-2 my-2 text-center">
@@ -1129,9 +1272,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                 )}
 
                                 {isBroken && (
-                                  <div className="text-right">
-                                    <span className="text-[10px] font-semibold py-0.5 px-2 rounded bg-[var(--color-danger)]/20 text-[var(--color-danger)] border border-[var(--color-danger)]/40">
-                                      Avería en curso
+                                  <div className="flex items-center justify-between gap-2 text-[10px]">
+                                    <span className="text-slate-400 font-mono-code">
+                                      {breakdownCfg ? breakdownCfg.transferText : 'Avería en curso'}
+                                    </span>
+                                    <span
+                                      className={`shrink-0 font-semibold py-0.5 px-2 rounded border ${
+                                        breakdownCfg
+                                          ? breakdownCfg.badgeClass
+                                          : 'bg-[var(--color-danger)]/20 text-[var(--color-danger)] border-[var(--color-danger)]/40'
+                                      }`}
+                                    >
+                                      {breakdownCfg ? breakdownCfg.code : 'Avería'}
                                     </span>
                                   </div>
                                 )}

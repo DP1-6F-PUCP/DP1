@@ -92,8 +92,29 @@ public class MotorSimulacion {
         }
 
         // Punto de cierre: donde quedó cada unidad al final del lote y qué está haciendo.
+        // Si una unidad averiada de Tipo 2 o 3 cumple sus 4 horas de permanencia en sitio dentro
+        // de este lote, se registra el traslado instantáneo (dos puntos con el mismo timestamp)
+        // hacia el almacén central antes de cerrar el lote.
         LocalDateTime finLote = instanteDe(contexto, tiempoFinMaxHoras);
+        Almacen almacenCentral = contexto.almacenes().stream()
+                .filter(com.paqrap.dominio.AlmacenCentral.class::isInstance)
+                .findFirst()
+                .orElse(null);
         for (UnidadTransporte unidad : contexto.vehiculos()) {
+            var averia = unidad.getAveriaActual();
+            if (unidad.getEstado() == EstadoUnidad.AVERIADO
+                    && averia != null
+                    && averia.fechaTrasladoAlmacen() != null
+                    && almacenCentral != null
+                    && !unidad.getPosicion().equals(almacenCentral.getPosicion())
+                    && !finLote.isBefore(averia.fechaTrasladoAlmacen())) {
+                LocalDateTime instanteTraslado = averia.fechaTrasladoAlmacen().isBefore(contexto.marcaTiempoActual())
+                        ? contexto.marcaTiempoActual()
+                        : averia.fechaTrasladoAlmacen();
+                unidad.registrarPuntoTrayectoria(unidad.getPosicion(), instanteTraslado, ActividadVehiculo.INACTIVO);
+                unidad.setPosicion(almacenCentral.getPosicion());
+                unidad.registrarPuntoTrayectoria(almacenCentral.getPosicion(), instanteTraslado, ActividadVehiculo.INACTIVO);
+            }
             unidad.registrarPuntoTrayectoria(unidad.getPosicion(), finLote, unidad.getActividadActual());
         }
 

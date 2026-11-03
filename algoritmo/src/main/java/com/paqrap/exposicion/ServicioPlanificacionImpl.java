@@ -396,14 +396,12 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                 .ifPresent(unidad -> {
                     TipoAveria tipo = TipoAveria.valueOf(ajuste.valorNuevo());
                     LocalDateTime fin = configuracionOperacion.finIndisponibilidadAveria(tipo, fechaInicioSimulada);
-                    unidad.setAveriaActual(new Averia(tipo, fechaInicioSimulada, fin, 0, fechaInicioSimulada));
+                    int permanenciaEnSitioHoras = tipo == TipoAveria.TIPO_1 ? 2 : 4;
+                    LocalDateTime fechaTraslado = tipo == TipoAveria.TIPO_1
+                            ? null
+                            : fechaInicioSimulada.plusHours(permanenciaEnSitioHoras);
+                    unidad.setAveriaActual(new Averia(tipo, fechaInicioSimulada, fin, permanenciaEnSitioHoras, fechaTraslado));
                     unidad.setEstado(EstadoUnidad.AVERIADO);
-                    if (tipo == TipoAveria.TIPO_2 || tipo == TipoAveria.TIPO_3) {
-                        almacenes.stream()
-                                .filter(AlmacenCentral.class::isInstance)
-                                .findFirst()
-                                .ifPresent(central -> unidad.setPosicion(central.getPosicion()));
-                    }
                 });
     }
 
