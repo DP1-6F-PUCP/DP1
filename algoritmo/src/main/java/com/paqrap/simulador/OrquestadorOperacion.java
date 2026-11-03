@@ -108,6 +108,7 @@ public class OrquestadorOperacion {
     private final Set<YearMonth> mesesBloqueosCargados = new HashSet<>();
     private final Set<String> bimestresMantenimientoCargados = new HashSet<>();
     private final Set<Bloqueo> bloqueosNotificados = new HashSet<>();
+    private Set<Bloqueo> bloqueosEnUltimaPlanificacion = Set.of();
     /** Pedidos recién cargados de un archivo oficial, pendientes de incorporarse al próximo lote. */
     private final List<Pedido> pedidosPorIncorporar = new ArrayList<>();
 
@@ -193,6 +194,7 @@ public class OrquestadorOperacion {
         this.ejecucionActual.iniciar();
         this.detenido = false;
         this.bloqueosNotificados.clear();
+        this.bloqueosEnUltimaPlanificacion = Set.of();
         notificarCierreDeLote();
 
         this.programador = Executors.newSingleThreadScheduledExecutor();
@@ -228,7 +230,7 @@ public class OrquestadorOperacion {
      *
      * @throws IllegalStateException si el ciclo no está en curso
      */
-    public void pausar() {
+    public synchronized void pausar() {
         if (detenido || ejecucionActual == null) {
             throw new IllegalStateException("No hay una ejecución en curso para pausar");
         }
@@ -241,7 +243,7 @@ public class OrquestadorOperacion {
      *
      * @throws IllegalStateException si el ciclo no está en curso o no está pausado
      */
-    public void reanudar() {
+    public synchronized void reanudar() {
         if (detenido || ejecucionActual == null) {
             throw new IllegalStateException("No hay una ejecución en curso para reanudar");
         }
@@ -345,7 +347,7 @@ public class OrquestadorOperacion {
      * desempeño. Se detiene automáticamente si detecta un pedido incumplido (falla dura: la
      * política de entrega a tiempo es irrenunciable).
      */
-    public void ejecutarSiguienteLote() {
+    public synchronized void ejecutarSiguienteLote() {
         if (detenido || pausado) {
             return;
         }
@@ -394,9 +396,13 @@ public class OrquestadorOperacion {
         // misma ruta o cambie"): ahora una ruta en curso se mantiene si sigue siendo factible (ver
         // sigueSiendoFactible) y solo se replanifica si dejó de serlo.
         LocalDateTime instanteEvaluacion = contextoProblema.marcaTiempoActual();
+        Set<Bloqueo> bloqueosActuales = todosLosBloqueos.stream()
+                .filter(b -> b.estaVigente(instanteEvaluacion)).collect(java.util.stream.Collectors.toSet());
+        boolean nuevosBloqueos = !bloqueosEnUltimaPlanificacion.containsAll(bloqueosActuales);
+        bloqueosEnUltimaPlanificacion = bloqueosActuales;
         List<Ruta> rutasEnCurso = rutasEnEjecucion.stream()
                 .filter(r -> r.getUnidadTransporte().getActividadActual() == com.paqrap.dominio.ActividadVehiculo.ENTREGANDO
-                        || sigueSiendoFactible(r, instanteEvaluacion))
+                        || (!nuevosBloqueos && sigueSiendoFactible(r, instanteEvaluacion)))
                 .toList();
         abandonarRutasParaReplanificar(rutasEnEjecucion, rutasEnCurso);
         Set<Pedido> pedidosEnRutasEnCurso = rutasEnCurso.stream()
@@ -599,7 +605,7 @@ public class OrquestadorOperacion {
     }
 
     /** Detiene el ciclo periódico. Si la ejecución no terminó por incumplimiento, la marca {@code FINALIZADA}. */
-    public void detener() {
+    public synchronized void detener() {
         detenido = true;
         if (programador != null) {
             programador.shutdown();
@@ -607,6 +613,17 @@ public class OrquestadorOperacion {
         if (ejecucionActual != null && ejecucionActual.getEstado() != EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO) {
             ejecucionActual.setEstado(EstadoEjecucion.FINALIZADA);
         }
+        if (ejecucionActual != null) {
+            ejecucionActual.registrarFin();
+            notificarCierreDeLote();
+        }
+    }
+
+    public String getMotivoFinalizacion() {
+        if (ejecucionActual.getEstado() == EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO) return "COLAPSO";
+        if (fechaFinSimulada != null && !contextoProblema.marcaTiempoActual().isBefore(fechaFinSimulada))
+            return "PERIODO_COMPLETADO";
+        return "PARADA_MANUAL";
     }
 
     public ContextoProblema getContextoProblema() {

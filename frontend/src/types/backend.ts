@@ -155,6 +155,8 @@ export interface ConfiguracionActualDTO {
 }
 
 export interface EstadoOperacionDTO {
+  /** Ejecución que produjo esta instantánea; permite descartar mensajes tardíos. */
+  idEjecucion?: string | null;
   marcaTiempoActual: string | null;
   rutas: RutaDTO[];
   vehiculos: VehiculoDTO[];
@@ -180,6 +182,22 @@ export interface EjecucionEscenarioDTO {
 
 export interface ResultadoCargaDTO {
   nombreArchivo: string;
+}
+
+export interface ReporteSimulacionDTO {
+  idEjecucion: string;
+  tipoEscenario: TipoEscenarioBackend;
+  motivoFinalizacion: 'COLAPSO' | 'PARADA_MANUAL' | 'PERIODO_COMPLETADO';
+  inicioReal: string;
+  finReal: string;
+  duracionRealMs: number;
+  inicioSimulado: string;
+  finSimulado: string;
+  duracionSimuladaMs: number;
+  estadoFinal: EstadoOperacionDTO;
+  pedidosFinales: PedidoDTO[];
+  ultimaPlanificacionEstable: EstadoOperacionDTO | null;
+  pedidosPlanificacionEstable: PedidoDTO[];
 }
 
 export interface TickUpdateDTO {

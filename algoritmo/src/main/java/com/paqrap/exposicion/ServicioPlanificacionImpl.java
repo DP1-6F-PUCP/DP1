@@ -127,12 +127,51 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      */
     private volatile EstadoOperacionDTO estadoPublicado;
     private volatile List<PedidoDTO> pedidosPublicados;
+    private record CierrePublicado(EstadoOperacionDTO estado, List<PedidoDTO> pedidos) {}
+    private final Map<String, CierrePublicado> planificacionesEstables = new ConcurrentHashMap<>();
+    private final Map<String, ReporteSimulacionDTO> reportesFinales = new ConcurrentHashMap<>();
 
     private void publicarEstado(OrquestadorOperacion orquestador) {
         ContextoProblema contexto = orquestador.getContextoProblema();
         pedidosPublicados = orquestador.getPedidosRecibidos().stream().map(EnsambladorRespuestas::aPedidoDTO).toList();
         estadoPublicado = EnsambladorRespuestas.ensamblarEstado(contexto, orquestador.getUltimasRutas(),
-                orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte());
+                orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte())
+                .conEjecucion(orquestador.getEjecucionActual().getIdEjecucion());
+        String id = orquestador.getEjecucionActual().getIdEjecucion();
+        CierrePublicado cierre = new CierrePublicado(estadoPublicado, pedidosPublicados);
+        // El lote que produce el colapso no reemplaza la última planificación sin incumplimientos.
+        if (orquestador.getAnclaUltimoLote() != null && orquestador.getEjecucionActual().getEstado()
+                != com.paqrap.simulador.EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO) {
+            planificacionesEstables.put(id, cierre);
+        }
+        if (orquestador.getEjecucionActual().getFinReal() != null) {
+            reportesFinales.computeIfAbsent(id, clave -> crearReporte(orquestador, cierre));
+        }
+    }
+
+    private ReporteSimulacionDTO crearReporte(OrquestadorOperacion orquestador, CierrePublicado cierre) {
+        var ejecucion = orquestador.getEjecucionActual();
+        var estable = planificacionesEstables.get(ejecucion.getIdEjecucion());
+        var fin = cierre.estado().marcaTiempoActual();
+        return new ReporteSimulacionDTO(ejecucion.getIdEjecucion(), ejecucion.getTipoEscenario().name(),
+                orquestador.getMotivoFinalizacion(), ejecucion.getInicioReal(), ejecucion.getFinReal(),
+                java.time.Duration.between(ejecucion.getInicioReal(), ejecucion.getFinReal()).toMillis(),
+                ejecucion.getFechaInicioSimulada(), fin,
+                java.time.Duration.between(ejecucion.getFechaInicioSimulada(), fin).toMillis(),
+                cierre.estado(), cierre.pedidos(), estable != null ? estable.estado() : null,
+                estable != null ? estable.pedidos() : List.of());
+    }
+
+    @Override
+    public ReporteSimulacionDTO consultarReporteFinal(String idEjecucion) {
+        var conservado = reportesFinales.get(idEjecucion);
+        if (conservado != null) return conservado;
+        var orquestador = orquestadorDe(idEjecucion);
+        synchronized (orquestador) {
+            var reporte = reportesFinales.get(idEjecucion);
+            if (reporte == null) throw new IllegalStateException("El reporte estará disponible al finalizar la ejecución.");
+            return reporte;
+        }
     }
 
     @Override
@@ -166,7 +205,8 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         }
         // Antes de que cierre el primer lote todavía no hay instantánea publicada.
         return EnsambladorRespuestas.ensamblarEstado(orquestador.getContextoProblema(), orquestador.getUltimasRutas(),
-                orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte());
+                orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte())
+                .conEjecucion(orquestador.getEjecucionActual().getIdEjecucion());
     }
 
     @Override
@@ -238,6 +278,8 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
             return orquestadorActivo.getEjecucionActual();
         }
 
+        // Esperar al cierre del lote anterior antes de reutilizar flota y almacenes.
+        ejecuciones.values().forEach(OrquestadorOperacion::detener);
         reiniciarFlotaYAlmacenes(fechaInicioSimulada);
         aplicarAjustesIniciales(ajustesIniciales, fechaInicioSimulada);
 
@@ -268,7 +310,6 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         // Llegar aquí implica que ninguna ejecución previa sigue activa (ver el chequeo de arriba):
         // se descartan para no retener indefinidamente su ContextoProblema (meses de pedidos,
         // bloqueos, historial de rutas) -- antes se acumulaban una por cada corrida del proceso.
-        ejecuciones.values().forEach(OrquestadorOperacion::detener);
         ejecuciones.clear();
         ejecuciones.put(ejecucion.getIdEjecucion(), orquestador);
         idEjecucionActiva = ejecucion.getIdEjecucion();

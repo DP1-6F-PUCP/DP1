@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { escenariosApi } from '../../../services/escenariosApi';
 import { useScenarioStore } from '../../../store/scenarioStore';
 import { useConfigInicialStore } from '../../../store/configInicialStore';
+import { iniciarEjecucion, cerrarEjecucion } from '../../../services/scenarioLifecycle';
 import { SeleccionarEscenarioRequest } from '../../../types/backend';
 
 export function useEscenario() {
@@ -11,14 +12,12 @@ export function useEscenario() {
   const queryClient = useQueryClient();
 
   const iniciarMutation = useMutation({
-    mutationFn: (request: SeleccionarEscenarioRequest) => escenariosApi.iniciarEscenario(request),
+    mutationFn: (request: SeleccionarEscenarioRequest) => iniciarEjecucion(queryClient, request),
     onSuccess: (dto) => {
       setEjecucion(dto);
       // Los ajustes ya forman parte de la configuración vigente del servidor.
       limpiarAjustesPendientes();
-      queryClient.invalidateQueries({ queryKey: ['estado-operacion'] });
-      queryClient.invalidateQueries({ queryKey: ['pedidos'] });
-      queryClient.invalidateQueries({ queryKey: ['configuracion'] });
+
     },
   });
 
@@ -40,10 +39,7 @@ export function useEscenario() {
   });
 
   const detenerMutation = useMutation({
-    mutationFn: (idEjecucion: string) => escenariosApi.detener(idEjecucion),
-    onSuccess: () => {
-      if (ejecucion) setEjecucion({ ...ejecucion, estado: 'FINALIZADA' });
-    },
+    mutationFn: (idEjecucion: string) => cerrarEjecucion(queryClient, idEjecucion),
   });
 
   return {

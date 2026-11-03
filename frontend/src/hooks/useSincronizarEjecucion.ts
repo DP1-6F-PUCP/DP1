@@ -10,30 +10,38 @@ import { useScenarioStore } from '../store/scenarioStore';
  * el reloj dejo de avanzar. Ahora se lee el estado real directamente.
  */
 export function useSincronizarEjecucion() {
+  const transicion = useScenarioStore((s) => s.transicion);
+  const estado = useScenarioStore((s) => s.ejecucion?.estado);
   const idEjecucion = useScenarioStore((s) => s.ejecucion?.idEjecucion);
   const setEjecucion = useScenarioStore((s) => s.setEjecucion);
 
   const query = useQuery({
     queryKey: ['escenario', idEjecucion],
-    queryFn: () => escenariosApi.consultarEscenario(idEjecucion as string),
-    enabled: Boolean(idEjecucion),
+    queryFn: ({ signal }) => escenariosApi.consultarEscenario(idEjecucion as string, signal),
+    enabled: Boolean(idEjecucion) && !transicion && ['INICIADA', 'EN_CURSO', 'PAUSADA'].includes(estado ?? ''),
     refetchInterval: 3000,
   });
 
   useEffect(() => {
-    if (query.data) {
+    if (!transicion && query.data && query.data.idEjecucion === idEjecucion
+        && useScenarioStore.getState().ejecucion?.idEjecucion === idEjecucion
+        && ['INICIADA', 'EN_CURSO', 'PAUSADA'].includes(useScenarioStore.getState().ejecucion?.estado ?? '')) {
       setEjecucion(query.data);
     }
-  }, [query.data, setEjecucion]);
+  }, [query.data, idEjecucion, transicion, setEjecucion]);
 
   // El backend ya no conoce esta ejecución (se reinició, o se inició otra después de que esta
   // terminara): adoptar la activa actual, si la hay, en vez de quedar consultando un id muerto
   // con la vista congelada.
   useEffect(() => {
-    if (!query.isError) return;
+    if (!query.isError || transicion) return;
+    let cancelada = false;
+    const vigente = () => !cancelada && !useScenarioStore.getState().transicion
+      && useScenarioStore.getState().ejecucion?.idEjecucion === idEjecucion;
     escenariosApi
       .consultarActiva()
-      .then((activa) => setEjecucion(activa))
-      .catch(() => setEjecucion(null));
-  }, [query.isError, setEjecucion]);
+      .then((activa) => { if (vigente()) setEjecucion(activa); })
+      .catch(() => { if (vigente()) setEjecucion(null); });
+    return () => { cancelada = true; };
+  }, [query.isError, idEjecucion, transicion, setEjecucion]);
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { DashboardPage } from '../pages/DashboardPage';
@@ -22,13 +23,17 @@ import { useScenarioStore } from '../store/scenarioStore';
 import { useThemeStore } from '../store/themeStore';
 import { OperacionTopbar } from '../components/OperacionTopbar';
 import { SimulationFinishedModal } from '../components/SimulationFinishedModal';
+import { useReporteFinal } from '../hooks/useReporteFinal';
 
 const ESTADOS_ACTIVOS = new Set(['INICIADA', 'EN_CURSO', 'PAUSADA']);
 
 const RootLayout: React.FC = () => {
   useSimulationSocket();
   useSincronizarEjecucion();
+  const reporteFinal = useReporteFinal();
+  const inicioVisibleMs = useScenarioStore((s) => s.playbackStartedAtMs);
 
+  const transicion = useScenarioStore((s) => s.transicion);
   const isDark = useThemeStore((s) => s.isDark);
   const ejecucion = useScenarioStore((s) => s.ejecucion);
   const selectedScenarioType = useScenarioStore((s) => s.selectedScenarioType);
@@ -37,8 +42,6 @@ const RootLayout: React.FC = () => {
   const navigate = useNavigate();
 
   const hasActiveExecution = Boolean(ejecucion && ESTADOS_ACTIVOS.has(ejecucion.estado));
-  const simulationStoppedByBreach = ejecucion?.estado === 'DETENIDA_POR_INCUMPLIMIENTO';
-  const simulationFinished = simulationStoppedByBreach;
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -56,16 +59,11 @@ const RootLayout: React.FC = () => {
   const simMinutesVisible = visual.marcaVisibleMs != null && scenarioStartMs != null
     ? Math.round((visual.marcaVisibleMs - scenarioStartMs) / 60000)
     : 0;
-  // El modal de fin muestra el estado FINAL real (en vivo), no el retrasado.
-  const failedOrder = orders.find((order) => order.status === 'delayed') ?? null;
-  const failedOrderVehicle = failedOrder?.assignedVehicleId
-    ? vehicles.find((vehicle) => vehicle.id === failedOrder.assignedVehicleId) ?? null
-    : null;
 
   return (
     <LiveAnnouncer>
       <ToastProvider historyScope={ejecucion?.idEjecucion ?? 'global'}>
-        <div className="flex h-screen w-screen overflow-hidden bg-[#0B111E] text-slate-100 font-sans select-none">
+        <div className="relative flex h-screen w-screen overflow-hidden bg-[#0B111E] text-slate-100 font-sans select-none">
           {/* SIDEBAR IZQUIERDO:
               - Antes de la simulación: SidebarLeft (logo, Carga de Datos, selección de escenarios, Config)
               - Durante la simulación: SidebarRight (Operación, Semáforo de flota, Seguimiento, Averías)
@@ -111,6 +109,17 @@ const RootLayout: React.FC = () => {
             </main>
           </div>
 
+          {transicion && (
+            <div role="status" aria-live="polite" aria-busy="true"
+              className="absolute inset-0 z-[5000] flex items-center justify-center bg-[var(--color-background)] text-[var(--color-text-primary)]">
+              <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-700/60 bg-[var(--color-surface)] p-8 text-center shadow-xl">
+                <Loader2 className="h-9 w-9 animate-spin text-blue-500" aria-hidden="true" />
+                <p className="text-base font-semibold">{transicion === 'cerrando' ? 'Cerrando escenario…' : transicion === 'preparando' ? 'Preparando el nuevo escenario…' : 'Iniciando escenario…'}</p>
+                <p className="text-sm text-slate-400">{transicion === 'cerrando' ? 'Finalizando la ejecución y limpiando sus datos.' : 'Cargando los datos iniciales de la nueva ejecución.'}</p>
+              </div>
+            </div>
+          )}
+
           {/* Modales globales pre-simulación */}
           <ConfigModal
             isOpen={isConfigOpen}
@@ -118,9 +127,11 @@ const RootLayout: React.FC = () => {
           />
 
           <SimulationFinishedModal
-            isOpen={simulationFinished}
-            order={failedOrder}
-            vehicle={failedOrderVehicle}
+            isOpen={reporteFinal.abierto}
+            reporte={reporteFinal.data}
+            inicioVisibleMs={inicioVisibleMs}
+            isError={reporteFinal.isError}
+            onRetry={() => { void reporteFinal.refetch(); }}
             onAccept={() => {
               setEjecucion(null);
               setShowDataFiles(false);

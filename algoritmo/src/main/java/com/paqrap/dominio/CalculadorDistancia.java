@@ -63,6 +63,16 @@ public final class CalculadorDistancia {
     public static List<Nodo> caminoMasCorto(Ciudad ciudad, List<Bloqueo> bloqueos, LocalDateTime instante,
             Nodo origen, Nodo destino) {
         List<Bloqueo> vigentes = bloqueos.stream().filter(bloqueo -> bloqueo.estaVigente(instante)).toList();
+        return caminoConBloqueos(ciudad, vigentes, origen, destino);
+    }
+
+    /** Camino conservador ante bloqueos que empiezan mientras se recorre la siguiente cuadra. */
+    public static List<Nodo> caminoMasCortoEnIntervalo(Ciudad ciudad, List<Bloqueo> bloqueos,
+            LocalDateTime desde, LocalDateTime hasta, Nodo origen, Nodo destino) {
+        return caminoConBloqueos(ciudad, Bloqueo.filtrarEnHorizonte(bloqueos, desde, hasta), origen, destino);
+    }
+
+    private static List<Nodo> caminoConBloqueos(Ciudad ciudad, List<Bloqueo> vigentes, Nodo origen, Nodo destino) {
         if (vigentes.isEmpty()) {
             return caminoManhattan(ciudad, origen, destino);
         }
@@ -98,6 +108,7 @@ public final class CalculadorDistancia {
             if (vigentes.stream().anyMatch(bloqueo -> bloqueo.interfiereCon(actual, siguiente))) {
                 return false;
             }
+            if (!permiteExtremos(vigentes, actual, siguiente)) return false;
             // Nodo intermedio de la poligonal de un bloqueo: aunque este tramo puntual no coincida
             // con interfiereCon, pasar POR ese nodo (para seguir derecho o girar) tampoco esta
             // permitido -- solo esta permitido si es el origen/destino (ya excluidos del set).
@@ -160,6 +171,7 @@ public final class CalculadorDistancia {
                 if (tramoBloqueado) {
                     continue;
                 }
+                if (!permiteExtremos(vigentes, actual, vecino)) continue;
                 // Nodo de un bloqueo: no se permite pasar por el ni girar ahi (regla dura del
                 // curso, ver el comentario de caminoMasCorto) -- salvo que sea el destino mismo.
                 if (nodosBloqueados.contains(vecino) && !vecino.equals(destino)) {
@@ -174,6 +186,21 @@ public final class CalculadorDistancia {
             }
         }
         return null;
+    }
+
+    private static boolean permiteExtremos(List<Bloqueo> vigentes, Nodo origen, Nodo destino) {
+        return vigentes.stream().allMatch(b ->
+            (!b.getSecuenciaNodos().contains(origen) || b.permiteAccesoPerpendicular(origen, destino))
+            && (!b.getSecuenciaNodos().contains(destino) || b.permiteAccesoPerpendicular(destino, origen)));
+    }
+
+    /** Una calle cerrada tampoco se puede cruzar por un nodo perpendicular de paso. */
+    public static boolean esPasoTransitable(List<Bloqueo> bloqueos, LocalDateTime desde, LocalDateTime hasta,
+            Nodo origen, Nodo destino, boolean esDestinoFinal) {
+        List<Bloqueo> vigentes = Bloqueo.filtrarEnHorizonte(bloqueos, desde, hasta);
+        return permiteExtremos(vigentes, origen, destino) && vigentes.stream().noneMatch(b ->
+            b.interfiereCon(origen, destino)
+            || (!esDestinoFinal && b.getSecuenciaNodos().contains(destino)));
     }
 
     /** Heurística admisible y consistente: distancia Manhattan en cantidad de saltos de la grilla. */

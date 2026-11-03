@@ -142,6 +142,8 @@ public interface ServicioPlanificacion {
      */
     EjecucionEscenario consultarEjecucion(String idEjecucion);
 
+    ReporteSimulacionDTO consultarReporteFinal(String idEjecucion);
+
     /**
      * Bug real corregido: sin este método no había forma de que un cliente nuevo (p. ej. una
      * pestaña recién abierta o recargada) descubriera que ya hay una ejecución activa -- solo

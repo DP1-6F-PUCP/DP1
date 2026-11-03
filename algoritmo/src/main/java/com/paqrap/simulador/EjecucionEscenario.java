@@ -9,6 +9,8 @@ public class EjecucionEscenario {
     private final TipoEscenario tipoEscenario;
     private EstadoEjecucion estado;
     private final LocalDateTime fechaInicio;
+    private final java.time.Instant inicioReal = java.time.Instant.now();
+    private java.time.Instant finReal;
     private final LocalDateTime fechaInicioSimulada;
     // sa/k se guardan aqui (no solo en OrquestadorOperacion) para poder exponerlos via
     // EjecucionEscenarioDTO: con horasAvance=(sa/60)*k por lote repartido en sa minutos reales, la
@@ -53,6 +55,10 @@ public class EjecucionEscenario {
     public LocalDateTime getFechaInicio() {
         return fechaInicio;
     }
+
+    public java.time.Instant getInicioReal() { return inicioReal; }
+    public java.time.Instant getFinReal() { return finReal; }
+    public void registrarFin() { if (finReal == null) finReal = java.time.Instant.now(); }
 
     public LocalDateTime getFechaInicioSimulada() {
         return fechaInicioSimulada;

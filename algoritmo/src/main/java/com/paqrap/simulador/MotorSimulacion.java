@@ -531,6 +531,7 @@ public class MotorSimulacion {
         double tiempoActual = tiempoInicial;
         double distanciaRecorrida = distanciaInicial;
         Nodo nodoActual = camino.isEmpty() ? unidad.getPosicion() : camino.get(0);
+        Nodo objetivo = camino.isEmpty() ? nodoActual : camino.get(camino.size() - 1);
         double kmPorCuadra = contexto.ciudad().distanciaEntreNodos();
         if (camino.size() > 1) {
             // Instante de partida: si antes hubo una pausa en este mismo nodo (entrega,
@@ -545,13 +546,38 @@ public class MotorSimulacion {
             Nodo destinoPaso = camino.get(i + 1);
             Nodo origenPaso = nodoActual;
             LocalDateTime instante = contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0));
-            boolean bloqueado = contexto.bloqueos().stream()
-                    .anyMatch(b -> b.estaVigente(instante) && b.interfiereCon(origenPaso, destinoPaso));
-            if (bloqueado) {
-                return new ResultadoTramo(tiempoActual, distanciaRecorrida, nodoActual, true);
-            }
-
             double tiempoPaso = kmPorCuadra / velocidad;
+            LocalDateTime llegadaPaso = instanteDe(contexto, Math.min(tiempoActual + tiempoPaso, tiempoFinMaxHoras));
+            boolean saliendoDeBloqueo = contexto.bloqueos().stream()
+                    .anyMatch(b -> b.estaVigente(instante) && b.getSecuenciaNodos().contains(origenPaso));
+            Nodo regreso = unidad.getNodoAnteriorRecorrido();
+            boolean requiereRegreso = saliendoDeBloqueo && regreso != null && !destinoPaso.equals(regreso);
+            if (requiereRegreso || !CalculadorDistancia.esPasoTransitable(contexto.bloqueos(), instante, llegadaPaso,
+                    origenPaso, destinoPaso, destinoPaso.equals(objetivo))) {
+                try {
+                    List<Nodo> desvio = new ArrayList<>();
+                    if (saliendoDeBloqueo && regreso != null) {
+                        if (!CalculadorDistancia.esPasoTransitable(contexto.bloqueos(), instante, llegadaPaso,
+                                origenPaso, regreso, regreso.equals(objetivo))) {
+                            return new ResultadoTramo(tiempoActual, distanciaRecorrida, nodoActual, true);
+                        }
+                        desvio.add(origenPaso);
+                        desvio.addAll(CalculadorDistancia.caminoMasCortoEnIntervalo(contexto.ciudad(),
+                                contexto.bloqueos(), instante, llegadaPaso, regreso, objetivo));
+                    } else {
+                        desvio.addAll(CalculadorDistancia.caminoMasCortoEnIntervalo(contexto.ciudad(),
+                                contexto.bloqueos(), instante, llegadaPaso, origenPaso, objetivo));
+                    }
+                    if (desvio.size() < 2 || desvio.equals(camino.subList(i, camino.size()))) {
+                        return new ResultadoTramo(tiempoActual, distanciaRecorrida, nodoActual, true);
+                    }
+                    camino = desvio;
+                    i = -1;
+                    continue;
+                } catch (IllegalStateException sinDesvio) {
+                    return new ResultadoTramo(tiempoActual, distanciaRecorrida, nodoActual, true);
+                }
+            }
             tiempoActual += tiempoPaso;
             distanciaRecorrida += kmPorCuadra;
             double costoAcum = distanciaRecorrida * costoKm;

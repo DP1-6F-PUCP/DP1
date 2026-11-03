@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { simulationSocket } from '../services/simulationSocket';
+import { useScenarioStore } from '../store/scenarioStore';
 import { EstadoOperacionDTO } from '../types/backend';
 
 /**
@@ -13,19 +14,25 @@ import { EstadoOperacionDTO } from '../types/backend';
  */
 export function useSimulationSocket() {
   const queryClient = useQueryClient();
+  const ejecucion = useScenarioStore((s) => s.ejecucion);
+  const transicion = useScenarioStore((s) => s.transicion);
+  const id = ejecucion && ['INICIADA', 'EN_CURSO', 'PAUSADA'].includes(ejecucion.estado) ? ejecucion.idEjecucion : null;
 
   useEffect(() => {
+    if (!id || transicion) return;
     simulationSocket.connect();
     const unsubscribe = simulationSocket.subscribe((tick) => {
-      queryClient.setQueryData<EstadoOperacionDTO>(['estado-operacion'], tick.estado);
-      queryClient.invalidateQueries({ queryKey: ['pedidos'] });
+      const current = useScenarioStore.getState();
+      if (current.transicion || current.ejecucion?.idEjecucion !== id || tick.estado.idEjecucion !== id) return;
+      queryClient.setQueryData<EstadoOperacionDTO>(['estado-operacion', id], tick.estado);
+      queryClient.invalidateQueries({ queryKey: ['pedidos', id] });
     });
 
     return () => {
       unsubscribe();
       simulationSocket.disconnect();
     };
-  }, [queryClient]);
+  }, [queryClient, id, transicion]);
 }
 
 /** true mientras el WebSocket de simulacion esta abierto. */

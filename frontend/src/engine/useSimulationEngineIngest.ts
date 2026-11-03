@@ -20,6 +20,7 @@ interface IngestInput {
  * cada lote como un cuadro y la UI lee el estado retrasado con useEstadoVisual.
  */
 export function useSimulationEngineIngest({ vehicles, routes, orders, warehouses, blockedStreets, estadoRaw }: IngestInput): void {
+  const transicion = useScenarioStore((s) => s.transicion);
   const idEjecucion = useScenarioStore((s) => s.ejecucion?.idEjecucion);
   const sa = useScenarioStore((s) => s.ejecucion?.sa);
   const k = useScenarioStore((s) => s.ejecucion?.k) ?? 0;
@@ -34,7 +35,7 @@ export function useSimulationEngineIngest({ vehicles, routes, orders, warehouses
 
   useEffect(() => {
     // Las consultas se completan por separado; no sustituir una flota válida por un vacío de carga.
-    if (!idEjecucion || !estadoRaw || (estadoRaw.vehiculos.length > 0 && vehicles.length === 0)) return;
+    if (transicion || !idEjecucion || !estadoRaw || (estadoRaw.vehiculos.length > 0 && vehicles.length === 0)) return;
     simulationEngine.ingest({ vehicles, routes, frame, idEjecucion, sa, marcaTiempoActual, k, avanzando });
-  }, [vehicles, routes, frame, idEjecucion, sa, marcaTiempoActual, k, avanzando]);
+  }, [vehicles, routes, frame, idEjecucion, sa, marcaTiempoActual, k, avanzando, transicion]);
 }

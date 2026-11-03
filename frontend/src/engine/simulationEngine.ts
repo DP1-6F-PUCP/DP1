@@ -2,6 +2,7 @@ import { Point, Route, TrajectoryPoint, Vehicle, VehicleStatus } from '../types'
 import { EngineSnapshot, EstadoVisual, FrameData, GrupoDetenido } from './types';
 import { ordersAtSimulatedTime } from '../utils/orderVisibility';
 import { parseBackendSimulatedTime } from '../utils/backendTime';
+import { adaptBloqueo } from '../utils/backendAdapters';
 
 /**
  * Motor de simulacion del front: singleton fuera del arbol de React, unica fuente de verdad del
@@ -204,14 +205,81 @@ export class SimulationEngine {
   private claveVisual = '';
   private visualListeners = new Set<() => void>();
   private ultimoSimNow: number | null = null;
+  private inicioPreparadoMs: number | null = null;
+  private preparandoReproduccion = false;
+  private retrasoPreparadoMs = 0;
   private pedidosConocidos = new Map<string, FrameData['orders'][number]>();
   private ultimoSnapshot: EngineSnapshot = { vehiclePositions: new Map(), gruposDetenidos: [], buffering: true, nowSimMs: null, segundosDesdeUltimoLote: 0 };
+
+  /** Descartar completamente el estado visual de una ejecución cerrada. */
+  reset(): void {
+    this.idEjecucionAnterior = undefined;
+    this.inicioPreparadoMs = null;
+    this.preparandoReproduccion = false;
+    this.retrasoPreparadoMs = 0;
+    this.pedidosConocidos.clear();
+    this.lineas.clear();
+    this.futuros.clear();
+    this.cuadros = [];
+    this.estadoVisual = null;
+    this.claveVisual = '';
+    this.ultimoSimNow = null;
+    this.relojMarcaConocidaValor = null;
+    this.relojMarcaConocidaMs = null;
+    this.relojInstanteConocidoMs = performance.now();
+    this.bufferingDesdeMs = performance.now();
+    this.buffering = true;
+    this.k = 0;
+    this.avanzando = false;
+    this.ultimoSnapshot = { vehiclePositions: new Map(), gruposDetenidos: [], buffering: true, nowSimMs: null, segundosDesdeUltimoLote: 0 };
+    for (const fn of this.visualListeners) fn();
+    for (const fn of this.listeners) fn(this.ultimoSnapshot);
+  }
+
+  /** Anclar una ejecución recién iniciada a su hora elegida, antes de mostrar el mapa. */
+  beginExecution(id: string, inicioMs: number, prepararReproduccion = false): void {
+    this.reset();
+    this.idEjecucionAnterior = id;
+    this.inicioPreparadoMs = Number.isFinite(inicioMs) ? inicioMs : null;
+    this.ultimoSimNow = this.inicioPreparadoMs;
+    this.preparandoReproduccion = prepararReproduccion;
+    this.ultimoSnapshot = { ...this.ultimoSnapshot, nowSimMs: this.inicioPreparadoMs };
+  }
+
+  /** Esperar datos reales suficientes para cubrir Sa y el margen de recepción. */
+  isPlaybackReady(): boolean {
+    const inicio = this.cuadros[0]?.marcaMs;
+    const fin = this.cuadros.at(-1)?.marcaMs;
+    return this.k > 0 && inicio != null && fin != null
+      && fin - inicio >= this.renderDelayMs * this.k;
+  }
+
+  /** Consumir la espera durante la carga; la reproducción arranca en el primer instante. */
+  startPreparedPlayback(): void {
+    if (!this.preparandoReproduccion || !this.isPlaybackReady()) {
+      throw new Error('Todavía no hay datos suficientes para iniciar la reproducción.');
+    }
+    const inicio = this.cuadros[0].marcaMs!;
+    const fin = this.cuadros.at(-1)!.marcaMs!;
+    const ahora = performance.now();
+    this.retrasoPreparadoMs = (fin - inicio) / this.k;
+    this.renderDelayMs = this.retrasoPreparadoMs;
+    for (const cuadro of this.cuadros) {
+      cuadro.arrivalMs = ahora - (fin - cuadro.marcaMs!) / this.k;
+    }
+    this.preparandoReproduccion = false;
+    this.buffering = false;
+    this.advance();
+  }
 
   /** Llamado cada vez que cambian los datos en vivo (push WS o poll) -- NUNCA desde el render. */
   ingest(params: IngestParams): void {
     const { vehicles, routes, frame, idEjecucion, sa, marcaTiempoActual, k, avanzando } = params;
+    // Comprobar la procedencia antes de tocar la identidad o el reloj del motor.
+    if (frame.estadoRaw?.idEjecucion && frame.estadoRaw.idEjecucion !== idEjecucion) return;
 
-    this.renderDelayMs = sa && sa > 0 ? sa * 60_000 + MARGEN_LATENCIA_POLLING_MS : RENDER_DELAY_RESPALDO_MS;
+    this.renderDelayMs = Math.max(this.retrasoPreparadoMs,
+      sa && sa > 0 ? sa * 60_000 + MARGEN_LATENCIA_POLLING_MS : RENDER_DELAY_RESPALDO_MS);
     this.k = k;
     this.avanzando = avanzando;
 
@@ -247,6 +315,13 @@ export class SimulationEngine {
     if (marcaMs != null && ultimaMarca != null && marcaMs < ultimaMarca) return;
     for (const pedido of frame.orders) this.pedidosConocidos.set(pedido.id, pedido);
     const cuadro = { ...frame, orders: [...this.pedidosConocidos.values()] };
+    // El primer lote puede llegar adelantado por el cómputo inicial del servidor.
+    // Conservar un cuadro inicial en la hora elegida para no arrancar desde el final de ese lote.
+    if (this.cuadros.length === 0 && this.inicioPreparadoMs != null && marcaMs != null) {
+      if (marcaMs < this.inicioPreparadoMs) return;
+      this.registrarCuadro(cuadro, new Date(this.inicioPreparadoMs).toISOString());
+      this.inicioPreparadoMs = null;
+    }
     const loteNuevo = this.registrarCuadro(cuadro, marcaTiempoActual);
 
     const idsActuales = new Set(vehicles.map((v) => v.id));
@@ -260,12 +335,12 @@ export class SimulationEngine {
     for (const v of vehicles) {
       const rutaActiva = routes.find((r) => r.vehicleId === v.id && r.status === 'in_progress');
       this.futuros.set(v.id, rutaActiva?.waypoints ?? v.returnPath ?? []);
-      if (loteNuevo) {
+      if (loteNuevo || !this.lineas.has(v.id)) {
         this.agregarTrayectoria(v);
       }
     }
 
-    if (this.cuadros.length >= 2) {
+    if (!this.preparandoReproduccion && this.cuadros.length >= 2) {
       this.buffering = false;
     }
     this.advance();
@@ -359,11 +434,11 @@ export class SimulationEngine {
     const ahoraReal = performance.now();
     const renderTimeMs = ahoraReal - this.renderDelayMs;
 
-    if (ahoraReal - this.bufferingDesdeMs > this.renderDelayMs * 2) {
+    if (!this.preparandoReproduccion && ahoraReal - this.bufferingDesdeMs > this.renderDelayMs * 2) {
       this.buffering = false;
     }
 
-    const calculado = this.relojEnRender(renderTimeMs);
+    const calculado = this.preparandoReproduccion ? this.ultimoSimNow : this.relojEnRender(renderTimeMs);
     const simNow = calculado == null ? this.ultimoSimNow
       : this.ultimoSimNow == null ? calculado : Math.max(this.ultimoSimNow, calculado);
     this.ultimoSimNow = simNow;
@@ -406,22 +481,31 @@ export class SimulationEngine {
 
     const marcaVisibleMs = simNow ?? base.marcaMs;
     const orders = ordersAtSimulatedTime(base.data.orders, marcaVisibleMs);
+    // `vigente` corresponde al final del lote del servidor, no al reloj visible interpolado.
+    const bloqueosVisibles = base.data.estadoRaw && marcaVisibleMs != null
+      ? (base.data.estadoRaw.bloqueos ?? []).map((bloqueo, index) => ({ bloqueo, index })).filter(({ bloqueo }) =>
+        parseBackendSimulatedTime(bloqueo.fechaInicio) <= marcaVisibleMs
+          && marcaVisibleMs <= parseBackendSimulatedTime(bloqueo.fechaFin))
+      : null;
     let firma = '';
     for (const v of base.data.vehicles) {
       const e = estados.get(v.id);
       firma += `${v.id}:${e?.moviendo ?? false}:${e?.act ?? '-'}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
     }
     // La lista puede cambiar dentro del mismo lote, incluso sin vehículos en movimiento.
-    const clave = JSON.stringify([base.arrivalMs, firma, orders.map((order) => order.id)]);
+    const clave = JSON.stringify([base.arrivalMs, firma, orders.map((order) => order.id),
+      bloqueosVisibles?.map((b) => b.index) ?? base.data.blockedStreets.map((b) => b.id)]);
     if (clave === this.claveVisual) return;
     this.claveVisual = clave;
+    const blockedStreets = bloqueosVisibles
+      ? bloqueosVisibles.flatMap(({ bloqueo, index }) => adaptBloqueo(bloqueo, index)) : base.data.blockedStreets;
 
     const vehicles = base.data.vehicles.map((v) => {
       const e = estados.get(v.id);
       if (!e) return v;
       return { ...v, status: statusVisible(v.status, e.act, e.moviendo), position: e.nodo };
     });
-    this.estadoVisual = { ...base.data, vehicles, orders, marcaVisibleMs };
+    this.estadoVisual = { ...base.data, vehicles, orders, blockedStreets, marcaVisibleMs };
     for (const fn of this.visualListeners) fn();
   }
 

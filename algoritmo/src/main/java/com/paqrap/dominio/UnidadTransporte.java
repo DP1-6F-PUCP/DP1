@@ -10,6 +10,7 @@ public class UnidadTransporte {
     private final String idUnidad;
     private EstadoUnidad estado;
     private Nodo posicion;
+    private Nodo nodoAnteriorRecorrido;
     private final TipoVehiculo tipoVehiculo;
     private Averia averiaActual;
     // rutas nunca se recorta -- acumula TODO el historial de despachos de la unidad durante la
@@ -54,6 +55,7 @@ public class UnidadTransporte {
     public synchronized void registrarPuntoTrayectoria(Nodo nodo, LocalDateTime instante, ActividadVehiculo actividad) {
         if (!trayectoriaLote.isEmpty()) {
             PuntoTrayectoria ultimo = trayectoriaLote.get(trayectoriaLote.size() - 1);
+            if (!ultimo.nodo().equals(nodo)) nodoAnteriorRecorrido = ultimo.nodo();
             if (instante.isBefore(ultimo.instante())) {
                 instante = ultimo.instante(); // nunca hacia atrás en el tiempo
             }
@@ -91,6 +93,10 @@ public class UnidadTransporte {
 
     public Nodo getPosicion() {
         return posicion;
+    }
+
+    public Nodo getNodoAnteriorRecorrido() {
+        return nodoAnteriorRecorrido;
     }
 
     public void setPosicion(Nodo posicion) {
@@ -150,6 +156,7 @@ public class UnidadTransporte {
      */
     public synchronized void reiniciarParaNuevaEjecucion(Nodo posicionInicial, LocalDateTime inicioTurno) {
         this.posicion = posicionInicial;
+        this.nodoAnteriorRecorrido = null;
         this.estado = EstadoUnidad.DISPONIBLE;
         this.averiaActual = null;
         this.rutas.clear();

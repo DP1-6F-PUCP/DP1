@@ -107,6 +107,19 @@ public class Bloqueo {
         return false;
     }
 
+    /** Acceso a una entrega: perpendicular a todos los segmentos incidentes del bloqueo. */
+    public boolean permiteAccesoPerpendicular(Nodo nodo, Nodo vecino) {
+        int dx = vecino.x() - nodo.x();
+        int dy = vecino.y() - nodo.y();
+        for (int i = 0; i < secuenciaNodos.size() - 1; i++) {
+            Nodo a = secuenciaNodos.get(i);
+            Nodo b = secuenciaNodos.get(i + 1);
+            if ((a.equals(nodo) || b.equals(nodo))
+                    && dx * (b.x() - a.x()) + dy * (b.y() - a.y()) != 0) return false;
+        }
+        return true;
+    }
+
     /**
      * Recorta una lista de bloqueos a los que realmente pueden ser consultados dentro de
      * {@code [desde, hasta]}, descartando los que ya terminaron antes o empiezan después de esa

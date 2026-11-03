@@ -68,7 +68,8 @@ public final class EnsambladorRespuestas {
                 // -- contexto.bloqueos() es el universo completo cargado (mes actual + siguiente, más
                 // de 1000 en datos reales) y era ~95% del estado enviado en CADA lote (≈330 KB de
                 // 355 KB medidos), cuando el visualizador solo dibuja los vigentes.
-                Bloqueo.filtrarEnHorizonte(contexto.bloqueos(), contexto.marcaTiempoActual(),
+                // Incluir también los que vencieron DENTRO del lote: el mapa aún lo reproduce.
+                Bloqueo.filtrarEnHorizonte(contexto.bloqueos(), anclaEventos != null ? anclaEventos : contexto.marcaTiempoActual(),
                         contexto.marcaTiempoActual().plusHours(HORAS_BLOQUEOS_VISIBLES)).stream()
                         .map(b -> aBloqueoDTO(b, contexto.marcaTiempoActual())).toList(),
                 eventosRecientes.stream().map(evento -> aEventoDTO(evento, anclaEventos)).toList(),

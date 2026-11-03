@@ -21,25 +21,32 @@ const POLL_SIN_SOCKET_MS = 3_000;
  * queda para la ingesta del motor y para acciones que se envían al backend.
  */
 export function useEstadoOperacion() {
+  const ejecucion = useScenarioStore((s) => s.ejecucion);
+  const transicion = useScenarioStore((s) => s.transicion);
+  const activa = ejecucion && ['INICIADA', 'EN_CURSO', 'PAUSADA'].includes(ejecucion.estado);
+  const id = activa ? ejecucion.idEjecucion : null;
   const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
   const socketConectado = useSocketConectado();
   const intervalo = socketConectado ? POLL_CON_SOCKET_MS : POLL_SIN_SOCKET_MS;
 
   const estadoQuery = useQuery({
-    queryKey: ['estado-operacion'],
-    queryFn: () => estadoOperacionApi.getEstado(),
+    queryKey: ['estado-operacion', id],
+    queryFn: ({ signal }) => estadoOperacionApi.getEstado(signal, id ?? undefined),
+    enabled: Boolean(id) && !transicion,
     refetchInterval: intervalo,
   });
 
   const pedidosQuery = useQuery({
-    queryKey: ['pedidos'],
-    queryFn: () => estadoOperacionApi.getPedidos(),
+    queryKey: ['pedidos', id],
+    queryFn: ({ signal }) => estadoOperacionApi.getPedidos(undefined, signal),
+    enabled: Boolean(id) && !transicion,
     refetchInterval: intervalo,
   });
 
   const configuracionQuery = useQuery({
     queryKey: ['configuracion'],
-    queryFn: () => configuracionApi.getConfiguracion(),
+    queryFn: ({ signal }) => configuracionApi.getConfiguracion(signal),
+    enabled: !transicion,
     staleTime: 60_000,
   });
 

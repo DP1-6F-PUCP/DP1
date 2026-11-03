@@ -100,6 +100,11 @@ public class SimulacionController {
         return ApiResponseDTO.of(aDTO(ejecucion));
     }
 
+    @GetMapping("/api/escenarios/{id}/reporte")
+    public ApiResponseDTO<com.paqrap.exposicion.ReporteSimulacionDTO> consultarReporte(@PathVariable String id) {
+        return ApiResponseDTO.of(servicioPlanificacion.consultarReporteFinal(id));
+    }
+
     @PostMapping("/api/escenarios/{id}/pausar")
     public ApiResponseDTO<Void> pausar(@PathVariable String id) {
         servicioPlanificacion.pausarEjecucion(id);

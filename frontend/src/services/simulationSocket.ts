@@ -38,9 +38,11 @@ class SimulationSocketService {
     const url = base || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/simulation`;
 
     try {
-      this.ws = new WebSocket(url);
-      this.ws.onopen = () => this.setConectado(true);
-      this.ws.onmessage = (event) => {
+      const socket = new WebSocket(url);
+      this.ws = socket;
+      socket.onopen = () => { if (this.ws === socket) this.setConectado(true); };
+      socket.onmessage = (event) => {
+        if (this.ws !== socket) return;
         try {
           const tick = JSON.parse(event.data) as TickUpdateDTO;
           this.listeners.forEach((fn) => fn(tick));
@@ -48,13 +50,14 @@ class SimulationSocketService {
           // mensaje no parseable, se ignora
         }
       };
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        if (this.ws !== socket) return;
         this.ws = null;
         this.setConectado(false);
         this.scheduleReconnect();
       };
-      this.ws.onerror = () => {
-        this.ws?.close();
+      socket.onerror = () => {
+        socket.close();
       };
     } catch {
       this.ws = null;

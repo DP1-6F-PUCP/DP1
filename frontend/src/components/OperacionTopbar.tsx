@@ -36,6 +36,7 @@ const formatearTranscurrido = (ms: number | null, siempreIncluirDias = false): s
 export const OperacionTopbar: React.FC = () => {
   const { ejecucion, pausar, reanudar, detener, isPausando, isReanudando, isDeteniendo } = useEscenario();
   const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
+  const playbackStartedAtMs = useScenarioStore((s) => s.playbackStartedAtMs);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export const OperacionTopbar: React.FC = () => {
 
   const snapshot = simulationEngine.getSnapshotNow();
   const fechaInicioRealMs = (() => {
+    if (playbackStartedAtMs != null) return playbackStartedAtMs;
     if (!ejecucion?.fechaInicio) return null;
     const rawStr = ejecucion.fechaInicio;
     const msUtc = Date.parse(rawStr);

@@ -13,25 +13,27 @@ import { useScenarioStore } from '../store/scenarioStore';
  * adopta si el backend reporta una activa.
  */
 export function useDescubrirEjecucionActiva() {
+  const transicion = useScenarioStore((s) => s.transicion);
   const ejecucion = useScenarioStore((s) => s.ejecucion);
   const setEjecucion = useScenarioStore((s) => s.setEjecucion);
 
   const query = useQuery({
     queryKey: ['escenario-activa'],
-    queryFn: () => escenariosApi.consultarActiva(),
-    enabled: !ejecucion,
-    staleTime: Infinity,
+    queryFn: ({ signal }) => escenariosApi.consultarActiva(signal),
+    enabled: !ejecucion && !transicion,
+    staleTime: 0,
+    refetchOnMount: 'always',
     retry: false,
   });
 
   useEffect(() => {
-    if (query.data) {
+    if (!ejecucion && !transicion && query.isFetchedAfterMount && !query.isFetching && !query.isError && query.data) {
       setEjecucion(query.data);
     }
-  }, [query.data, setEjecucion]);
+  }, [query.data, query.isFetching, query.isError, query.isFetchedAfterMount, ejecucion, transicion, setEjecucion]);
 
   // Mientras no haya ejecucion local Y la busqueda inicial siga en vuelo, el gate no deberia
   // mostrar todavia la pantalla de seleccion -- evita el parpadeo de "Iniciar ejecucion" seguido
   // de un salto al dashboard apenas resuelve la consulta.
-  return { verificando: !ejecucion && query.isLoading };
+  return { verificando: !ejecucion && query.isFetching };
 }
