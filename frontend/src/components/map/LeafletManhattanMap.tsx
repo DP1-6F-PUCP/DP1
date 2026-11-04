@@ -13,6 +13,8 @@ import {
 } from '../../utils/vehicleStatus';
 import { useSemaforoStore } from '../../store/semaforoStore';
 import { getWarehouseStockStatus } from '../../utils/warehouseStock';
+import { vehicleIdsCarryingOrder } from '../../utils/orderRoutes';
+import { fixedDashOffset, routeLineKey } from '../../utils/routeLine';
 import { simulationEngine } from '../../engine/simulationEngine';
 
 const getVehicleLoadStatus = (vehicle: Vehicle) => {
@@ -148,12 +150,20 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   // posicion de la ejecucion anterior, etc.) -- ver el efecto de suscripcion mas abajo.
   const [buffering, setBuffering] = useState(true);
   const routeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
+  const routeLineKeysRef = useRef<Map<string, string>>(new Map());
+  const orderPinsRef = useRef<Map<string, { marker: L.Marker; signature: string }>>(new Map());
+  const ordersRef = useRef<Order[]>(orders);
+  const selectedOrderIdRef = useRef(selectedOrderId);
+  const onSelectOrderRef = useRef(onSelectOrder);
   const vehiclesRef = useRef<Vehicle[]>(vehicles);
   const onSelectVehicleRef = useRef(onSelectVehicle);
   const isDarkThemeRef = useRef(isDarkTheme);
   useEffect(() => {
     vehiclesRef.current = vehicles;
     onSelectVehicleRef.current = onSelectVehicle;
+    ordersRef.current = orders;
+    selectedOrderIdRef.current = selectedOrderId;
+    onSelectOrderRef.current = onSelectOrder;
     isDarkThemeRef.current = isDarkTheme;
   }, [vehicles, onSelectVehicle, isDarkTheme]);
 
@@ -370,11 +380,12 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   }, [showBlockedStreets, blockedStreets, selectedBlockId, onSelectBlock, cityWidth, cityHeight]);
 
   // 4. Render order destinations
+  //
+  // Corre con cada cambio del estado visible, varias veces por segundo: reutiliza cada pin y solo
+  // rehace su icono si cambió algo que se ve, para no recrear todos los marcadores cada vez.
   useEffect(() => {
     const group = ordersLayerGroupRef.current;
-    group.clearLayers();
-
-    if (!showOrders) return;
+    const pinesVigentes = new Set<string>();
 
     const statusColors: Record<Order['status'], string> = {
       on_time: '#10B981',
@@ -391,12 +402,18 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       collapsed: 'Colapsado',
     };
 
-    orders.forEach((order) => {
+    if (showOrders) orders.forEach((order) => {
       // Conservar el historial en las listas; retirar del mapa los destinos ya atendidos.
       if (order.status === 'delivered') return;
+      pinesVigentes.add(order.id);
       const isSelected = selectedOrderId === order.id;
-      const color = statusColors[order.status] || '#3B82F6';
+      const signature = JSON.stringify([order.status, isSelected, order.destination.x, order.destination.y, order.clientId]);
 
+      let pin = orderPinsRef.current.get(order.id);
+      if (pin && !group.hasLayer(pin.marker)) pin = undefined;
+      if (pin && pin.signature === signature) return;
+
+      const color = statusColors[order.status] || '#3B82F6';
       const pinMarkup = renderToStaticMarkup(
         <MapPin
           size={isSelected ? 34 : 28}
@@ -418,16 +435,29 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         : `<div style="cursor: pointer; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));">
             ${pinMarkup}
           </div>`;
-
-      const marker = L.marker([order.destination.y, order.destination.x], {
-        icon: L.divIcon({
-          className: 'order-destination-marker',
-          html,
-          iconSize: isSelected ? [44, 48] : [28, 28],
-          iconAnchor: isSelected ? [22, 40] : [14, 28],
-        }),
-        zIndexOffset: isSelected ? 3000 : 100,
+      const icon = L.divIcon({
+        className: 'order-destination-marker',
+        html,
+        iconSize: isSelected ? [44, 48] : [28, 28],
+        iconAnchor: isSelected ? [22, 40] : [14, 28],
       });
+      const zIndexOffset = isSelected ? 3000 : 100;
+
+      let marker = pin?.marker;
+      if (marker) {
+        marker.setLatLng([order.destination.y, order.destination.x]);
+        marker.setIcon(icon);
+        marker.setZIndexOffset(zIndexOffset);
+        marker.unbindTooltip();
+      } else {
+        marker = L.marker([order.destination.y, order.destination.x], { icon, zIndexOffset });
+        marker.on('click', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          const actual = ordersRef.current.find((item) => item.id === order.id);
+          onSelectOrderRef.current?.(selectedOrderIdRef.current === order.id ? null : actual ?? null);
+        });
+        marker.addTo(group);
+      }
 
       marker.bindTooltip(
         `<strong>${order.code}</strong><br />${order.clientId || 'Cliente no informado'}<br />${statusLabels[order.status]}<br />(${order.destination.x}, ${order.destination.y})`,
@@ -437,50 +467,69 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
           opacity: 0.95,
         }
       );
-
-      marker.on('click', (e: L.LeafletMouseEvent) => {
-        L.DomEvent.stopPropagation(e);
-        if (selectedOrderId === order.id) {
-          onSelectOrder?.(null);
-        } else {
-          onSelectOrder?.(order);
-        }
-      });
-
-      marker.addTo(group);
+      orderPinsRef.current.set(order.id, { marker, signature });
     });
-  }, [orders, showOrders, selectedOrderId, onSelectOrder, cityWidth, cityHeight]);
+
+    for (const [id, pin] of orderPinsRef.current) {
+      if (pinesVigentes.has(id)) continue;
+      group.removeLayer(pin.marker);
+      orderPinsRef.current.delete(id);
+    }
+  }, [orders, showOrders, selectedOrderId, cityWidth, cityHeight]);
 
   // 4. Render projected routes for every vehicle
   //
-  // Dos casos:
-  //  - Vehiculo en camino a entregar un pedido: ruta activa (in_progress) -> geometria de
-  //    activeRoute.waypoints, en azul.
-  //  - Vehiculo regresando a un almacen: la Ruta ya quedo FINALIZADA, asi que no hay ruta activa;
-  //    se usa Vehicle.returnPath (VehiculoDTO.geometriaRetorno), en ambar y mas punteado.
+  // Solo vehiculos en camino a entregar un pedido: ruta activa (in_progress) -> geometria de
+  // activeRoute.waypoints. Un vehiculo regresando a un almacen no lleva linea: la Ruta ya quedo
+  // FINALIZADA, asi que no hay ruta activa ni entregas pendientes en su trayectoria.
+  // Vehicle.returnPath solo cubre el caso sin trayectoria visible: no viene si vuelve dentro del lote.
   //
   // El fallback directo solo cubre estados sin geometria.
+  //
+  // Este efecto corre cada vez que un vehiculo cambia de nodo, asi que reutiliza las lineas en vez
+  // de recrearlas: borrarlas todas y redibujarlas con la geometria del final del lote hacia parpadear
+  // el mapa hasta el siguiente frame, que las devolvia a la ruta visible.
   useEffect(() => {
     const group = routesLayerGroupRef.current;
-    group.clearLayers();
-    routeLinesRef.current.clear();
+    const lineasVigentes = new Set<string>();
 
-    if (!showProjectedRoutes) return;
+    const retirarLineasNoVigentes = () => {
+      for (const [id, line] of routeLinesRef.current) {
+        if (lineasVigentes.has(id)) continue;
+        group.removeLayer(line);
+        routeLinesRef.current.delete(id);
+        routeLineKeysRef.current.delete(id);
+      }
+    };
+
+    if (!showProjectedRoutes) {
+      retirarLineasNoVigentes();
+      return;
+    }
+
+    // Rutas del envío seleccionado (rúbrica F03): siguen resaltadas mientras su unidad atiende otra parada.
+    const selectedOrder = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) : undefined;
+    const orderVehicleIds = selectedOrder ? vehicleIdsCarryingOrder(selectedOrder, routes) : new Set<string>();
 
     vehicles.forEach((vehicle) => {
-      if (vehicle.status !== 'en_route') return;
-
-      const isSelected = selectedVehicleId === vehicle.id;
+      const carriesSelectedOrder = orderVehicleIds.has(vehicle.id);
       const activeRoute = routes.find(
         (route) =>
           route.vehicleId === vehicle.id &&
           route.status === 'in_progress'
       );
+      const rutaVisible = simulationEngine.getRutaVisible(vehicle.id);
+      const hasVisiblePath = Boolean(rutaVisible && rutaVisible.length > 1);
 
       const deliveryPath = activeRoute?.waypoints ?? [];
       const returnPath = vehicle.returnPath ?? [];
-      const isReturning = deliveryPath.length < 2 && returnPath.length > 1;
-      const geometry = deliveryPath.length > 1 ? deliveryPath : isReturning ? returnPath : [];
+      const isReturning = deliveryPath.length < 2 && (
+        hasVisiblePath ? simulationEngine.sinEntregasPendientes(vehicle.id) : returnPath.length > 1
+      );
+      if (isReturning || (vehicle.status !== 'en_route' && !carriesSelectedOrder)) return;
+
+      const isSelected = selectedVehicleId === vehicle.id || carriesSelectedOrder;
+      const geometry = deliveryPath.length > 1 ? deliveryPath : [];
       const fallbackDestination = vehicle.destination;
       const routePath = geometry.length > 1
         ? geometry
@@ -490,14 +539,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
       if (routePath.length <= 1) return;
 
-      // La ruta seleccionada se resalta; el regreso conserva su semántica con un tono violeta.
-      const accent = isSelected
-        ? isReturning
-          ? '#c084fc'
-          : '#38bdf8'
-        : isReturning
-          ? '#f59e0b'
-          : '#64748b';
+      // La ruta seleccionada se resalta.
+      const accent = isSelected ? '#38bdf8' : '#64748b';
 
       const destinationPath = normalizeManhattanPath(
         routePath[0]?.x === vehicle.position.x && routePath[0].y === vehicle.position.y
@@ -508,21 +551,34 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       // segmento (por ejemplo, al cambiar de lote). Normalizar la linea final
       // evita que Leaflet una esos puntos con una diagonal.
       const manhattanDestinationPath = normalizeManhattanPath(destinationPath);
-      const routeLine = L.polyline(
-        manhattanDestinationPath.map((point) => [point.y, point.x] as [number, number]),
-        {
-          color: accent,
-          weight: isSelected ? 4 : 2.5,
-          opacity: isSelected ? 0.9 : 0.55,
-          dashArray: isReturning ? '2, 8' : isSelected ? undefined : '6, 8',
-          lineCap: 'round',
-          lineJoin: 'round',
-          interactive: false,
+      const path = rutaVisible && hasVisiblePath ? normalizeManhattanPath(rutaVisible) : manhattanDestinationPath;
+      const key = routeLineKey(path);
+      const latLngs = path.map((point) => [point.y, point.x] as [number, number]);
+      const style = {
+        color: accent,
+        weight: isSelected ? 4 : 2.5,
+        opacity: isSelected ? 0.9 : 0.55,
+        dashArray: isSelected ? undefined : '6, 8',
+      };
+
+      let routeLine = routeLinesRef.current.get(vehicle.id);
+      if (routeLine && group.hasLayer(routeLine)) {
+        const actual = routeLine.options;
+        if (actual.color !== style.color || actual.weight !== style.weight || actual.dashArray !== style.dashArray) {
+          routeLine.setStyle(style);
         }
-      ).addTo(group);
-      routeLinesRef.current.set(vehicle.id, routeLine);
+        if (routeLineKeysRef.current.get(vehicle.id) !== key) routeLine.setLatLngs(latLngs);
+      } else {
+        routeLine = L.polyline(latLngs, { ...style, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(group);
+        routeLinesRef.current.set(vehicle.id, routeLine);
+      }
+      routeLineKeysRef.current.set(vehicle.id, key);
+      lineasVigentes.add(vehicle.id);
+      if (carriesSelectedOrder) routeLine.bringToFront();
     });
-  }, [showProjectedRoutes, vehicles, routes, selectedVehicleId, cityWidth, cityHeight]);
+
+    retirarLineasNoVigentes();
+  }, [showProjectedRoutes, vehicles, routes, orders, selectedVehicleId, selectedOrderId, cityWidth, cityHeight]);
 
   // 5. Render Warehouses (tooltip on hover, left inspector popup on click)
   useEffect(() => {
@@ -975,7 +1031,24 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         const ruta = simulationEngine.getRutaVisible(id);
         if (routeLine && ruta && ruta.length > 1) {
           const manhattanRuta = normalizeManhattanPath(ruta);
-          routeLine.setLatLngs(manhattanRuta.map((p) => [p.y, p.x] as [number, number]));
+          const key = routeLineKey(manhattanRuta);
+          if (routeLineKeysRef.current.get(id) !== key) {
+            routeLineKeysRef.current.set(id, key);
+            routeLine.setLatLngs(manhattanRuta.map((p) => [p.y, p.x] as [number, number]));
+          }
+          // Se reaplica cada frame: cambia al hacer zoom, y setStyle lo borra del elemento.
+          const dashArray = routeLine.options.dashArray;
+          const map = mapInstanceRef.current;
+          if (typeof dashArray === 'string' && map) {
+            const offset = fixedDashOffset(manhattanRuta, map.getZoomScale(map.getZoom(), 0), dashArray);
+            const offsetAttr = offset === null ? null : offset.toFixed(2);
+            const element = routeLine.getElement();
+            if (element && offsetAttr !== null && element.getAttribute('stroke-dashoffset') !== offsetAttr) {
+              element.setAttribute('stroke-dashoffset', offsetAttr);
+            }
+          } else {
+            routeLine.getElement()?.removeAttribute('stroke-dashoffset');
+          }
         }
       }
       if (snap.buffering !== bufferingAnterior) {

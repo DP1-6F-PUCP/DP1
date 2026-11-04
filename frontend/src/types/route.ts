@@ -16,6 +16,7 @@ export interface Route {
   estimatedDurationMinutes: number;
   status: 'planned' | 'in_progress' | 'completed' | 'blocked';
   assignedOrderCount: number;
+  orderIds: string[];
 }
 
 export interface Warehouse {

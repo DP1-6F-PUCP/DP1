@@ -23,6 +23,12 @@ export interface Order {
   departureSimMs?: number;
   /** true cuando la ruta que lo lleva ya salió del almacén (EN_EJECUCION o FINALIZADA). */
   departed?: boolean;
+  /** Salida estimada de un pedido sin ruta todavía (el planificador solo crea rutas que salen ya). */
+  estimatedDepartureSimMs?: number;
+  /** Almacén estimado de salida de un pedido sin ruta: el más cercano al destino con stock suficiente. */
+  estimatedWarehouseId?: string;
+  /** Fin estimado de la entrega si aún no ocurre: por su ruta o, sin ruta, desde su salida estimada. */
+  estimatedDeliverySimMs?: number;
   clientId?: string;
   quantity?: number;
   slaHours?: number;

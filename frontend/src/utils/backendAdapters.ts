@@ -247,6 +247,131 @@ export function adaptVehiculo(
   };
 }
 
+/** Datos de la flota con los que se estima la salida de un pedido que aún no tiene ruta. */
+export interface EstimacionSalida {
+  /** Velocidad del tipo más lento: no subestima el viaje y el pedido entra antes en la ventana. */
+  velocidadKmH: number;
+  /** Instante en que la flota alcanza a cargar cada pedido sin ruta (ver asignarColaDeSalida). */
+  salidaPorCola: Map<string, number>;
+  /** Fin estimado de la entrega de cada pedido con ruta (ver estimarEntregasEnRuta). */
+  entregaEnRuta: Map<string, number>;
+  servicioHoras: number;
+}
+
+/**
+ * Recorre las paradas pendientes de cada ruta desde la posición actual de su unidad: viaje en línea
+ * Manhattan (sin rodeos por bloqueos ni refrigerios futuros) más el servicio de cada parada. Si un
+ * pedido va en varias rutas por entregas parciales, cuenta la última. nowMs es la marca que cierra
+ * el lote, el instante al que corresponden esas posiciones.
+ */
+export function estimarEntregasEnRuta(
+  rutas: RutaDTO[],
+  vehiculos: VehiculoDTO[],
+  pedidosById: Map<string, PedidoDTO>,
+  config: ConfiguracionActualDTO,
+  nowMs: number | null
+): Map<string, number> {
+  const entregas = new Map<string, number>();
+  if (nowMs == null) return entregas;
+  const servicioMs = config.operacion.tiempoServicioClienteHoras * 3600000;
+  const refrigerioMs = config.operacion.duracionRefrigerioHoras * 3600000;
+  for (const ruta of rutas) {
+    const vehiculo = vehiculos.find((v) => v.idUnidad === ruta.vehiculoId);
+    const velocidad = vehiculo ? tipoVehiculoDe(vehiculo.tipo, config.tiposVehiculo)?.velocidadKmH ?? 0 : 0;
+    if (!vehiculo || velocidad <= 0 || (ruta.estado !== 'EN_EJECUCION' && ruta.estado !== 'PLANIFICADA')) continue;
+
+    const desdeMs = vehiculo.actividadDesde ? parseBackendSimulatedTime(vehiculo.actividadDesde) : NaN;
+    const salidaMs = ruta.estado === 'PLANIFICADA' && ruta.horaSalida ? parseBackendSimulatedTime(ruta.horaSalida) : nowMs;
+    let cursorMs = Math.max(nowMs, salidaMs);
+    if (vehiculo.actividad === 'EN_REFRIGERIO' && Number.isFinite(desdeMs)) {
+      cursorMs = Math.max(cursorMs, desdeMs + refrigerioMs);
+    }
+    // A mitad de un servicio, la parada donde está termina al acabar ese servicio, sin sumar otro.
+    let enServicio = vehiculo.actividad === 'ENTREGANDO' && Number.isFinite(desdeMs);
+    if (enServicio) cursorMs = Math.max(cursorMs, desdeMs + servicioMs);
+    let x = vehiculo.posXActual;
+    let y = vehiculo.posYActual;
+
+    for (const id of ruta.secuenciaEntrega) {
+      const pedido = pedidosById.get(id);
+      if (!pedido || pedido.estado === 'ENTREGADA') continue;
+      const distanciaKm = Math.abs(pedido.posX - x) + Math.abs(pedido.posY - y);
+      if (!(enServicio && distanciaKm === 0)) {
+        cursorMs += (distanciaKm / velocidad) * 3600000 + servicioMs;
+      }
+      enServicio = false;
+      x = pedido.posX;
+      y = pedido.posY;
+      entregas.set(id, Math.max(entregas.get(id) ?? 0, cursorMs));
+    }
+  }
+  return entregas;
+}
+
+/**
+ * Reparte los pedidos sin ruta sobre la flota como el planificador: por plazo y hasta llenar la
+ * capacidad de cada unidad, tomando la que se libere antes. Una unidad libre sale en el próximo
+ * lote (nowMs, la marca que cierra este lote); una en ruta, al terminar su ruta. Solo mira un viaje
+ * por unidad: lo que no cabe queda fuera del mapa y se rige por su plazo (ver estimarSalida).
+ */
+export function asignarColaDeSalida(
+  pedidos: PedidoDTO[],
+  vehiculos: VehiculoDTO[],
+  rutas: RutaDTO[],
+  tipos: TipoVehiculoDTO[],
+  nowMs: number | null
+): Map<string, number> {
+  const salidas = new Map<string, number>();
+  if (nowMs == null) return salidas;
+  const unidades = vehiculos
+    .filter((v) => v.estado === 'DISPONIBLE' || v.estado === 'EN_RUTA')
+    .map((v) => {
+      const ruta = rutas.find((r) => r.vehiculoId === v.idUnidad && r.estado === 'EN_EJECUCION');
+      const finRuta = ruta?.horaSalida
+        ? parseBackendSimulatedTime(ruta.horaSalida) + ruta.duracionEstimadaHoras * 3600000
+        : nowMs;
+      return {
+        libreMs: Math.max(nowMs, Number.isFinite(finRuta) ? finRuta : nowMs),
+        capacidad: tipoVehiculoDe(v.tipo, tipos)?.capacidad ?? 0,
+      };
+    })
+    .sort((a, b) => a.libreMs - b.libreMs);
+  const enEspera = pedidos
+    .filter((p) =>
+      p.estado === 'PENDIENTE' &&
+      p.origenX == null &&
+      parseBackendSimulatedTime(p.fechaIngreso) <= nowMs &&
+      !rutas.some((r) => r.estado !== 'REEMPLAZADA' && r.secuenciaEntrega.includes(p.idPedido))
+    )
+    .sort((a, b) => parseBackendSimulatedTime(a.fechaLimite) - parseBackendSimulatedTime(b.fechaLimite));
+  for (const pedido of enEspera) {
+    const unidad = unidades.find((u) => u.capacidad >= pedido.cantidadSolicitada);
+    if (!unidad) continue;
+    unidad.capacidad -= pedido.cantidadSolicitada;
+    salidas.set(pedido.idPedido, unidad.libreMs);
+  }
+  return salidas;
+}
+
+/**
+ * Lo que ocurra antes: que la flota alcance al pedido o el último instante en que puede salir para
+ * llegar dentro del plazo (el plazo se cumple con la llegada, sin la hora de servicio).
+ */
+function estimarSalida(
+  estimacion: EstimacionSalida,
+  idPedido: string,
+  nowMs: number,
+  deadlineMs: number,
+  distanciaKm: number
+): number | undefined {
+  const porCola = estimacion.salidaPorCola.get(idPedido);
+  const limite = estimacion.velocidadKmH > 0 && Number.isFinite(deadlineMs)
+    ? deadlineMs - (distanciaKm / estimacion.velocidadKmH) * 3600000
+    : undefined;
+  if (porCola === undefined && limite === undefined) return undefined;
+  return Math.max(nowMs, Math.min(porCola ?? Infinity, limite ?? Infinity));
+}
+
 function almacenMasCercano(warehouses: Warehouse[], x: number, y: number): Warehouse | undefined {
   let mejor: Warehouse | undefined;
   let mejorDist = Infinity;
@@ -265,7 +390,8 @@ export function adaptPedido(
   rutas: RutaDTO[],
   scenarioStartMs: number | null,
   nowMs: number | null,
-  warehouses: Warehouse[] = []
+  warehouses: Warehouse[] = [],
+  estimacion?: EstimacionSalida
 ): Order {
   const createdMs = parseBackendSimulatedTime(dto.fechaIngreso);
   const deadlineMs = parseBackendSimulatedTime(dto.fechaLimite);
@@ -305,6 +431,23 @@ export function adaptPedido(
   const salida = despachado ? dto.fechaSalida : rutaOrigen?.horaSalida;
   const departureMs = salida ? parseBackendSimulatedTime(salida) : NaN;
   const deliveredMs = dto.fechaEntrega ? parseBackendSimulatedTime(dto.fechaEntrega) : NaN;
+  const sinRuta = dto.estado === 'PENDIENTE' && origenX == null && !rutaOrigen;
+  const almacenEstimado = sinRuta
+    ? almacenMasCercano(
+        warehouses.filter((w) => w.capacity === Infinity || w.currentStock >= dto.cantidadSolicitada),
+        dto.posX,
+        dto.posY
+      )
+    : undefined;
+  const distanciaEstimadaKm = almacenEstimado
+    ? Math.abs(almacenEstimado.coords.x - dto.posX) + Math.abs(almacenEstimado.coords.y - dto.posY)
+    : 0;
+  const salidaEstimada = almacenEstimado && estimacion && nowMs != null
+    ? estimarSalida(estimacion, dto.idPedido, nowMs, deadlineMs, distanciaEstimadaKm)
+    : undefined;
+  const entregaDesdeSalida = salidaEstimada !== undefined && estimacion && estimacion.velocidadKmH > 0
+    ? salidaEstimada + (distanciaEstimadaKm / estimacion.velocidadKmH + estimacion.servicioHoras) * 3600000
+    : undefined;
 
   return {
     id: dto.idPedido,
@@ -313,6 +456,9 @@ export function adaptPedido(
     departureSimMs: Number.isFinite(departureMs) ? departureMs : undefined,
     departed: despachado || rutaOrigen?.estado === 'EN_EJECUCION' || rutaOrigen?.estado === 'FINALIZADA',
     deliveredSimMs: Number.isFinite(deliveredMs) ? deliveredMs : undefined,
+    estimatedDepartureSimMs: salidaEstimada,
+    estimatedWarehouseId: almacenEstimado?.id,
+    estimatedDeliverySimMs: estimacion?.entregaEnRuta.get(dto.idPedido) ?? entregaDesdeSalida,
     deliveredMinute: scenarioStartMs != null && Number.isFinite(deliveredMs)
       ? Math.round((deliveredMs - scenarioStartMs) / 60000)
       : undefined,
@@ -378,6 +524,7 @@ export function adaptRuta(
     estimatedDurationMinutes: Math.round(dto.duracionEstimadaHoras * 60),
     status: ESTADO_RUTA_A_STATUS[dto.estado] || 'planned',
     assignedOrderCount: dto.secuenciaEntrega.length,
+    orderIds: dto.secuenciaEntrega,
   };
 }
 
@@ -401,12 +548,18 @@ export function adaptEstadoOperacion(
   const vehiculosById = new Map(estado.vehiculos.map((v) => [v.idUnidad, v]));
   const blockedStreets = estado.bloqueos.filter((b) => b.vigente).flatMap(adaptBloqueo);
   const warehouses = estado.almacenes.map(adaptAlmacen);
+  const estimacion: EstimacionSalida = {
+    velocidadKmH: Math.min(...config.tiposVehiculo.map((t) => t.velocidadKmH)),
+    salidaPorCola: asignarColaDeSalida(pedidos, estado.vehiculos, estado.rutas, config.tiposVehiculo, nowMs),
+    entregaEnRuta: estimarEntregasEnRuta(estado.rutas, estado.vehiculos, pedidosById, config, nowMs),
+    servicioHoras: config.operacion.tiempoServicioClienteHoras,
+  };
 
   return {
     vehicles: estado.vehiculos.map((v) =>
       adaptVehiculo(v, config, estado.rutas, pedidosById, nowMs)
     ),
-    orders: pedidos.map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs, warehouses)),
+    orders: pedidos.map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs, warehouses, estimacion)),
     routes: estado.rutas.map((r) =>
       adaptRuta(
         r,

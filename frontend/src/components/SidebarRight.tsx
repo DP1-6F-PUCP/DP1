@@ -10,7 +10,6 @@ import {
   Warehouse as WarehouseIcon,
   Activity,
   Search,
-  Filter,
   Truck,
   Package,
   MapPin,
@@ -28,7 +27,7 @@ import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useEscenario } from '../features/escenario/hooks/useEscenario';
 import { useMapStore } from '../store/mapStore';
 import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
-import { BreakdownType, Order } from '../types';
+import { BreakdownType } from '../types';
 import { BreakdownModal } from './BreakdownModal';
 import { ConfigModal } from './ConfigModal';
 import { useToast } from './ToastProvider';
@@ -41,6 +40,14 @@ import {
 import { FaMotorcycle } from 'react-icons/fa';
 import { useSemaforoStore } from '../store/semaforoStore';
 import { getWarehouseStockStatus } from '../utils/warehouseStock';
+import {
+  classifyWarehouseShipments,
+  deliveryMs,
+  isDeliveredRecently,
+  isDueSoon,
+  upcomingDepartureMs,
+  WAREHOUSE_WINDOW_HOURS,
+} from '../utils/warehouseShipments';
 import { useScenarioStore } from '../store/scenarioStore';
 import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
 import { Vehicle } from '../types/vehicle';
@@ -72,9 +79,6 @@ const FLEET_DISTANCE_RANGES = [
 ] as const;
 
 type FleetDistanceFilter = 'all' | (typeof FLEET_DISTANCE_RANGES)[number]['key'];
-
-/** Ventana fija (h) de "por salir" y "entregados" en la card de cada almacén (rúbrica E21/E22). */
-const WAREHOUSE_WINDOW_HOURS = 4;
 
 function manhattanDist(ax: number, ay: number, bx: number, by: number): number {
   return Math.abs(ax - bx) + Math.abs(ay - by);
@@ -315,6 +319,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const [shipmentStatusFilter, setShipmentStatusFilter] = useState<
     'all' | 'on_time' | 'at_risk' | 'delayed' | 'delivered'
   >('all');
+  const [shipmentWindowFilter, setShipmentWindowFilter] = useState<'all' | 'delivered' | 'due'>('all');
 
   const previousSelectedVehicleId = useRef<string | null>(selectedVehicleId);
   const previousSelectedOrderId = useRef<string | null>(selectedOrderId);
@@ -350,6 +355,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     setActiveTab('shipments');
     setShipmentSearchTerm('');
     setShipmentStatusFilter('all');
+    setShipmentWindowFilter('all');
     if (isCollapsed) onToggleCollapse();
 
     requestAnimationFrame(() => {
@@ -390,39 +396,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     });
   }, [selectedWarehouseId, isCollapsed, onToggleCollapse]);
 
-  // Envíos de un almacén, partidos por las tres ventanas de su card (fijas en 4 h, rúbrica
-  // E20-E22). Se clasifican por sus instantes contra el instante VISIBLE del mapa, no contra
-  // marcaTiempoActual ni por status/departed: esos describen el FINAL del lote, y el mapa va
-  // animando dentro de él -- así un pedido que sale o se entrega más tarde en el lote no aparece
-  // "en tránsito" o desaparece antes de tiempo.
-  const nowSimMs = marcaVisibleMs;
-  const getWarehouseShipments = (warehouseId: string) => {
-    if (nowSimMs === null) return { transit: [], upcoming: [], delivered: [] };
-    const fromWarehouse = orders.filter((order) => order.warehouseOriginId === warehouseId);
-    const isDeliveredByNow = (order: Order) =>
-      order.deliveredSimMs !== undefined && order.deliveredSimMs <= nowSimMs;
-    const hasLeftByNow = (order: Order) =>
-      order.departed === true && (order.departureSimMs === undefined || order.departureSimMs <= nowSimMs);
-    return {
-      transit: fromWarehouse.filter((order) => !isDeliveredByNow(order) && hasLeftByNow(order)),
-      upcoming: fromWarehouse
-        .filter(
-          (order) =>
-            !isDeliveredByNow(order) &&
-            !hasLeftByNow(order) &&
-            order.departureSimMs !== undefined &&
-            order.departureSimMs <= nowSimMs + WAREHOUSE_WINDOW_HOURS * 3600000
-        )
-        .sort((a, b) => (a.departureSimMs ?? 0) - (b.departureSimMs ?? 0)),
-      delivered: fromWarehouse
-        .filter(
-          (order) =>
-            isDeliveredByNow(order) &&
-            nowSimMs - (order.deliveredSimMs ?? 0) <= WAREHOUSE_WINDOW_HOURS * 3600000
-        )
-        .sort((a, b) => (b.deliveredSimMs ?? 0) - (a.deliveredSimMs ?? 0)),
-    };
-  };
+  const getWarehouseShipments = (warehouseId: string) =>
+    classifyWarehouseShipments(orders, warehouseId, marcaVisibleMs);
   const formatSimClock = (ms: number | undefined) =>
     ms === undefined ? '--:--' : formatBackendSimulatedTime(ms, false);
 
@@ -615,15 +590,22 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const activeFleetFilterCount = activeFleetFilterPills.length;
   const clearFleetFilters = () => activeFleetFilterPills.forEach((pill) => pill.onClear());
 
+  // Ventanas de 4 h de la lista de envíos (rúbrica E32/E33): se combinan con estado y búsqueda.
+  const shipmentWindows = {
+    delivered: marcaVisibleMs === null ? [] : orders.filter((order) => isDeliveredRecently(order, marcaVisibleMs)),
+    due: marcaVisibleMs === null ? [] : orders.filter((order) => isDueSoon(order, marcaVisibleMs)),
+  };
+
   const filteredOrders = orders.filter((order) => {
     const search = shipmentSearchTerm.trim().toLowerCase();
     const statusMatches = shipmentStatusFilter === 'all' || order.status === shipmentStatusFilter;
+    const windowMatches = shipmentWindowFilter === 'all' || shipmentWindows[shipmentWindowFilter].includes(order);
     const searchMatches =
       !search ||
       [order.code, order.id, order.clientId, 'pedido de cliente'].some((value) =>
         value?.toLowerCase().includes(search)
       );
-    return statusMatches && searchMatches;
+    return statusMatches && windowMatches && searchMatches;
   });
 
   const formatShipmentTime = (minute: number) => {
@@ -827,24 +809,50 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                    <Filter className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                  <FilterRow label="Estado">
+                    <div className="flex flex-wrap gap-1">
+                      {([
+                        ['all', 'Todos', null],
+                        ['on_time', 'A tiempo', '#34D399'],
+                        ['at_risk', 'En riesgo', '#FBBF24'],
+                        ['delayed', 'Retrasado', '#FB7185'],
+                        ['delivered', 'Entregado', '#60A5FA'],
+                      ] as const).map(([key, label, dot]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          aria-pressed={shipmentStatusFilter === key}
+                          onClick={() => setShipmentStatusFilter(key)}
+                          className={`flex items-center gap-1 rounded-md border px-1.5 py-1 text-[10.5px] font-medium transition-colors cursor-pointer ${
+                            shipmentStatusFilter === key
+                              ? 'border-blue-500 bg-blue-600 text-white'
+                              : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />}
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </FilterRow>
+
+                  <div className="grid grid-cols-2 gap-1.5">
                     {([
-                      ['all', 'Todos'],
-                      ['on_time', 'A tiempo'],
-                      ['at_risk', 'En riesgo'],
-                      ['delayed', 'Retrasado'],
-                      ['delivered', 'Entregado'],
+                      ['delivered', `Entregados últimas ${WAREHOUSE_WINDOW_HOURS} h`],
+                      ['due', `Por entregar próximas ${WAREHOUSE_WINDOW_HOURS} h`],
                     ] as const).map(([key, label]) => (
                       <button
                         key={key}
                         type="button"
-                        onClick={() => setShipmentStatusFilter(key)}
-                        className={`shrink-0 rounded-xl px-2.5 py-1.5 text-[11px] font-medium ${
-                          shipmentStatusFilter === key ? 'bg-blue-600 text-white' : 'border border-slate-700/50 bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                        aria-pressed={shipmentWindowFilter === key}
+                        onClick={() => setShipmentWindowFilter(shipmentWindowFilter === key ? 'all' : key)}
+                        className={`rounded-xl px-2 py-1.5 text-left cursor-pointer ${
+                          shipmentWindowFilter === key
+                            ? 'bg-blue-600/30 border border-blue-500/60'
+                            : 'bg-slate-900/90 border border-slate-800 hover:border-slate-600'
                         }`}
                       >
-                        {label}
+                        <span className="block text-[10px] text-slate-300">{label}</span>
                       </button>
                     ))}
                   </div>
@@ -866,6 +874,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         const distance = warehouse
                           ? Math.abs(order.destination.x - warehouse.coords.x) + Math.abs(order.destination.y - warehouse.coords.y)
                           : 0;
+                        const delivery = deliveryMs(order);
                         return (
                           <article
                             key={order.id}
@@ -896,6 +905,14 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                               <div><span className="text-slate-500">Destino cartesiano</span><p className="font-mono-code font-medium text-cyan-300">X={order.destination.x}, Y={order.destination.y}</p></div>
                               <div><span className="text-slate-500">Salida / ETA</span><p className="font-mono-code font-medium text-slate-200">{formatShipmentTime(order.createdMinute)} / {formatShipmentTime(order.deadlineMinute)}</p></div>
                               <div><span className="text-slate-500">Tiempo máximo</span><p className="font-medium text-slate-200">{order.slaHours ?? 0} h</p></div>
+                              <div className="col-span-2">
+                                <span className="text-slate-500">Entrega</span>
+                                <p className="font-mono-code font-medium text-slate-200">
+                                  {delivery === undefined
+                                    ? 'Sin estimar'
+                                    : `${order.deliveredSimMs === undefined ? '~' : ''}${formatSimClock(delivery)}`}
+                                </p>
+                              </div>
                             </div>
                             <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
                               <span className="text-[10px] text-slate-400">UT asignada</span>
@@ -1526,7 +1543,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                               {warehouseInspectorTab !== 'transit' && (
                                 <p className="text-[10px] text-slate-400">
                                   {warehouseInspectorTab === 'upcoming'
-                                    ? `Salen en las próximas ${WAREHOUSE_WINDOW_HOURS} horas`
+                                    ? `Salen en las próximas ${WAREHOUSE_WINDOW_HOURS} horas (~ estimado, aún sin UT)`
                                     : `Entregados en las últimas ${WAREHOUSE_WINDOW_HOURS} horas`}
                                 </p>
                               )}
@@ -1549,7 +1566,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                           {warehouseInspectorTab === 'delivered'
                                             ? `Entregado ${formatSimClock(order.deliveredSimMs)}`
                                             : order.assignedVehicleId ?? 'Sin UT'}
-                                          {warehouseInspectorTab === 'upcoming' && ` · sale ${formatSimClock(order.departureSimMs)}`}
+                                          {warehouseInspectorTab === 'upcoming' && ` · sale ${order.departureSimMs === undefined ? '~' : ''}${formatSimClock(upcomingDepartureMs(order))}`}
                                         </span>
                                       </div>
                                     </div>

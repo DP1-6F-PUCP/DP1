@@ -565,6 +565,18 @@ export class SimulationEngine {
     return camino;
   }
 
+  /**
+   * true si a la unidad, sin ruta activa, ya no le queda ninguna entrega en su trayectoria: lo que
+   * recorre es su regreso. geometriaRetorno no basta: solo viene si el regreso cruza el cierre del
+   * lote, y uno que empieza y termina dentro del lote llega sin ella.
+   */
+  sinEntregasPendientes(vehicleId: string): boolean {
+    const simNow = this.ultimoSimNow;
+    const linea = this.lineas.get(vehicleId);
+    if (!linea || simNow == null) return false;
+    return !linea.some((p) => p.t > simNow && p.act === 'ENTREGANDO');
+  }
+
   /** Suscripcion de alta frecuencia (un callback por frame) -- para el mapa. */
   subscribe(fn: (snap: EngineSnapshot) => void): () => void {
     this.listeners.add(fn);
