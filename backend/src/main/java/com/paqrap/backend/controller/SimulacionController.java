@@ -45,6 +45,7 @@ public class SimulacionController {
     @PostMapping("/api/escenarios")
     public ResponseEntity<ApiResponseDTO<EjecucionEscenarioDTO>> iniciarEscenario(
             @Valid @RequestBody SeleccionarEscenarioRequestDTO request) {
+        servicioPlanificacion.validarArchivosRequeridos(request.tipo());
         LocalDateTime fechaInicioSimulada = request.tipo() == TipoEscenario.DIA_A_DIA
                 ? LocalDateTime.now()
                 : request.fechaInicioSimulada() != null

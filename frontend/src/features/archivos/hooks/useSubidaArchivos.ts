@@ -26,34 +26,70 @@ export function useSubidaArchivos(warehouses: Warehouse[]) {
 
   const [estado, setEstado] = useState<EstadoSubida | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadingCategory, setUploadingCategory] = useState<CategoriaArchivo | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ actual: number; total: number } | null>(null);
 
   const mostrarEstado = (estadoNuevo: EstadoSubida) => {
     setEstado(estadoNuevo);
     setTimeout(() => setEstado(null), 3500);
   };
 
+  const subirPorLotes = async <T,>(items: File[], fn: (f: File) => Promise<T>, tamanoLote = 4) => {
+    let completados = 0;
+    for (let i = 0; i < items.length; i += tamanoLote) {
+      const lote = items.slice(i, i + tamanoLote);
+      await Promise.all(
+        lote.map(async (f) => {
+          const res = await fn(f);
+          completados += 1;
+          setUploadProgress({ actual: completados, total: items.length });
+          return res;
+        })
+      );
+    }
+  };
+
   const procesarArchivos = async (categoria: CategoriaArchivo, files: File[]) => {
     if (files.length === 0) return;
     setIsUploading(true);
+    setUploadingCategory(categoria);
+    setUploadProgress({ actual: 0, total: files.length });
+    // Ceder un frame para que React renderice el spinner antes del parseo masivo
+    await new Promise((resolve) => setTimeout(resolve, 16));
     try {
+      const sortedFiles = [...files].sort((a, b) => a.name.localeCompare(b.name));
       if (categoria === 'blockages') {
-        const entries = await leerYParsearArchivos(files, (c, n) => parseBlockedStreetsFile(c, n).blockages);
-        fileStore.setBlockageFiles((prev) => [...prev.filter((p) => !files.some((f) => f.name === p.name)), ...entries]);
-        await Promise.all(files.map((f) => archivosApi.cargarBloqueos(f)));
+        const entries = await leerYParsearArchivos(sortedFiles, (c, n) => parseBlockedStreetsFile(c, n).blockages);
+        await subirPorLotes(sortedFiles, (f) => archivosApi.cargarBloqueos(f));
+        fileStore.setBlockageFiles((prev) =>
+          [...prev.filter((p) => !sortedFiles.some((f) => f.name === p.name)), ...entries].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        );
       } else if (categoria === 'orders') {
-        const entries = await leerYParsearArchivos(files, (c, n) => parseOrdersFile(c, n, warehouses).orders);
-        fileStore.setOrdersFiles((prev) => [...prev.filter((p) => !files.some((f) => f.name === p.name)), ...entries]);
-        await Promise.all(files.map((f) => archivosApi.cargarPedidos(f)));
+        const entries = await leerYParsearArchivos(sortedFiles, (c, n) => parseOrdersFile(c, n, warehouses).orders);
+        await subirPorLotes(sortedFiles, (f) => archivosApi.cargarPedidos(f));
+        fileStore.setOrdersFiles((prev) =>
+          [...prev.filter((p) => !sortedFiles.some((f) => f.name === p.name)), ...entries].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        );
       } else {
-        const entries = await leerYParsearArchivos(files, (c, n) => parseMaintenanceFile(c, n).records);
-        fileStore.setMaintenanceFiles((prev) => [...prev.filter((p) => !files.some((f) => f.name === p.name)), ...entries]);
-        await Promise.all(files.map((f) => archivosApi.cargarMantenimiento(f)));
+        const entries = await leerYParsearArchivos(sortedFiles, (c, n) => parseMaintenanceFile(c, n).records);
+        await subirPorLotes(sortedFiles, (f) => archivosApi.cargarMantenimiento(f));
+        fileStore.setMaintenanceFiles((prev) =>
+          [...prev.filter((p) => !sortedFiles.some((f) => f.name === p.name)), ...entries].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        );
       }
       mostrarEstado({ tipo: 'success', mensaje: `${files.length} archivo(s) subido(s) y aplicado(s) en el backend.` });
     } catch (err) {
       mostrarEstado({ tipo: 'error', mensaje: (err as Error)?.message || 'Error al procesar los archivos.' });
     } finally {
       setIsUploading(false);
+      setUploadingCategory(null);
+      setUploadProgress(null);
     }
   };
 
@@ -74,7 +110,17 @@ export function useSubidaArchivos(warehouses: Warehouse[]) {
     procesarArchivos,
     eliminarArchivo,
     resetToSamples: () => fileStore.resetToSamples(warehouses),
+    limpiarTodo: async () => {
+      fileStore.clearAll();
+      try {
+        await archivosApi.limpiarArchivos();
+      } catch {
+        // backend opcional o en reinicio
+      }
+    },
     estado,
     isUploading,
+    uploadingCategory,
+    uploadProgress,
   };
 }

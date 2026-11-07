@@ -54,23 +54,25 @@ public final class EnsambladorRespuestas {
      */
     public static EstadoOperacionDTO ensamblarEstado(ContextoProblema contexto, List<Ruta> rutas,
             List<EventoSimulacion> eventosRecientes, LocalDateTime anclaEventos, ReporteDesempeno reporte) {
+        // Solo los bloqueos vigentes o que empiezan en las próximas HORAS_BLOQUEOS_VISIBLES
+        // -- contexto.bloqueos() es el universo completo cargado (mes actual + siguiente, más
+        // de 1000 en datos reales) y era ~95% del estado enviado en CADA lote (≈330 KB de
+        // 355 KB medidos), cuando el visualizador solo dibuja los vigentes.
+        // Incluir también los que vencieron DENTRO del lote: el mapa aún lo reproduce.
+        List<Bloqueo> bloqueosEnHorizonte = Bloqueo.filtrarEnHorizonte(contexto.bloqueos(),
+                anclaEventos != null ? anclaEventos : contexto.marcaTiempoActual(),
+                contexto.marcaTiempoActual().plusHours(HORAS_BLOQUEOS_VISIBLES));
         return new EstadoOperacionDTO(
                 contexto.marcaTiempoActual(),
                 rutas.stream()
-                        .map(r -> aRutaDTO(r, contexto.ciudad(), contexto.bloqueos(), contexto.marcaTiempoActual()))
+                        .map(r -> aRutaDTO(r, contexto.ciudad(), bloqueosEnHorizonte, contexto.marcaTiempoActual()))
                         .toList(),
                 contexto.vehiculos().stream()
-                        .map(v -> aVehiculoDTO(v, contexto.ciudad(), contexto.bloqueos(), contexto.almacenes(),
+                        .map(v -> aVehiculoDTO(v, contexto.ciudad(), bloqueosEnHorizonte, contexto.almacenes(),
                                 contexto.marcaTiempoActual()))
                         .toList(),
                 contexto.almacenes().stream().map(EnsambladorRespuestas::aAlmacenDTO).toList(),
-                // Solo los bloqueos vigentes o que empiezan en las próximas HORAS_BLOQUEOS_VISIBLES
-                // -- contexto.bloqueos() es el universo completo cargado (mes actual + siguiente, más
-                // de 1000 en datos reales) y era ~95% del estado enviado en CADA lote (≈330 KB de
-                // 355 KB medidos), cuando el visualizador solo dibuja los vigentes.
-                // Incluir también los que vencieron DENTRO del lote: el mapa aún lo reproduce.
-                Bloqueo.filtrarEnHorizonte(contexto.bloqueos(), anclaEventos != null ? anclaEventos : contexto.marcaTiempoActual(),
-                        contexto.marcaTiempoActual().plusHours(HORAS_BLOQUEOS_VISIBLES)).stream()
+                bloqueosEnHorizonte.stream()
                         .map(b -> aBloqueoDTO(b, contexto.marcaTiempoActual())).toList(),
                 eventosRecientes.stream().map(evento -> aEventoDTO(evento, anclaEventos)).toList(),
                 aMetricasDTO(reporte));

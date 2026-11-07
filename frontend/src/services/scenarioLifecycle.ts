@@ -9,6 +9,8 @@ import { useScenarioStore } from '../store/scenarioStore';
 import { parseBackendSimulatedTime } from '../utils/backendTime';
 import { useMapStore } from '../store/mapStore';
 import { adaptEstadoOperacion } from '../utils/backendAdapters';
+import { fileStore } from '../utils/fileStore';
+import { archivosApi } from './archivosApi';
 
 const consultas = ['estado-operacion', 'pedidos', 'configuracion', 'escenario', 'escenario-activa'];
 async function cancelarConsultas(client: QueryClient) {
@@ -98,6 +100,8 @@ export async function cerrarEjecucion(client: QueryClient, id: string) {
   try {
     await cancelarConsultas(client);
     await escenariosApi.detener(id);
+    fileStore.clearAll();
+    void archivosApi.limpiarArchivos().catch(() => {});
     const actual = useScenarioStore.getState().ejecucion;
     if (actual?.idEjecucion === id) store.setEjecucion({ ...actual, estado: 'FINALIZADA' });
     limpiarVista(client, true);

@@ -78,7 +78,7 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         )}
       </div>
 
-      {/* Línea divisoria */}
+      {/* Pestaña anterior de Carga de Datos (comentada para que no aparezca en la UI):
       <div className="p-2.5 space-y-1.5 shrink-0">
         <button
           type="button"
@@ -98,8 +98,8 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         </button>
       </div>
 
-      {/* Línea divisoria */}
       <div className="mx-3.5 border-b border-[var(--color-sidebar-border)]/60" />
+      */}
 
       {/* 3. Escenarios de Operación */}
       <div className="flex-1 p-2.5 space-y-2 overflow-y-auto">

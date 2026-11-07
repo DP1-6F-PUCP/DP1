@@ -101,6 +101,13 @@ export const fileStore = {
     };
   },
 
+  clearAll() {
+    blockageFiles = [];
+    ordersFiles = [];
+    maintenanceFiles = [];
+    notify();
+  },
+
   resetToSamples(warehouses: Warehouse[] = []) {
     const effectiveWarehouses = warehouses && warehouses.length > 0 ? warehouses : [];
     const parsedBlockages = parseBlockedStreetsFile(SAMPLE_BLOCKAGES_FILE_CONTENT, '202609.bloqueadas');

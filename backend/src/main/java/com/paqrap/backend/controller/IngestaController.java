@@ -3,10 +3,12 @@ package com.paqrap.backend.controller;
 import com.paqrap.backend.dto.ApiResponseDTO;
 import com.paqrap.backend.dto.ResultadoCargaDTO;
 import com.paqrap.backend.exception.ArchivoIlegibleException;
+import com.paqrap.dominio.TipoArchivo;
 import com.paqrap.exposicion.ArchivoEntrada;
 import com.paqrap.exposicion.ServicioPlanificacion;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,28 +39,35 @@ public class IngestaController {
 
     @PostMapping("/api/files/orders")
     public ApiResponseDTO<ResultadoCargaDTO> cargarPedidos(@RequestParam("file") MultipartFile file) {
-        return recibir(file);
+        return recibir(file, TipoArchivo.PEDIDOS);
     }
 
     @PostMapping("/api/files/blocked-streets")
     public ApiResponseDTO<ResultadoCargaDTO> cargarBloqueos(@RequestParam("file") MultipartFile file) {
-        return recibir(file);
+        return recibir(file, TipoArchivo.BLOQUEOS);
     }
 
     @PostMapping("/api/files/maintenance")
     public ApiResponseDTO<ResultadoCargaDTO> cargarMantenimiento(@RequestParam("file") MultipartFile file) {
-        return recibir(file);
+        return recibir(file, TipoArchivo.MANTENIMIENTO);
     }
 
-    private ApiResponseDTO<ResultadoCargaDTO> recibir(MultipartFile file) {
+    @DeleteMapping("/api/files")
+    public ApiResponseDTO<Void> limpiarArchivos() {
+        servicioPlanificacion.limpiarArchivosCargados();
+        log.info("Archivos cargados limpiados mediante API");
+        return ApiResponseDTO.of(null);
+    }
+
+    private ApiResponseDTO<ResultadoCargaDTO> recibir(MultipartFile file, TipoArchivo tipo) {
         String contenido;
         try {
             contenido = new String(file.getBytes(), StandardCharsets.UTF_8);
         } catch (IOException ex) {
             throw new ArchivoIlegibleException(file.getOriginalFilename(), ex);
         }
-        servicioPlanificacion.recibirArchivo(new ArchivoEntrada(file.getOriginalFilename(), contenido));
-        log.info("Archivo ingerido: {}", file.getOriginalFilename());
+        servicioPlanificacion.recibirArchivo(new ArchivoEntrada(file.getOriginalFilename(), contenido), tipo);
+        log.info("Archivo ingerido ({}): {}", tipo, file.getOriginalFilename());
         return ApiResponseDTO.of(new ResultadoCargaDTO(file.getOriginalFilename()));
     }
 }
