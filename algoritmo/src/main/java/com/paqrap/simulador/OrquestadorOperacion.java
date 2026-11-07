@@ -146,11 +146,27 @@ public class OrquestadorOperacion {
         this.ta = ta;
         this.k = k;
         this.tiempoMaximoComputoSegundos = tiempoMaximoComputoSegundos;
-        this.contextoProblema = contextoInicial;
+        this.instanteInicioEscenario = contextoInicial.marcaTiempoActual();
         this.todosLosBloqueos = new ArrayList<>(contextoInicial.bloqueos());
         this.todosLosMantenimientos = new ArrayList<>(contextoInicial.mantenimientos());
         this.cargadorRecursos = cargadorRecursos;
-        this.instanteInicioEscenario = contextoInicial.marcaTiempoActual();
+
+        List<Pedido> pedidosValidos = new ArrayList<>();
+        for (Pedido p : contextoInicial.pedidos()) {
+            if (p.getFechaIngreso().isBefore(instanteInicioEscenario)) {
+                if (p.getEstado() == EstadoPedido.ENTREGADA || !p.getEntregasParciales().isEmpty()) {
+                    pedidosValidos.add(p);
+                }
+            } else if (!p.getFechaIngreso().isAfter(instanteInicioEscenario)) {
+                pedidosValidos.add(p);
+            } else {
+                this.pedidosPorIncorporar.add(p);
+            }
+        }
+        this.contextoProblema = new ContextoProblema(contextoInicial.marcaTiempoActual(),
+                pedidosValidos, contextoInicial.bloqueos(), contextoInicial.mantenimientos(),
+                contextoInicial.almacenes(), contextoInicial.vehiculos(), contextoInicial.ciudad(),
+                contextoInicial.configuracionOperacion());
     }
 
     /**
@@ -171,6 +187,42 @@ public class OrquestadorOperacion {
      */
     public void encolarSolicitud(SolicitudOperacion solicitud) {
         solicitudesPendientes.add(solicitud);
+    }
+
+    /**
+     * Incorpora nuevos pedidos, bloqueos o mantenimientos a una ejecución en curso.
+     */
+    public synchronized void incorporarDatos(List<Pedido> pedidos, List<Bloqueo> bloqueos,
+            List<Mantenimiento> mantenimientos) {
+        if (pedidos != null && !pedidos.isEmpty()) {
+            LocalDateTime ahora = contextoProblema.marcaTiempoActual();
+            List<Pedido> paraAgregarAlContexto = new ArrayList<>();
+            for (Pedido p : pedidos) {
+                if (p.getFechaIngreso().isBefore(instanteInicioEscenario)) {
+                    continue;
+                }
+                if (!p.getFechaIngreso().isAfter(ahora)) {
+                    historialPedidos.put(p.getIdPedido(), p);
+                    paraAgregarAlContexto.add(p);
+                } else {
+                    pedidosPorIncorporar.add(p);
+                }
+            }
+            if (!paraAgregarAlContexto.isEmpty()) {
+                List<Pedido> nuevos = new ArrayList<>(contextoProblema.pedidos());
+                nuevos.addAll(paraAgregarAlContexto);
+                this.contextoProblema = new ContextoProblema(contextoProblema.marcaTiempoActual(),
+                        nuevos, contextoProblema.bloqueos(), contextoProblema.mantenimientos(),
+                        contextoProblema.almacenes(), contextoProblema.vehiculos(), contextoProblema.ciudad(),
+                        contextoProblema.configuracionOperacion());
+            }
+        }
+        if (bloqueos != null && !bloqueos.isEmpty()) {
+            todosLosBloqueos.addAll(bloqueos);
+        }
+        if (mantenimientos != null && !mantenimientos.isEmpty()) {
+            todosLosMantenimientos.addAll(mantenimientos);
+        }
     }
 
     /**
@@ -783,7 +835,7 @@ public class OrquestadorOperacion {
         // Ahora se decide una sola vez por unidad: en mantenimiento si CUALQUIER registro la cubre.
         Set<UnidadTransporte> enVentana = new HashSet<>();
         Set<UnidadTransporte> conRegistros = new java.util.LinkedHashSet<>();
-        for (Mantenimiento mantenimiento : contextoProblema.mantenimientos()) {
+        for (Mantenimiento mantenimiento : todosLosMantenimientos) {
             conRegistros.add(mantenimiento.vehiculoAfectado());
             if (!instante.isBefore(mantenimiento.fechaInicio()) && instante.isBefore(mantenimiento.fechaFinCalculada())) {
                 enVentana.add(mantenimiento.vehiculoAfectado());

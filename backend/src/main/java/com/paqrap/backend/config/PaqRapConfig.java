@@ -116,12 +116,20 @@ public class PaqRapConfig {
         return new CargadorRecursos(carpetaDatos, "config");
     }
 
-    @Bean
     public ServicioPlanificacion servicioPlanificacion(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
             List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
             CargadorRecursos cargadorRecursos) {
+        return servicioPlanificacion(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota,
+                cargadorRecursos, false);
+    }
+
+    @Bean
+    public ServicioPlanificacion servicioPlanificacion(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
+            List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
+            CargadorRecursos cargadorRecursos,
+            @Value("${paqrap.datos.carga-automatica:false}") boolean cargaAutomatica) {
         return new ServicioPlanificacionImpl(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota,
-                TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargadorRecursos);
+                TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargaAutomatica ? cargadorRecursos : null);
     }
 
     /**

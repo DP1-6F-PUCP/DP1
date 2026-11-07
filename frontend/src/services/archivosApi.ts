@@ -17,4 +17,8 @@ export const archivosApi = {
   async cargarMantenimiento(file: File): Promise<ResultadoCargaDTO> {
     return await httpClient.postFile<ResultadoCargaDTO>('/files/maintenance', file);
   },
+
+  async limpiarArchivos(): Promise<void> {
+    await httpClient.delete<void>('/files');
+  },
 };

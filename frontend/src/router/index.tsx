@@ -24,6 +24,8 @@ import { useThemeStore } from '../store/themeStore';
 import { OperacionTopbar } from '../components/OperacionTopbar';
 import { SimulationFinishedModal } from '../components/SimulationFinishedModal';
 import { useReporteFinal } from '../hooks/useReporteFinal';
+import { fileStore } from '../utils/fileStore';
+import { archivosApi } from '../services/archivosApi';
 
 const ESTADOS_ACTIVOS = new Set(['INICIADA', 'EN_CURSO', 'PAUSADA']);
 
@@ -133,6 +135,8 @@ const RootLayout: React.FC = () => {
             isError={reporteFinal.isError}
             onRetry={() => { void reporteFinal.refetch(); }}
             onAccept={() => {
+              fileStore.clearAll();
+              void archivosApi.limpiarArchivos().catch(() => {});
               setEjecucion(null);
               setShowDataFiles(false);
               navigate('/', { replace: true });

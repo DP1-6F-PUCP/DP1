@@ -23,6 +23,29 @@ public interface ServicioPlanificacion {
     void recibirArchivo(ArchivoEntrada archivo);
 
     /**
+     * Procesa un archivo de entrada especificando explícitamente su tipo de contenido.
+     *
+     * @param archivo nombre y contenido del archivo recibido
+     * @param tipoExplicito tipo de archivo indicado por el invocador
+     */
+    default void recibirArchivo(ArchivoEntrada archivo, com.paqrap.dominio.TipoArchivo tipoExplicito) {
+        recibirArchivo(archivo);
+    }
+
+    /**
+     * Limpia de memoria los pedidos, bloqueos y mantenimientos cargados previamente.
+     */
+    void limpiarArchivosCargados();
+
+    /**
+     * Valida que los archivos obligatorios hayan sido cargados antes de iniciar un escenario planificado.
+     *
+     * @param tipo tipo de escenario a iniciar
+     */
+    default void validarArchivosRequeridos(TipoEscenario tipo) {
+    }
+
+    /**
      * @return las rutas actualmente vigentes de la ejecución en curso
      */
     List<RutaDTO> consultarRutasVigentes();

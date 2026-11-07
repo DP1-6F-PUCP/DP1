@@ -93,8 +93,13 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     }
 
     @Override
-    public void recibirArchivo(ArchivoEntrada archivo) {
-        TipoArchivo tipo = inferirTipoArchivo(archivo.nombreArchivo());
+    public synchronized void recibirArchivo(ArchivoEntrada archivo) {
+        recibirArchivo(archivo, null);
+    }
+
+    @Override
+    public synchronized void recibirArchivo(ArchivoEntrada archivo, TipoArchivo tipoExplicito) {
+        TipoArchivo tipo = tipoExplicito != null ? tipoExplicito : inferirTipoArchivo(archivo.nombreArchivo());
         YearMonth periodo = inferirPeriodo(archivo.nombreArchivo()).orElse(YearMonth.now());
 
         CargaArchivo carga = new CargaArchivo(archivo.nombreArchivo(), tipo, periodo);
@@ -105,17 +110,73 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                     + carga.getErrores().size() + " línea(s) inválida(s): " + carga.getErrores().get(0).tipoError());
         }
 
-        pedidosRecibidos.addAll(carga.getPedidos());
+        // Deduplica pedidos por idPedido si se sube el mismo archivo varias veces
+        java.util.Set<String> idsExistentes = pedidosRecibidos.stream()
+                .map(Pedido::getIdPedido)
+                .collect(java.util.stream.Collectors.toSet());
+        List<Pedido> nuevosPedidos = new ArrayList<>();
+        for (Pedido p : carga.getPedidos()) {
+            if (!idsExistentes.contains(p.getIdPedido())) {
+                pedidosRecibidos.add(p);
+                nuevosPedidos.add(p);
+                idsExistentes.add(p.getIdPedido());
+            }
+        }
+
         bloqueosRecibidos.addAll(carga.getBloqueos());
+
+        List<Mantenimiento> nuevosMantenimientos = new ArrayList<>();
         for (var pendiente : carga.getMantenimientosPendientes()) {
             flota.stream()
                     .filter(u -> u.getIdUnidad().equalsIgnoreCase(pendiente.idUnidad()))
                     .findFirst()
                     .ifPresent(unidad -> {
-                        LocalDateTime inicio = pendiente.fecha().atStartOfDay();
-                        LocalDateTime fin = inicio.plusHours((long) unidad.getTipoVehiculo().getDuracionMantenimientoHoras());
-                        mantenimientosRecibidos.add(new Mantenimiento(unidad, inicio, fin));
+                        boolean primerMesPlantilla = pendiente.fecha().getMonthValue() % 2 == 1;
+                        for (int anio = 2026; anio <= 2028; anio++) {
+                            for (int mes1 = 1; mes1 <= 11; mes1 += 2) {
+                                int mesDestino = primerMesPlantilla ? mes1 : mes1 + 1;
+                                int diaDestino = Math.min(pendiente.fecha().getDayOfMonth(),
+                                        YearMonth.of(anio, mesDestino).lengthOfMonth());
+                                LocalDateTime inicio = java.time.LocalDate.of(anio, mesDestino, diaDestino).atStartOfDay();
+                                LocalDateTime fin = inicio.plusHours((long) unidad.getTipoVehiculo().getDuracionMantenimientoHoras());
+                                Mantenimiento m = new Mantenimiento(unidad, inicio, fin);
+                                mantenimientosRecibidos.add(m);
+                                nuevosMantenimientos.add(m);
+                            }
+                        }
                     });
+        }
+
+        // Si ya hay una ejecución activa (p. ej. DIA_A_DIA), incorporar los datos en caliente
+        OrquestadorOperacion activo = ejecucionActivaOrquestador();
+        if (activo != null && esEjecucionActiva(activo.getEjecucionActual())) {
+            activo.incorporarDatos(nuevosPedidos, carga.getBloqueos(), nuevosMantenimientos);
+        }
+    }
+
+    @Override
+    public synchronized void limpiarArchivosCargados() {
+        pedidosRecibidos.clear();
+        bloqueosRecibidos.clear();
+        mantenimientosRecibidos.clear();
+        log.info("Archivos de pedidos, bloqueos y mantenimientos limpiados de memoria.");
+    }
+
+    @Override
+    public synchronized void validarArchivosRequeridos(TipoEscenario tipo) {
+        OrquestadorOperacion orquestadorActivo = ejecucionActivaOrquestador();
+        if (orquestadorActivo != null && esEjecucionActiva(orquestadorActivo.getEjecucionActual())) {
+            return;
+        }
+        if (cargadorRecursos == null) {
+            if (pedidosRecibidos.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Debe subir el archivo de pedidos/ventas antes de iniciar la simulación (" + tipo + ").");
+            }
+            if ((tipo == TipoEscenario.CINCO_DIAS || tipo == TipoEscenario.COLAPSO_LOGISTICO) && bloqueosRecibidos.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Debe subir el archivo de tramos bloqueados antes de iniciar la simulación (" + tipo + ").");
+            }
         }
     }
 
@@ -284,7 +345,8 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         aplicarAjustesIniciales(ajustesIniciales, fechaInicioSimulada);
 
         List<Pedido> pedidosPendientes = pedidosRecibidos.stream()
-                .filter(p -> p.getEstado() == EstadoPedido.PENDIENTE)
+                .map(p -> new Pedido(p.getIdPedido(), p.getIdCliente(), p.getDestino(),
+                        p.getCantidadSolicitada(), p.getHorasLimite(), p.getFechaIngreso()))
                 .toList();
 
         // Nótese que aquí se pasa el universo COMPLETO de bloqueos recibidos, sin recortar: el
@@ -586,6 +648,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     @Override
     public void detenerEjecucion(String idEjecucion) {
         orquestadorDe(idEjecucion).detener();
+        limpiarArchivosCargados();
     }
 
     @Override
@@ -661,13 +724,13 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
     private TipoArchivo inferirTipoArchivo(String nombreArchivo) {
         String nombre = nombreArchivo.toLowerCase();
-        if (nombre.startsWith("ventas")) {
+        if (nombre.contains("ventas") || nombre.contains("pedido")) {
             return TipoArchivo.PEDIDOS;
         }
-        if (nombre.startsWith("bloqueo")) {
+        if (nombre.contains("bloqueo") || nombre.contains("bloqueada")) {
             return TipoArchivo.BLOQUEOS;
         }
-        if (nombre.startsWith("mant.preventivo") || nombre.startsWith("mant")) {
+        if (nombre.contains("mant")) {
             return TipoArchivo.MANTENIMIENTO;
         }
         throw new IllegalArgumentException("No se pudo inferir el tipo de archivo a partir del nombre: " + nombreArchivo);
@@ -675,18 +738,22 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
     private java.util.Optional<YearMonth> inferirPeriodo(String nombreArchivo) {
         try {
-            if (nombreArchivo.startsWith("ventas.")) {
-                String digitos = nombreArchivo.replaceAll("[^0-9]", "");
-                return java.util.Optional.of(YearMonth.of(Integer.parseInt(digitos.substring(0, 4)),
-                        Integer.parseInt(digitos.substring(4, 6))));
-            }
-            if (nombreArchivo.startsWith("bloqueo.")) {
-                String digitos = nombreArchivo.replaceAll("[^0-9]", "");
-                int anio = 2000 + Integer.parseInt(digitos.substring(0, 2));
-                int mes = Integer.parseInt(digitos.substring(2, 4));
+            // Busca patrón de 6 dígitos YYYYMM (ej. 202609)
+            java.util.regex.Matcher m6 = java.util.regex.Pattern.compile("(?:20\\d{2})(0[1-9]|1[0-2])").matcher(nombreArchivo);
+            if (m6.find()) {
+                String coincidencia = m6.group(0);
+                int anio = Integer.parseInt(coincidencia.substring(0, 4));
+                int mes = Integer.parseInt(coincidencia.substring(4, 6));
                 return java.util.Optional.of(YearMonth.of(anio, mes));
             }
-        } catch (DateTimeParseException | NumberFormatException | IndexOutOfBoundsException ex) {
+            // Busca patrón de 4 dígitos YYMM (ej. 2609)
+            java.util.regex.Matcher m4 = java.util.regex.Pattern.compile("(?<!\\d)(\\d{2})(0[1-9]|1[0-2])(?=[^0-9]|$)").matcher(nombreArchivo);
+            if (m4.find()) {
+                int anio = 2000 + Integer.parseInt(m4.group(1));
+                int mes = Integer.parseInt(m4.group(2));
+                return java.util.Optional.of(YearMonth.of(anio, mes));
+            }
+        } catch (Exception ex) {
             return java.util.Optional.empty();
         }
         return java.util.Optional.empty();
