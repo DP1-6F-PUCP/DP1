@@ -6,6 +6,10 @@ export interface FrameData {
   vehicles: Vehicle[];
   routes: Route[];
   orders: Order[];
+  /** Pedidos que informó el backend en este lote, incluidos los que `orders` ya no retiene. */
+  ordersTotal?: number;
+  /** Pedidos antiguos que no se retienen: sumados a `orders` dan el total del contador. */
+  ordersOmitted?: number;
   warehouses: Warehouse[];
   blockedStreets: BlockedStreet[];
   estadoRaw: EstadoOperacionDTO | undefined;

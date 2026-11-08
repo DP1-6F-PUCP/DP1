@@ -51,11 +51,11 @@ const RootLayout: React.FC = () => {
 
   // Mapa persistente montado una sola vez aqui
   const [mapSlot, setMapSlot] = useState<HTMLDivElement | null>(null);
-  const { warehouses, vehicles, blockedStreets, orders, routes, estadoRaw } = useEstadoOperacion();
+  const { warehouses, vehicles, blockedStreets, orders, ordersTotal, routes, estadoRaw } = useEstadoOperacion();
   // Unico punto de ingesta del motor de simulacion (engine/simulationEngine.ts), con el estado EN
   // VIVO. Todo lo que se muestra junto al mapa lee el estado retrasado (useEstadoVisual), para que
   // marcadores, reloj, badges y panel muestren el mismo instante.
-  useSimulationEngineIngest({ vehicles, routes, orders, warehouses, blockedStreets, estadoRaw });
+  useSimulationEngineIngest({ vehicles, routes, orders, ordersTotal, warehouses, blockedStreets, estadoRaw });
   const visual = useEstadoVisual();
   const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
   const simMinutesVisible = visual.marcaVisibleMs != null && scenarioStartMs != null

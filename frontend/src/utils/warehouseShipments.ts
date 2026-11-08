@@ -17,14 +17,14 @@ export const deliveryMs = (order: Order) => order.deliveredSimMs ?? order.estima
 const isDeliveredBy = (order: Order, nowSimMs: number) =>
   order.deliveredSimMs !== undefined && order.deliveredSimMs <= nowSimMs;
 
-/** Pedidos entregados en las últimas 4 h, contra el instante visible del mapa (rúbrica E32). */
-export const isDeliveredRecently = (order: Order, nowSimMs: number) =>
-  isDeliveredBy(order, nowSimMs) && nowSimMs - (order.deliveredSimMs ?? 0) <= WINDOW_MS;
+/** Pedidos entregados en las últimas `hours` h (4 por defecto), contra el instante visible del mapa (rúbrica E32). */
+export const isDeliveredRecently = (order: Order, nowSimMs: number, hours = WAREHOUSE_WINDOW_HOURS) =>
+  isDeliveredBy(order, nowSimMs) && nowSimMs - (order.deliveredSimMs ?? 0) <= hours * 3600000;
 
-/** Pedidos que se entregarán en las siguientes 4 h (rúbrica E33). */
-export const isDueSoon = (order: Order, nowSimMs: number) => {
+/** Pedidos que se entregarán en las siguientes `hours` h (4 por defecto, rúbrica E33). */
+export const isDueSoon = (order: Order, nowSimMs: number, hours = WAREHOUSE_WINDOW_HOURS) => {
   const due = deliveryMs(order);
-  return !isDeliveredBy(order, nowSimMs) && due !== undefined && due <= nowSimMs + WINDOW_MS;
+  return !isDeliveredBy(order, nowSimMs) && due !== undefined && due <= nowSimMs + hours * 3600000;
 };
 
 /** Salida real o planificada si el pedido tiene ruta; si no, la estimada. */

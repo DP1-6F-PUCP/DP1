@@ -27,6 +27,7 @@ export function useEstadoVisual(): EstadoVisual {
     vehicles: vivo.vehicles,
     routes: vivo.routes,
     orders: ordersAtSimulatedTime(vivo.orders, marcaVisibleMs),
+    ordersOmitted: Math.max(0, vivo.ordersTotal - vivo.orders.length),
     warehouses: vivo.warehouses,
     blockedStreets: vivo.blockedStreets,
     estadoRaw: vivo.estadoRaw,

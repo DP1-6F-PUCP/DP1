@@ -1,6 +1,7 @@
 import { Point, Route, TrajectoryPoint, Vehicle, VehicleStatus } from '../types';
 import { EngineSnapshot, EstadoVisual, FrameData, GrupoDetenido } from './types';
 import { ordersAtSimulatedTime } from '../utils/orderVisibility';
+import { keepRecentOrders, MAX_LOADED_ORDERS } from '../utils/shipmentList';
 import { parseBackendSimulatedTime } from '../utils/backendTime';
 import { adaptBloqueo } from '../utils/backendAdapters';
 
@@ -212,6 +213,7 @@ export class SimulationEngine {
   private preparandoReproduccion = false;
   private retrasoPreparadoMs = 0;
   private pedidosConocidos = new Map<string, FrameData['orders'][number]>();
+  private pedidosTotal = 0;
   /** Último rumbo conocido por vehículo: al detenerse conserva hacia dónde iba (como en un GPS). */
   private rumbos = new Map<string, number>();
   private ultimoSnapshot: EngineSnapshot = { vehiclePositions: new Map(), gruposDetenidos: [], buffering: true, nowSimMs: null, segundosDesdeUltimoLote: 0 };
@@ -223,6 +225,7 @@ export class SimulationEngine {
     this.preparandoReproduccion = false;
     this.retrasoPreparadoMs = 0;
     this.pedidosConocidos.clear();
+    this.pedidosTotal = 0;
     this.lineas.clear();
     this.futuros.clear();
     this.cuadros = [];
@@ -301,6 +304,7 @@ export class SimulationEngine {
     }
     if (huboResetDeEjecucion) {
       this.pedidosConocidos.clear();
+      this.pedidosTotal = 0;
       this.ultimoSimNow = null;
       this.lineas.clear();
       this.rumbos.clear();
@@ -320,7 +324,18 @@ export class SimulationEngine {
     const ultimaMarca = this.cuadros.at(-1)?.marcaMs;
     if (marcaMs != null && ultimaMarca != null && marcaMs < ultimaMarca) return;
     for (const pedido of frame.orders) this.pedidosConocidos.set(pedido.id, pedido);
-    const cuadro = { ...frame, orders: [...this.pedidosConocidos.values()] };
+    // Sin este recorte el acumulado crecería sin límite aunque cada lote ya venga recortado.
+    const pedidos = keepRecentOrders(
+      [...this.pedidosConocidos.values()],
+      MAX_LOADED_ORDERS,
+      (pedido) => pedido.status === 'delivered',
+      (pedido) => pedido.arrivalSimMs ?? 0,
+    );
+    if (pedidos.length < this.pedidosConocidos.size) {
+      this.pedidosConocidos = new Map(pedidos.map((pedido) => [pedido.id, pedido]));
+    }
+    this.pedidosTotal = Math.max(this.pedidosTotal, frame.ordersTotal ?? 0);
+    const cuadro = { ...frame, orders: pedidos, ordersOmitted: Math.max(0, this.pedidosTotal - pedidos.length) };
     // El primer lote puede llegar adelantado por el cómputo inicial del servidor.
     // Conservar un cuadro inicial en la hora elegida para no arrancar desde el final de ese lote.
     if (this.cuadros.length === 0 && this.inicioPreparadoMs != null && marcaMs != null) {
@@ -509,7 +524,7 @@ export class SimulationEngine {
       firma += `${v.id}:${e?.moviendo ?? false}:${e?.act ?? '-'}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
     }
     // La lista puede cambiar dentro del mismo lote, incluso sin vehículos en movimiento.
-    const clave = JSON.stringify([base.arrivalMs, firma, orders.map((order) => order.id),
+    const clave = JSON.stringify([base.arrivalMs, firma, base.data.ordersOmitted, orders.map((order) => order.id),
       bloqueosVisibles?.map((b) => b.index) ?? base.data.blockedStreets.map((b) => b.id)]);
     if (clave === this.claveVisual) return;
     this.claveVisual = clave;

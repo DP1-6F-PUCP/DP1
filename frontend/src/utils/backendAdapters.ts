@@ -25,6 +25,7 @@ import { Route, Warehouse, BlockedStreet, Point } from '../types/route';
 import { generateManhattanPath, isSegmentBlocked, normalizeManhattanPath } from './manhattan';
 import { parseBackendSimulatedTime } from './backendTime';
 import { BREAKDOWN_LEVEL_CONFIGS } from './vehicleBreakdown';
+import { keepRecentOrders, MAX_LOADED_ORDERS } from './shipmentList';
 
 const TIPO_A_VEHICLE_TYPE: Record<string, VehicleType> = {
   AUTO: 'car',
@@ -531,6 +532,8 @@ export function adaptRuta(
 export interface EstadoAdaptado {
   vehicles: Vehicle[];
   orders: Order[];
+  /** Pedidos que informó el backend; `orders` puede traer menos (ver MAX_LOADED_ORDERS). */
+  ordersTotal: number;
   routes: Route[];
   warehouses: Warehouse[];
   blockedStreets: BlockedStreet[];
@@ -559,7 +562,14 @@ export function adaptEstadoOperacion(
     vehicles: estado.vehiculos.map((v) =>
       adaptVehiculo(v, config, estado.rutas, pedidosById, nowMs)
     ),
-    orders: pedidos.map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs, warehouses, estimacion)),
+    // Solo se recorta lo que llega a la vista: rutas y vehículos siguen cruzando contra `pedidosById`.
+    orders: keepRecentOrders(
+      pedidos,
+      MAX_LOADED_ORDERS,
+      (p) => p.estado === 'ENTREGADA',
+      (p) => parseBackendSimulatedTime(p.fechaIngreso),
+    ).map((p) => adaptPedido(p, estado.rutas, scenarioStartMs, nowMs, warehouses, estimacion)),
+    ordersTotal: pedidos.length,
     routes: estado.rutas.map((r) =>
       adaptRuta(
         r,

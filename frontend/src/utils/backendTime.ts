@@ -16,19 +16,32 @@ export function parseBackendSimulatedTime(value: string | null | undefined): num
   return milliseconds;
 }
 
+// Crear un Intl.DateTimeFormat es caro y la lista de envíos formatea varias horas por tarjeta.
+const simulatedTimeFormats = new Map<string, Intl.DateTimeFormat>();
+
+function simulatedTimeFormat(includeDate: boolean, includeSeconds: boolean): Intl.DateTimeFormat {
+  const key = `${includeDate}:${includeSeconds}`;
+  let format = simulatedTimeFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat('es-PE', {
+      ...(includeDate ? { day: '2-digit', month: '2-digit', year: 'numeric' } : {}),
+      hour: 'numeric',
+      minute: '2-digit',
+      ...(includeSeconds ? { second: '2-digit' } : {}),
+      hourCycle: 'h12',
+      timeZone: 'UTC',
+    });
+    simulatedTimeFormats.set(key, format);
+  }
+  return format;
+}
+
 export function formatBackendSimulatedTime(
   milliseconds: number,
   includeDate = true,
   includeSeconds = false,
 ): string {
-  const parts = new Intl.DateTimeFormat('es-PE', {
-    ...(includeDate ? { day: '2-digit', month: '2-digit', year: 'numeric' } : {}),
-    hour: 'numeric',
-    minute: '2-digit',
-    ...(includeSeconds ? { second: '2-digit' } : {}),
-    hourCycle: 'h12',
-    timeZone: 'UTC',
-  }).formatToParts(milliseconds);
+  const parts = simulatedTimeFormat(includeDate, includeSeconds).formatToParts(milliseconds);
 
   return parts
     .map((part) => (part.type === 'hour' && part.value === '12' ? { ...part, value: '0' } : part))

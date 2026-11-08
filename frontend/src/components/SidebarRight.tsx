@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clock,
   AlertTriangle,
@@ -48,6 +48,14 @@ import {
   upcomingDepartureMs,
   WAREHOUSE_WINDOW_HOURS,
 } from '../utils/warehouseShipments';
+import {
+  isInShipmentListWindow,
+  newestOrdersFirst,
+  ordersToRender,
+  parseWindowHours,
+  SHIPMENT_MAX_RENDERED,
+  SHIPMENT_PAGE_SIZE,
+} from '../utils/shipmentList';
 import { useScenarioStore } from '../store/scenarioStore';
 import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
 import { Vehicle } from '../types/vehicle';
@@ -286,7 +294,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 }) => {
   // Estado retrasado al mismo instante que el mapa (ver engine/useEstadoVisual): antes el panel
   // mostraba el dato en vivo, ~sa segundos reales por delante de lo que se veía en el mapa.
-  const { warehouses, vehicles, orders, estadoRaw, marcaVisibleMs } = useEstadoVisual();
+  const { warehouses, vehicles, orders, ordersOmitted = 0, estadoRaw, marcaVisibleMs } = useEstadoVisual();
   const { ejecucion } = useEscenario();
   const selectedVehicleId = useMapStore((s) => s.selectedVehicleId);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
@@ -317,9 +325,16 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const [expandedWarehouseId, setExpandedWarehouseId] = useState<string | null>(null);
   const [shipmentSearchTerm, setShipmentSearchTerm] = useState('');
   const [shipmentStatusFilter, setShipmentStatusFilter] = useState<
-    'all' | 'on_time' | 'at_risk' | 'delayed' | 'delivered'
+    'all' | 'on_time' | 'at_risk' | 'delivered'
   >('all');
   const [shipmentWindowFilter, setShipmentWindowFilter] = useState<'all' | 'delivered' | 'due'>('all');
+  const [shipmentWindowHoursText, setShipmentWindowHoursText] = useState(String(WAREHOUSE_WINDOW_HOURS));
+  const shipmentWindowHours = parseWindowHours(shipmentWindowHoursText, WAREHOUSE_WINDOW_HOURS);
+  const [shipmentRenderCount, setShipmentRenderCount] = useState(SHIPMENT_PAGE_SIZE);
+
+  useEffect(() => {
+    setShipmentRenderCount(SHIPMENT_PAGE_SIZE);
+  }, [shipmentSearchTerm, shipmentStatusFilter, shipmentWindowFilter, shipmentWindowHours]);
 
   const previousSelectedVehicleId = useRef<string | null>(selectedVehicleId);
   const previousSelectedOrderId = useRef<string | null>(selectedOrderId);
@@ -590,23 +605,40 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const activeFleetFilterCount = activeFleetFilterPills.length;
   const clearFleetFilters = () => activeFleetFilterPills.forEach((pill) => pill.onClear());
 
-  // Ventanas de 4 h de la lista de envíos (rúbrica E32/E33): se combinan con estado y búsqueda.
-  const shipmentWindows = {
-    delivered: marcaVisibleMs === null ? [] : orders.filter((order) => isDeliveredRecently(order, marcaVisibleMs)),
-    due: marcaVisibleMs === null ? [] : orders.filter((order) => isDueSoon(order, marcaVisibleMs)),
-  };
-
-  const filteredOrders = orders.filter((order) => {
+  // El contador suma también los pedidos antiguos que ya no se retienen (ver MAX_LOADED_ORDERS).
+  // La lista solo muestra lo reciente y lo no entregado, salvo al buscar, que recorre todo `orders`.
+  const filteredOrders = useMemo(() => {
     const search = shipmentSearchTerm.trim().toLowerCase();
-    const statusMatches = shipmentStatusFilter === 'all' || order.status === shipmentStatusFilter;
-    const windowMatches = shipmentWindowFilter === 'all' || shipmentWindows[shipmentWindowFilter].includes(order);
-    const searchMatches =
-      !search ||
-      [order.code, order.id, order.clientId, 'pedido de cliente'].some((value) =>
-        value?.toLowerCase().includes(search)
-      );
-    return statusMatches && windowMatches && searchMatches;
-  });
+    return newestOrdersFirst(orders.filter((order) => {
+      if (!search && !isInShipmentListWindow(order, marcaVisibleMs)) return false;
+      const statusMatches = shipmentStatusFilter === 'all' || order.status === shipmentStatusFilter;
+      // Ventanas de horas de la lista de envíos (rúbrica E32/E33: 4 h por defecto): se combinan
+      // con estado y búsqueda.
+      const windowMatches =
+        shipmentWindowFilter === 'all' ||
+        (marcaVisibleMs !== null &&
+          (shipmentWindowFilter === 'delivered'
+            ? isDeliveredRecently(order, marcaVisibleMs, shipmentWindowHours)
+            : isDueSoon(order, marcaVisibleMs, shipmentWindowHours)));
+      const searchMatches =
+        !search ||
+        [order.code, order.id, order.clientId, 'pedido de cliente'].some((value) =>
+          value?.toLowerCase().includes(search)
+        );
+      return statusMatches && windowMatches && searchMatches;
+    }));
+  }, [orders, marcaVisibleMs, shipmentSearchTerm, shipmentStatusFilter, shipmentWindowFilter, shipmentWindowHours]);
+
+  const renderedOrders = useMemo(
+    () => ordersToRender(
+      filteredOrders,
+      shipmentRenderCount,
+      selectedOrderId ? orders.find((order) => order.id === selectedOrderId) : undefined,
+    ),
+    [filteredOrders, shipmentRenderCount, selectedOrderId, orders],
+  );
+  const remainingOrders = Math.max(0, filteredOrders.length - shipmentRenderCount);
+  const totalOrders = orders.length + ordersOmitted;
 
   const formatShipmentTime = (minute: number) => {
     if (scenarioStartMs == null) return '--:--';
@@ -682,9 +714,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                   ? 'bg-blue-600 border border-blue-400'
                   : 'bg-[var(--color-sidebar-surface)] hover:bg-[var(--color-sidebar-border)]'
               }`}
-              title="Panel de Operación"
+              title="Almacén"
             >
-              <Activity className="h-4 w-4" />
+              <WarehouseIcon className="h-4 w-4" />
             </button>
 
             {/* Tab Flota */}
@@ -747,8 +779,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/50'
                 }`}
               >
-                <Activity className="h-3.5 w-3.5" />
-                <span>Operación</span>
+                <WarehouseIcon className="h-3.5 w-3.5" />
+                <span>Almacén</span>
               </button>
               <button
                 type="button"
@@ -786,10 +818,17 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-bold text-white">Gestión de Envíos</h3>
-                      <p className="text-[11px] text-slate-400">Pedidos activos y seguimiento de SLA</p>
+                      <p className="text-[11px] text-slate-400">
+                        {shipmentSearchTerm.trim()
+                          ? 'Buscando en todos los pedidos cargados'
+                          : 'Sin entregar y entregados'}
+                      </p>
                     </div>
-                    <span className="rounded-lg bg-blue-500/15 px-2 py-1 text-[11px] font-mono-code text-blue-300">
-                      {filteredOrders.length}/{orders.length}
+                    <span
+                      title={`${filteredOrders.length} en esta lista de ${totalOrders} pedidos en total`}
+                      className="rounded-lg bg-blue-500/15 px-2 py-1 text-[11px] font-mono-code text-blue-300"
+                    >
+                      {filteredOrders.length}/{totalOrders}
                     </span>
                   </div>
 
@@ -815,7 +854,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         ['all', 'Todos', null],
                         ['on_time', 'A tiempo', '#34D399'],
                         ['at_risk', 'En riesgo', '#FBBF24'],
-                        ['delayed', 'Retrasado', '#FB7185'],
                         ['delivered', 'Entregado', '#60A5FA'],
                       ] as const).map(([key, label, dot]) => (
                         <button
@@ -836,28 +874,44 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     </div>
                   </FilterRow>
 
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {([
-                      ['delivered', `Entregados últimas ${WAREHOUSE_WINDOW_HOURS} h`],
-                      ['due', `Por entregar próximas ${WAREHOUSE_WINDOW_HOURS} h`],
-                    ] as const).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        aria-pressed={shipmentWindowFilter === key}
-                        onClick={() => setShipmentWindowFilter(shipmentWindowFilter === key ? 'all' : key)}
-                        className={`rounded-xl px-2 py-1.5 text-left cursor-pointer ${
-                          shipmentWindowFilter === key
-                            ? 'bg-blue-600/30 border border-blue-500/60'
-                            : 'bg-slate-900/90 border border-slate-800 hover:border-slate-600'
-                        }`}
-                      >
-                        <span className="block text-[10px] text-slate-300">{label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <FilterRow label="Periodo">
+                    <Segmented
+                      value={shipmentWindowFilter}
+                      onChange={setShipmentWindowFilter}
+                      options={[
+                        { value: 'all', label: 'Todos' },
+                        { value: 'delivered', label: 'Entregados', title: 'Entregados en las últimas horas' },
+                        { value: 'due', label: 'Por entregar', title: 'Por entregar en las próximas horas' },
+                      ]}
+                    />
+                  </FilterRow>
 
-                  {filteredOrders.length === 0 ? (
+                  {shipmentWindowFilter !== 'all' && (
+                    <FilterRow
+                      label="Horas"
+                      hint={shipmentWindowFilter === 'delivered' ? 'últimas' : 'próximas'}
+                    >
+                      <div className="flex items-center">
+                        <div className="flex items-center rounded-lg border border-slate-700/70 bg-slate-950/60 focus-within:border-blue-500">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            inputMode="numeric"
+                            value={shipmentWindowHoursText}
+                            onChange={(event) => setShipmentWindowHoursText(event.target.value)}
+                            onBlur={() => setShipmentWindowHoursText(String(shipmentWindowHours))}
+                            aria-label="Horas del periodo"
+                            title="Escribe el número de horas"
+                            className="w-12 bg-transparent py-1 pl-2 text-right font-mono-code text-[11px] text-slate-100 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                          <span className="pl-1 pr-2 text-[10.5px] text-slate-500">horas</span>
+                        </div>
+                      </div>
+                    </FilterRow>
+                  )}
+
+                  {renderedOrders.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-slate-400">
                       <Package className="mx-auto mb-2 h-7 w-7 text-slate-600" />
                       <p className="font-medium text-slate-300">Sin coincidencias</p>
@@ -865,7 +919,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-2.5">
-                      {filteredOrders.map((order) => {
+                      {renderedOrders.map((order) => {
                         const status = shipmentStatus[order.status];
                         const warehouse = warehouses.find((item) => item.id === order.warehouseOriginId) ?? warehouses.find((item) => item.id === 'central') ?? warehouses[0];
                         const vehicle = order.assignedVehicleId
@@ -935,6 +989,20 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                           </article>
                         );
                       })}
+                      {remainingOrders > 0 && shipmentRenderCount < SHIPMENT_MAX_RENDERED && (
+                        <button
+                          type="button"
+                          onClick={() => setShipmentRenderCount((count) => Math.min(count + SHIPMENT_PAGE_SIZE, SHIPMENT_MAX_RENDERED))}
+                          className="w-full rounded-xl border border-slate-700/80 bg-slate-900 py-2 text-[11px] font-medium text-slate-200 hover:border-blue-500 hover:text-white cursor-pointer"
+                        >
+                          Ver {Math.min(remainingOrders, SHIPMENT_PAGE_SIZE)} más ({remainingOrders} restantes)
+                        </button>
+                      )}
+                      {remainingOrders > 0 && shipmentRenderCount >= SHIPMENT_MAX_RENDERED && (
+                        <p className="py-1 text-center text-[11px] text-slate-400">
+                          Se muestran como máximo {SHIPMENT_MAX_RENDERED}. Usa la búsqueda o los filtros para encontrar los otros {remainingOrders}.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

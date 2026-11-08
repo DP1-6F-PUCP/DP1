@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Activity, Play, Route as RouteIcon, Truck, Navigation, MapPin, PackageOpen, PackageCheck,
   Coffee, Warehouse, Construction, Wrench, PackagePlus, RefreshCw, Camera, AlertTriangle, Flag,
@@ -66,6 +67,26 @@ export const EventLogButton: React.FC = () => {
   // reprodujo.
   const { estadoRaw } = useEstadoVisual();
   const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // El header del topbar tiene overflow-x-auto, que recorta cualquier hijo absolute: el panel
+  // quedaba "dentro" de la barra con scroll. Por eso se renderiza en un portal con position fixed,
+  // anclado a la posicion del boton.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const update = () => {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 8, left: r.left });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [isOpen]);
 
   const eventos: EventoDTO[] = [...(estadoRaw?.eventos ?? [])].sort(
     (a, b) => Date.parse(b.instante) - Date.parse(a.instante)
@@ -74,6 +95,7 @@ export const EventLogButton: React.FC = () => {
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setIsOpen((v) => !v)}
         title="Bitácora de eventos"
@@ -82,11 +104,14 @@ export const EventLogButton: React.FC = () => {
         <Activity className="h-3.5 w-3.5" />
       </button>
 
-      {isOpen && (
+      {isOpen && pos && createPortal(
         // Se abre hacia la DERECHA: el boton vive en el extremo izquierdo de la barra superior, y con
         // right-0 el panel quedaba fuera de la pantalla, detras del sidebar. z alto para quedar sobre
         // los paneles de Leaflet.
-        <div className="absolute left-0 top-full mt-2 w-[min(24rem,calc(100vw-6rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 shadow-xl z-2000">
+        <div
+          style={{ top: pos.top, left: pos.left }}
+          className="fixed w-[min(24rem,calc(100vw-6rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-slate-800 bg-slate-900 shadow-xl z-2000"
+        >
           <div className="p-3 border-b border-slate-800 flex items-center justify-between">
             <h3 className="text-xs font-bold text-white">Bitácora de eventos ({eventos.length})</h3>
           </div>
@@ -111,7 +136,8 @@ export const EventLogButton: React.FC = () => {
               })}
             </ul>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

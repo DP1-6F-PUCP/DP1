@@ -9,6 +9,7 @@ interface IngestInput {
   vehicles: Vehicle[];
   routes: Route[];
   orders: Order[];
+  ordersTotal: number;
   warehouses: Warehouse[];
   blockedStreets: BlockedStreet[];
   estadoRaw: EstadoOperacionDTO | undefined;
@@ -19,7 +20,7 @@ interface IngestInput {
  * router/index.tsx), con el estado EN VIVO ya adaptado por useEstadoOperacion. El motor guarda
  * cada lote como un cuadro y la UI lee el estado retrasado con useEstadoVisual.
  */
-export function useSimulationEngineIngest({ vehicles, routes, orders, warehouses, blockedStreets, estadoRaw }: IngestInput): void {
+export function useSimulationEngineIngest({ vehicles, routes, orders, ordersTotal, warehouses, blockedStreets, estadoRaw }: IngestInput): void {
   const transicion = useScenarioStore((s) => s.transicion);
   const idEjecucion = useScenarioStore((s) => s.ejecucion?.idEjecucion);
   const sa = useScenarioStore((s) => s.ejecucion?.sa);
@@ -29,8 +30,8 @@ export function useSimulationEngineIngest({ vehicles, routes, orders, warehouses
   const marcaTiempoActual = estadoRaw?.marcaTiempoActual ?? null;
 
   const frame = useMemo<FrameData>(
-    () => ({ vehicles, routes, orders, warehouses, blockedStreets, estadoRaw }),
-    [vehicles, routes, orders, warehouses, blockedStreets, estadoRaw],
+    () => ({ vehicles, routes, orders, ordersTotal, warehouses, blockedStreets, estadoRaw }),
+    [vehicles, routes, orders, ordersTotal, warehouses, blockedStreets, estadoRaw],
   );
 
   useEffect(() => {

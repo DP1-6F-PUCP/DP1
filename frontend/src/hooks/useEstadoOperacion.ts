@@ -3,10 +3,29 @@ import { useQuery } from '@tanstack/react-query';
 import { estadoOperacionApi } from '../services/estadoOperacionApi';
 import { configuracionApi } from '../services/configuracionApi';
 import { adaptEstadoOperacion, EstadoAdaptado } from '../utils/backendAdapters';
+import type { PedidoDTO } from '../types/backend';
 import { useScenarioStore } from '../store/scenarioStore';
 import { useSocketConectado } from './useSimulationSocket';
 
-const ESTADO_VACIO: EstadoAdaptado = { vehicles: [], orders: [], routes: [], warehouses: [], blockedStreets: [] };
+const ESTADO_VACIO: EstadoAdaptado = { vehicles: [], orders: [], ordersTotal: 0, routes: [], warehouses: [], blockedStreets: [] };
+const SIN_PEDIDOS: PedidoDTO[] = [];
+
+type EntradaAdaptacion = Parameters<typeof adaptEstadoOperacion>;
+let ultimaAdaptacion: { entrada: EntradaAdaptacion; resultado: EstadoAdaptado } | null = null;
+
+/**
+ * Cada componente que usa este hook tiene su propio useMemo, pero todos reciben las mismas
+ * referencias de React Query: sin esta caché el cruce se repetía una vez por componente (~7) en
+ * cada lote, y con miles de pedidos eso bloqueaba la página varios segundos seguidos.
+ */
+function adaptarCompartido(...entrada: EntradaAdaptacion): EstadoAdaptado {
+  if (ultimaAdaptacion && entrada.every((valor, i) => valor === ultimaAdaptacion!.entrada[i])) {
+    return ultimaAdaptacion.resultado;
+  }
+  const resultado = adaptEstadoOperacion(...entrada);
+  ultimaAdaptacion = { entrada, resultado };
+  return resultado;
+}
 
 /** Con el WebSocket abierto, cada lote llega por push (y los pedidos se piden en ese momento, ver
  * useSimulationSocket): el polling queda solo como red de seguridad lenta. Sin socket, vuelve a
@@ -59,7 +78,7 @@ export function useEstadoOperacion() {
   const adaptado: EstadoAdaptado = useMemo(
     () =>
       estadoQuery.data && configuracionQuery.data
-        ? adaptEstadoOperacion(estadoQuery.data, configuracionQuery.data, pedidosQuery.data ?? [], scenarioStartMs)
+        ? adaptarCompartido(estadoQuery.data, configuracionQuery.data, pedidosQuery.data ?? SIN_PEDIDOS, scenarioStartMs)
         : ESTADO_VACIO,
     [estadoQuery.data, pedidosQuery.data, configuracionQuery.data, scenarioStartMs],
   );
