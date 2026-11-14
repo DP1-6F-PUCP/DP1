@@ -46,3 +46,23 @@ if (process.env.SYSMILE_REPORT_PREVIEW) {
   writeFileSync(process.env.SYSMILE_REPORT_PREVIEW, Buffer.from(documento.output('arraybuffer')));
 }
 console.log(`OK: tres motivos de cierre, tiempos separados, totales, planificación estable y PDF de ${documento.getNumberOfPages()} páginas.`);
+
+// The PDF must distinguish the final snapshot from the stable snapshot.
+const cincoDias = { ...reporte, tipoEscenario: 'CINCO_DIAS' as const, motivoFinalizacion: 'PARADA_MANUAL' as const,
+  duracionSimuladaMs: 216000000, pedidosFinales: [{ ...pedido, idPedido: 'FINAL-ONLY', fechaLimite: '2026-01-02T00:00:00' }],
+  pedidosPlanificacionEstable: [{ ...pedido, idPedido: 'STABLE-ONLY' }] };
+const parcial = crearReportePdf(cincoDias, null).output();
+assert(parcial.includes('50 %'));
+assert(parcial.indexOf('FINAL-ONLY') < parcial.indexOf('STABLE-ONLY'));
+assert(!parcial.includes('NaN'));
+const emptyState = { ...reporte.estadoFinal, rutas: [], vehiculos: [], almacenes: [],
+  metricas: { ...reporte.estadoFinal.metricas, contadorEntregados: 0, contadorIncumplidos: 0 } };
+const empty = crearReportePdf({ ...cincoDias, estadoFinal: emptyState, ultimaPlanificacionEstable: emptyState,
+  pedidosFinales: [], pedidosPlanificacionEstable: [] }, null).output();
+assert(empty.includes('No aplica: sin pedidos resueltos'));
+assert(!empty.includes('NaN'));
+const longRoute = { ...fixture.estado.rutas[0], secuenciaEntrega: Array.from({ length: 350 }, (_, i) => `PED-LONG-${i}`) };
+const stress = crearReportePdf({ ...cincoDias, ultimaPlanificacionEstable: { ...emptyState, rutas: [longRoute] } as any }, null);
+assert(stress.output().includes('PED-LONG-349'), 'No truncar secuencias largas de pedidos');
+assert(stress.getNumberOfPages() > 5);
+console.log('OK: avance de cinco días, cortes separados, datos vacíos y paginación de una ruta extensa.');
