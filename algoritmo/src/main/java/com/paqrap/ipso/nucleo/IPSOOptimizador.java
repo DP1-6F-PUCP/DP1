@@ -176,8 +176,18 @@ public class IPSOOptimizador {
         puntos.add(deposito);
         for (int i = 0; i <= n; i++) {
             for (int j = 0; j <= n; j++) {
-                distancias[i][j] = (i == j) ? 0.0
-                        : CalculadorDistancia.distanciaKm(ciudad, bloqueos, horaSalida, puntos.get(i), puntos.get(j));
+                if (i == j) {
+                    distancias[i][j] = 0.0;
+                } else {
+                    try {
+                        distancias[i][j] = CalculadorDistancia.distanciaKm(ciudad, bloqueos, horaSalida,
+                                puntos.get(i), puntos.get(j));
+                    } catch (IllegalStateException sinCaminoEnHoraSalida) {
+                        Nodo a = puntos.get(i);
+                        Nodo b = puntos.get(j);
+                        distancias[i][j] = (Math.abs(a.x() - b.x()) + Math.abs(a.y() - b.y())) + 10_000.0;
+                    }
+                }
             }
         }
     }

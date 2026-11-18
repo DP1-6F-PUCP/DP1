@@ -126,4 +126,33 @@ class BloqueosDinamicosTest {
             assertEquals(EstadoRuta.REEMPLAZADA, original.getEstado());
         } finally { runner.detener(); }
     }
+
+    @Test void ipsoPlanificaParadaEnEsquinaCuyoBloqueoVenceDuranteLaRuta() {
+        LocalDateTime ahora = LocalDateTime.of(2026, 11, 17, 21, 10);
+        Ciudad ciudad = new Ciudad(70, 50, new Nodo(0, 0), 1, true);
+        ConfiguracionOperacion op = new ConfiguracionOperacion(8, 7, 1, 1, 1, 0, 0.5, 2);
+        TipoVehiculo auto = new TipoVehiculo("AUTO", "Auto", 24, 40.0, 8.0, 1, 48);
+        UnidadTransporte unidad = new UnidadTransporte("TA01", auto, new Nodo(27, 14),
+                LocalDateTime.of(2026, 11, 17, 15, 0));
+        unidad.setRefrigerioTomado(true);
+        unidad.setTiempoInicioTurnoActual(LocalDateTime.of(2026, 11, 17, 15, 0));
+
+        // Bloqueo en L con esquina en (20, 35) vigente de 19:24 a 21:57 (expira antes de la 2da parada)
+        Bloqueo bloqueoEsquina = new Bloqueo(
+                List.of(new Nodo(15, 25), new Nodo(15, 30), new Nodo(20, 30),
+                        new Nodo(20, 35), new Nodo(30, 35), new Nodo(30, 40)),
+                LocalDateTime.of(2026, 11, 17, 19, 24),
+                LocalDateTime.of(2026, 11, 17, 21, 57));
+
+        Pedido primero = new Pedido("P1", "C1", new Nodo(24, 41), 2, 4, ahora.minusMinutes(10));
+        Pedido segundo = new Pedido("P2", "C2", new Nodo(20, 35), 2, 4, ahora.minusMinutes(5));
+        ContextoProblema ctx = new ContextoProblema(ahora, List.of(primero, segundo), List.of(bloqueoEsquina),
+                List.of(), List.of(new AlmacenCentral(new Nodo(27, 14))), List.of(unidad), ciudad, op);
+
+        var planificador = new com.paqrap.ipso.PlanificadorIPSO(new com.paqrap.ipso.nucleo.IPSOConfig());
+        List<Ruta> rutas = assertDoesNotThrow(() -> planificador.planificarRutas(ctx));
+        assertEquals(1, rutas.size());
+        assertEquals(List.of("P1", "P2"),
+                rutas.get(0).getSecuenciaParadas().stream().map(p -> p.getPedido().getIdPedido()).toList());
+    }
 }
