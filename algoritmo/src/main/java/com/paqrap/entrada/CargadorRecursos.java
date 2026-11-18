@@ -6,6 +6,9 @@ import com.paqrap.dominio.Pedido;
 import com.paqrap.dominio.TipoArchivo;
 import com.paqrap.dominio.UnidadTransporte;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Único punto del sistema con conocimiento de rutas de carpeta: lee los archivos oficiales del
@@ -43,9 +47,13 @@ public class CargadorRecursos {
      */
     private static final String ARCHIVO_MANTENIMIENTO_PLANTILLA = "mant.preventivo.09.10.txt";
     private static final int MES1_PLANTILLA_MANTENIMIENTO = 9;
+    private static final Logger log = LoggerFactory.getLogger(CargadorRecursos.class);
 
     private final Path carpetaDatos;
     private final Path carpetaConfig;
+    private final ConcurrentHashMap<YearMonth, CargaArchivo> cachePedidos = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<YearMonth, CargaArchivo> cacheBloqueos = new ConcurrentHashMap<>();
+    private volatile List<CargaArchivo.MantenimientoPendiente> cacheMantenimientoPlantilla;
 
     public CargadorRecursos(String carpetaDatos, String carpetaConfig) {
         this.carpetaDatos = Path.of(carpetaDatos);
@@ -53,37 +61,105 @@ public class CargadorRecursos {
     }
 
     /**
-     * Carga y parsea el archivo de ventas/pedidos del período dado.
+     * Precarga y parsea en RAM todos los archivos oficiales disponibles ({@value #ANIO_BLOQUEOS_DESDE}–
+     * {@value #ANIO_BLOQUEOS_HASTA}) al arrancar el servidor para que el inicio de cualquier escenario
+     * sea instantáneo sin latencia de lectura ni parseo en disco.
+     */
+    public void precargarTodo() {
+        long inicioMs = System.currentTimeMillis();
+        int mesesPedidos = 0;
+        int mesesBloqueos = 0;
+        for (int anio = ANIO_BLOQUEOS_DESDE; anio <= ANIO_BLOQUEOS_HASTA; anio++) {
+            for (int mes = 1; mes <= 12; mes++) {
+                YearMonth ym = YearMonth.of(anio, mes);
+                if (Files.isRegularFile(carpetaDatos.resolve("ventas").resolve(String.format("ventas.%04d%02d.txt", anio, mes)))) {
+                    try {
+                        obtenerPedidosBase(ym);
+                        mesesPedidos++;
+                    } catch (IOException ex) {
+                        log.warn("No se pudo precargar ventas de {}: {}", ym, ex.getMessage());
+                    }
+                }
+                if (Files.isRegularFile(carpetaDatos.resolve("bloqueos").resolve(String.format("bloqueo.%02d%02d.txt", anio % 100, mes)))) {
+                    try {
+                        obtenerBloqueosBase(ym);
+                        mesesBloqueos++;
+                    } catch (IOException ex) {
+                        log.warn("No se pudo precargar bloqueos de {}: {}", ym, ex.getMessage());
+                    }
+                }
+            }
+        }
+        if (Files.isRegularFile(carpetaDatos.resolve(ARCHIVO_MANTENIMIENTO_PLANTILLA))) {
+            try {
+                obtenerMantenimientoPlantilla();
+            } catch (IOException ex) {
+                log.warn("No se pudo precargar plantilla de mantenimiento: {}", ex.getMessage());
+            }
+        }
+        log.info("Precarga en RAM completada en {} ms: {} meses de ventas, {} meses de bloqueos.",
+                System.currentTimeMillis() - inicioMs, mesesPedidos, mesesBloqueos);
+    }
+
+    /**
+     * Carga y parsea el archivo de ventas/pedidos del período dado (usando caché en RAM si ya fue
+     * precargado) y devuelve instancias {@link Pedido} limpias para la ejecución solicitada.
      *
      * @param anio año (4 dígitos)
      * @param mes mes (1-12)
      * @return pedidos parseados
      */
     public CargaArchivo cargarPedidos(int anio, int mes) throws IOException {
-        String nombre = String.format("ventas.%04d%02d.txt", anio, mes);
+        YearMonth ym = YearMonth.of(anio, mes);
+        CargaArchivo base = obtenerPedidosBase(ym);
+        CargaArchivo copia = new CargaArchivo(base.getNombreArchivo(), TipoArchivo.PEDIDOS, ym);
+        for (Pedido p : base.getPedidos()) {
+            copia.getPedidos().add(new Pedido(p.getIdPedido(), p.getIdCliente(), p.getDestino(),
+                    p.getCantidadSolicitada(), p.getHorasLimite(), p.getFechaIngreso()));
+        }
+        return copia;
+    }
+
+    private CargaArchivo obtenerPedidosBase(YearMonth ym) throws IOException {
+        CargaArchivo existente = cachePedidos.get(ym);
+        if (existente != null) {
+            return existente;
+        }
+        String nombre = String.format("ventas.%04d%02d.txt", ym.getYear(), ym.getMonthValue());
         Path archivo = carpetaDatos.resolve("ventas").resolve(nombre);
-        CargaArchivo carga = new CargaArchivo(nombre, TipoArchivo.PEDIDOS, YearMonth.of(anio, mes));
+        CargaArchivo carga = new CargaArchivo(nombre, TipoArchivo.PEDIDOS, ym);
         carga.procesarArchivo(leerContenido(archivo));
+        cachePedidos.putIfAbsent(ym, carga);
         return carga;
     }
 
     /**
-     * Carga y parsea el archivo de bloqueos del período dado. Si {@code anio} cae fuera del rango
-     * cubierto por el curso ({@value #ANIO_BLOQUEOS_DESDE}-{@value #ANIO_BLOQUEOS_HASTA}), recicla
-     * cíclicamente el patrón de un año disponible: el contenido (formato relativo día/hora/minuto
-     * dentro del mes, sin año) se reinterpreta contra el {@code anio} realmente solicitado, así que
-     * las fechas resultantes quedan correctamente ubicadas en el año pedido, no en el reciclado.
+     * Carga y parsea el archivo de bloqueos del período dado (usando caché en RAM si ya fue
+     * precargado). Si {@code anio} cae fuera del rango cubierto por el curso
+     * ({@value #ANIO_BLOQUEOS_DESDE}-{@value #ANIO_BLOQUEOS_HASTA}), recicla cíclicamente el patrón
+     * de un año disponible: el contenido (formato relativo día/hora/minuto dentro del mes, sin año)
+     * se reinterpreta contra el {@code anio} realmente solicitado, así que las fechas resultantes
+     * quedan correctamente ubicadas en el año pedido, no en el reciclado.
      *
      * @param anio año (4 dígitos)
      * @param mes mes (1-12)
      * @return bloqueos parseados
      */
     public CargaArchivo cargarBloqueos(int anio, int mes) throws IOException {
-        int anioDisponible = anioBloqueoDisponible(anio);
-        String nombre = String.format("bloqueo.%02d%02d.txt", anioDisponible % 100, mes);
+        return obtenerBloqueosBase(YearMonth.of(anio, mes));
+    }
+
+    private CargaArchivo obtenerBloqueosBase(YearMonth ym) throws IOException {
+        CargaArchivo existente = cacheBloqueos.get(ym);
+        if (existente != null) {
+            return existente;
+        }
+        int anioDisponible = anioBloqueoDisponible(ym.getYear());
+        String nombre = String.format("bloqueo.%02d%02d.txt", anioDisponible % 100, ym.getMonthValue());
         Path archivo = carpetaDatos.resolve("bloqueos").resolve(nombre);
-        CargaArchivo carga = new CargaArchivo(nombre, TipoArchivo.BLOQUEOS, YearMonth.of(anio, mes));
+        CargaArchivo carga = new CargaArchivo(nombre, TipoArchivo.BLOQUEOS, ym);
         carga.procesarArchivo(leerContenido(archivo));
+        cacheBloqueos.putIfAbsent(ym, carga);
         return carga;
     }
 
@@ -115,15 +191,24 @@ public class CargadorRecursos {
      */
     public List<Mantenimiento> cargarMantenimiento(int anio, int mes1, int mes2, List<UnidadTransporte> flota)
             throws IOException {
-        Path archivo = carpetaDatos.resolve(ARCHIVO_MANTENIMIENTO_PLANTILLA);
-        CargaArchivo carga = new CargaArchivo(ARCHIVO_MANTENIMIENTO_PLANTILLA, TipoArchivo.MANTENIMIENTO,
-                YearMonth.of(anio, mes1));
-        carga.procesarArchivo(leerContenido(archivo));
-
-        return carga.getMantenimientosPendientes().stream()
+        return obtenerMantenimientoPlantilla().stream()
                 .map(pendiente -> resolverMantenimiento(pendiente, flota, anio, mes1, mes2))
                 .filter(java.util.Objects::nonNull)
                 .toList();
+    }
+
+    private List<CargaArchivo.MantenimientoPendiente> obtenerMantenimientoPlantilla() throws IOException {
+        List<CargaArchivo.MantenimientoPendiente> cache = this.cacheMantenimientoPlantilla;
+        if (cache != null) {
+            return cache;
+        }
+        Path archivo = carpetaDatos.resolve(ARCHIVO_MANTENIMIENTO_PLANTILLA);
+        CargaArchivo carga = new CargaArchivo(ARCHIVO_MANTENIMIENTO_PLANTILLA, TipoArchivo.MANTENIMIENTO,
+                YearMonth.of(ANIO_BLOQUEOS_DESDE, MES1_PLANTILLA_MANTENIMIENTO));
+        carga.procesarArchivo(leerContenido(archivo));
+        List<CargaArchivo.MantenimientoPendiente> pendientes = List.copyOf(carga.getMantenimientosPendientes());
+        this.cacheMantenimientoPlantilla = pendientes;
+        return pendientes;
     }
 
     private Mantenimiento resolverMantenimiento(CargaArchivo.MantenimientoPendiente pendiente,

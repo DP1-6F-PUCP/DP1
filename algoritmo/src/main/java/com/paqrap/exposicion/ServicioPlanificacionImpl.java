@@ -162,24 +162,6 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         log.info("Archivos de pedidos, bloqueos y mantenimientos limpiados de memoria.");
     }
 
-    @Override
-    public synchronized void validarArchivosRequeridos(TipoEscenario tipo) {
-        OrquestadorOperacion orquestadorActivo = ejecucionActivaOrquestador();
-        if (orquestadorActivo != null && esEjecucionActiva(orquestadorActivo.getEjecucionActual())) {
-            return;
-        }
-        if (cargadorRecursos == null) {
-            if (pedidosRecibidos.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "Debe subir el archivo de pedidos/ventas antes de iniciar la simulación (" + tipo + ").");
-            }
-            if ((tipo == TipoEscenario.CINCO_DIAS || tipo == TipoEscenario.COLAPSO_LOGISTICO) && bloqueosRecibidos.isEmpty()) {
-                throw new IllegalArgumentException(
-                        "Debe subir el archivo de tramos bloqueados antes de iniciar la simulación (" + tipo + ").");
-            }
-        }
-    }
-
     /**
      * Instantáneas inmutables del último lote cerrado, armadas en el hilo del orquestador (ver
      * {@link OrquestadorOperacion#setAlCerrarLote}). Las consultas las devuelven tal cual en vez de
@@ -648,7 +630,6 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     @Override
     public void detenerEjecucion(String idEjecucion) {
         orquestadorDe(idEjecucion).detener();
-        limpiarArchivosCargados();
     }
 
     @Override
