@@ -51,10 +51,67 @@ public class GestorLogSimulacion {
         this("logs", true);
     }
 
+    /** Archivo de la ejecución (una línea JSON por evento), abierto con {@link #iniciarArchivo}. */
+    private java.io.BufferedWriter archivoEjecucion;
+    private File archivoEventos;
+    private int sinVolcar;
+
+    /**
+     * Empieza a escribir los eventos de esta ejecución en {@code <dir>/<nombre>.jsonl}, a medida que
+     * ocurren. Incluye los que ya estaban en memoria (los lotes precalculados al iniciar). En memoria
+     * siguen solo los últimos {@value #MAX_EVENTOS_EN_MEMORIA}; el archivo guarda el historial completo
+     * como evidencia de la ejecución.
+     */
+    public synchronized void iniciarArchivo(String nombre) {
+        cerrar();
+        try {
+            archivoEventos = new File(archivoLogTexto.getParentFile(), nombre + ".jsonl");
+            archivoEjecucion = new java.io.BufferedWriter(new OutputStreamWriter(
+                    new FileOutputStream(archivoEventos, true), StandardCharsets.UTF_8));
+            for (EventoSimulacion ev : eventos) {
+                archivoEjecucion.write(ev.toJson());
+                archivoEjecucion.newLine();
+            }
+            archivoEjecucion.flush();
+        } catch (IOException e) {
+            log.error("No se pudo abrir el archivo de eventos {}: {}", nombre, e.getMessage());
+            archivoEjecucion = null;
+        }
+    }
+
+    /** Vuelca y cierra el archivo de la ejecución (al detenerla). */
+    public synchronized void cerrar() {
+        if (archivoEjecucion == null) {
+            return;
+        }
+        try {
+            archivoEjecucion.close();
+        } catch (IOException e) {
+            log.warn("Error al cerrar el archivo de eventos: {}", e.getMessage());
+        }
+        archivoEjecucion = null;
+    }
+
+    public File getArchivoEventos() {
+        return archivoEventos;
+    }
+
     public synchronized void registrarEvento(EventoSimulacion evento) {
         eventos.add(evento);
         if (eventos.size() > MAX_EVENTOS_EN_MEMORIA) {
             eventos.subList(0, eventos.size() - MAX_EVENTOS_EN_MEMORIA).clear();
+        }
+        if (archivoEjecucion != null) {
+            try {
+                archivoEjecucion.write(evento.toJson());
+                archivoEjecucion.newLine();
+                if (++sinVolcar >= 500) {
+                    archivoEjecucion.flush();
+                    sinVolcar = 0;
+                }
+            } catch (IOException e) {
+                log.warn("No se pudo escribir el evento en el archivo: {}", e.getMessage());
+            }
         }
         if (imprimirEnConsola) {
             log.info(evento.toLogLine());

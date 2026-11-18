@@ -52,6 +52,8 @@ const ESTADO_UNIDAD_A_STATUS: Record<string, VehicleStatus> = {
 const ACTIVIDAD_A_STATUS: Partial<Record<string, VehicleStatus>> = {
   ENTREGANDO: 'delivering',
   EN_REFRIGERIO: 'on_break',
+  // Trasvase: detenido junto a una unidad averiada recogiendo paquetes; se ve como "trabajando".
+  TRASVASANDO: 'delivering',
 };
 
 const TIPO_AVERIA_A_BREAKDOWN_TYPE: Record<string, BreakdownType> = {
@@ -240,7 +242,7 @@ export function adaptVehiculo(
     returnPath: normalizeManhattanPath(dto.geometriaRetorno.map(parseNodo)),
     activityRemainingMinutes,
     activitySince: dto.actividadDesde ?? undefined,
-    trajectory: (dto.trayectoria ?? []).map((p) => ({ x: p.x, y: p.y, t: parseBackendSimulatedTime(p.instante), act: p.actividad })),
+    trajectory: (dto.trayectoria ?? []).map((p) => ({ x: p.x, y: p.y, t: parseBackendSimulatedTime(p.instante), act: p.actividad, ret: p.retorno ?? false, carga: p.cargaABordo })),
     historyPath: [], // no expuesto por el backend
     assignedOrderIds: rutaActiva?.secuenciaEntrega ?? [],
     totalDelivered: 0, // no expuesto por el backend (no hay contador por vehiculo)

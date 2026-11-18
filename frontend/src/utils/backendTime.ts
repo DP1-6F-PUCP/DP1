@@ -36,6 +36,24 @@ function simulatedTimeFormat(includeDate: boolean, includeSeconds: boolean): Int
   return format;
 }
 
+const formato24 = new Map<boolean, Intl.DateTimeFormat>();
+
+/** Hora simulada en formato 24 h ("18/11/2026 15:32"), más corta que la de am/pm. */
+export function formatBackendSimulatedTime24(milliseconds: number, includeDate = true): string {
+  let format = formato24.get(includeDate);
+  if (!format) {
+    format = new Intl.DateTimeFormat('es-PE', {
+      ...(includeDate ? { day: '2-digit', month: '2-digit', year: 'numeric' } : {}),
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+      timeZone: 'UTC',
+    });
+    formato24.set(includeDate, format);
+  }
+  return format.format(milliseconds).replace(',', '');
+}
+
 export function formatBackendSimulatedTime(
   milliseconds: number,
   includeDate = true,

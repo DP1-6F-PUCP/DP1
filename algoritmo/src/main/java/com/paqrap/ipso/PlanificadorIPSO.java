@@ -1,5 +1,6 @@
 package com.paqrap.ipso;
 
+import com.paqrap.dominio.Almacen;
 import com.paqrap.dominio.CalculadorDistancia;
 import com.paqrap.dominio.ContextoProblema;
 import com.paqrap.dominio.EstadoPedido;
@@ -51,7 +52,7 @@ public class PlanificadorIPSO implements Planificador {
     public List<Ruta> planificarRutas(ContextoProblema contexto) {
         List<Pedido> pedidosPendientes = new ArrayList<>();
         for (Pedido pedido : contexto.pedidos()) {
-            if (pedido.getEstado() == EstadoPedido.PENDIENTE) {
+            if (pedido.getEstado() == EstadoPedido.PENDIENTE && pedido.cantidadPorPlanificar() > 0) {
                 pedidosPendientes.add(pedido);
             }
         }
@@ -71,7 +72,12 @@ public class PlanificadorIPSO implements Planificador {
         for (ClusterizadorPedidos.LoteVehiculo lote : lotes) {
             // Desde la posición REAL del vehículo (antes: desde el almacén del lote), que es desde
             // donde de verdad arranca la ruta (ver asignarParadasConLlegadas / MotorSimulacion).
-            IPSOOptimizador ipso = new IPSOOptimizador(lote.pedidos, lote.unidad.getPosicion(), lote.unidad,
+            // Si la unidad no está en el almacén del lote (volvía vacía), primero va a cargar ahí:
+            // el orden de entregas se optimiza desde el almacén, no desde donde quedó.
+            Almacen cargarEn = lote.almacen != null && !lote.almacen.getPosicion().equals(lote.unidad.getPosicion())
+                    ? lote.almacen : null;
+            IPSOOptimizador ipso = new IPSOOptimizador(lote.pedidos, lote.cantidades,
+                    cargarEn != null ? cargarEn.getPosicion() : lote.unidad.getPosicion(), lote.unidad,
                     contexto.ciudad(), contexto.bloqueos(), config, contexto.marcaTiempoActual(),
                     contexto.configuracionOperacion());
             ResultadoIPSO resultado = ipso.ejecutar();
@@ -79,7 +85,10 @@ public class PlanificadorIPSO implements Planificador {
 
             Ruta ruta = new Ruta(Ruta.generarId(lote.unidad.getIdUnidad(), contexto.marcaTiempoActual(), "R" + (++contadorRutas)),
                     contexto.marcaTiempoActual(), lote.unidad);
-            ruta.setCostoEstimado(resultado.costoTotal());
+            if (cargarEn != null) {
+                ruta.programarCarga(cargarEn);
+            }
+            ruta.setCostoEstimado(resultado.costoTotal() + costoTramoCarga(lote.unidad, cargarEn, contexto));
             ruta.setDuracionEstimada(resultado.duracionTotalHoras());
             ruta.setEstado(EstadoRuta.PLANIFICADA);
 
@@ -87,10 +96,18 @@ public class PlanificadorIPSO implements Planificador {
             // un orden más corto que llega tarde a alguna parada. El orden del agrupamiento
             // (por urgencia) es puntual por construcción: si el del PSO no lo es, se usa ese.
             List<Pedido> secuencia = resultado.secuenciaOptima();
-            if (!esPuntual(lote.unidad, secuencia, contexto)) {
+            if (!esPuntual(lote.unidad, secuencia, contexto, cargarEn)) {
                 secuencia = lote.pedidos;
             }
-            asignarParadasConLlegadas(ruta, secuencia, lote.unidad.getTipoVehiculo().getVelocidadKmH(), contexto);
+            try {
+                asignarParadasConLlegadas(ruta, secuencia, lote.cantidades, lote.unidad.getTipoVehiculo().getVelocidadKmH(),
+                        contexto);
+            } catch (IllegalStateException sinCamino) {
+                // Un tramo quedó cerrado por bloqueo en el instante estimado (p. ej. desde el almacén
+                // donde carga): no se arma esta ruta; los pedidos siguen pendientes para el próximo
+                // lote y la unidad recibe la ruta vacía de abajo. Antes la excepción tumbaba el lote.
+                continue;
+            }
 
             nuevasRutas.add(ruta);
         }
@@ -132,24 +149,27 @@ public class PlanificadorIPSO implements Planificador {
      * que ALNS, portada aquí (no se puede reusar {@code TiempoUtil} directamente, es
      * paquete-privado de {@code com.paqrap.alns}).
      */
-    private void asignarParadasConLlegadas(Ruta ruta, List<Pedido> secuencia, double velocidadKmH,
-            ContextoProblema contexto) {
+    private void asignarParadasConLlegadas(Ruta ruta, List<Pedido> secuencia, java.util.Map<Pedido, Integer> cantidades,
+            double velocidadKmH, ContextoProblema contexto) {
         List<LocalDateTime> llegadas = llegadasEstimadas(ruta.getUnidadTransporte(), ruta.getHoraInicioPlanificada(),
-                secuencia, velocidadKmH, contexto);
+                secuencia, velocidadKmH, contexto, ruta.getAlmacenCarga());
         for (int i = 0; i < secuencia.size(); i++) {
             Pedido pedido = secuencia.get(i);
-            ParadaPlanificada parada = new ParadaPlanificada(pedido, pedido.getCantidadSolicitada());
+            // Entrega parcial: la parada lleva solo la parte que le tocó a esta unidad.
+            ParadaPlanificada parada = new ParadaPlanificada(pedido,
+                    cantidades.getOrDefault(pedido, pedido.cantidadPorPlanificar()));
             parada.setFechaEntregada(llegadas.get(i));
             ruta.getSecuenciaParadas().add(parada);
         }
     }
 
     /** true si recorriendo {@code secuencia} en ese orden se llega a cada pedido antes de su plazo. */
-    private boolean esPuntual(UnidadTransporte unidad, List<Pedido> secuencia, ContextoProblema contexto) {
+    private boolean esPuntual(UnidadTransporte unidad, List<Pedido> secuencia, ContextoProblema contexto,
+            Almacen cargarEn) {
         final List<LocalDateTime> llegadas;
         try {
             llegadas = llegadasEstimadas(unidad, contexto.marcaTiempoActual(), secuencia,
-                    unidad.getTipoVehiculo().getVelocidadKmH(), contexto);
+                    unidad.getTipoVehiculo().getVelocidadKmH(), contexto, cargarEn);
         } catch (IllegalStateException sinCamino) {
             return false;
         }
@@ -161,9 +181,23 @@ public class PlanificadorIPSO implements Planificador {
         return true;
     }
 
-    /** Llegada estimada a cada pedido de {@code secuencia}, en orden, desde la posición actual. */
+    /** Costo del tramo vacío hasta el almacén donde carga (0 si ya está ahí). */
+    private double costoTramoCarga(UnidadTransporte unidad, Almacen cargarEn, ContextoProblema contexto) {
+        if (cargarEn == null) {
+            return 0.0;
+        }
+        try {
+            return CalculadorDistancia.distanciaKm(contexto.ciudad(), contexto.bloqueos(), contexto.marcaTiempoActual(),
+                    unidad.getPosicion(), cargarEn.getPosicion()) * unidad.getTipoVehiculo().getCostoPorKm();
+        } catch (IllegalStateException sinCamino) {
+            return 0.0;
+        }
+    }
+
+    /** Llegada estimada a cada pedido de {@code secuencia}, en orden, desde la posición actual
+     * (pasando antes por {@code cargarEn} a cargar, si no es null). */
     private List<LocalDateTime> llegadasEstimadas(UnidadTransporte unidad, LocalDateTime inicio, List<Pedido> secuencia,
-            double velocidadKmH, ContextoProblema contexto) {
+            double velocidadKmH, ContextoProblema contexto, Almacen cargarEn) {
         List<LocalDateTime> llegadas = new ArrayList<>();
         LocalDateTime tiempoActual = inicio;
         Nodo posicionActual = unidad.getPosicion();
@@ -184,6 +218,12 @@ public class PlanificadorIPSO implements Planificador {
                 tiempoActual = fin;
             }
             refrigerioTomado = true;
+        }
+        if (cargarEn != null) {
+            double kmAlmacen = CalculadorDistancia.distanciaKm(contexto.ciudad(), contexto.bloqueos(), tiempoActual,
+                    posicionActual, cargarEn.getPosicion());
+            tiempoActual = tiempoActual.plusSeconds(Math.round(kmAlmacen / velocidadKmH * 3600.0));
+            posicionActual = cargarEn.getPosicion();
         }
 
         for (Pedido pedido : secuencia) {

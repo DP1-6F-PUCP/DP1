@@ -1,16 +1,29 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { simulationSocket } from '../services/simulationSocket';
+import { ingerirLote, ponerseAlDia } from '../services/ingestaLotes';
 import { useScenarioStore } from '../store/scenarioStore';
-import { EstadoOperacionDTO } from '../types/backend';
+
+/** Sin socket, cada cuánto se piden los lotes nuevos (antes 3 s con la instantánea completa). */
+const POLL_LOTES_SIN_SOCKET_MS = 1_000;
+
+function contextoActual(id: string) {
+  const store = useScenarioStore.getState();
+  const estado = store.ejecucion?.estado;
+  return {
+    idEjecucion: id,
+    sa: store.ejecucion?.sa,
+    k: store.ejecucion?.k ?? 0,
+    scenarioStartMs: store.scenarioStartMs(),
+    avanzando: estado === 'EN_CURSO' || estado === 'INICIADA',
+  };
+}
 
 /**
- * Suscribe una sola vez (en el layout raiz) al WS real y empuja cada tick directamente a la
- * cache de React Query -- asi useEstadoOperacion se actualiza en vivo sin esperar al polling, que
- * queda solo como respaldo si el socket se cae.
- *
- * El tick no trae la lista de pedidos: se pide en ese mismo momento (una vez por lote, ya
- * publicada por el backend al cerrar el lote) en vez de cada 3s a ciegas.
+ * Suscribe una sola vez (en el layout raíz) al WS real. Cada lote empujado entra directo al motor
+ * y en orden (ver services/ingestaLotes): si falta alguno se recupera por número de secuencia, y
+ * los pedidos llegan como cambios que se mezclan con la caché, sin descargar la lista completa.
+ * Al reconectar, y mientras el socket está caído, se piden los lotes nuevos cada segundo.
  */
 export function useSimulationSocket() {
   const queryClient = useQueryClient();
@@ -24,12 +37,23 @@ export function useSimulationSocket() {
     const unsubscribe = simulationSocket.subscribe((tick) => {
       const current = useScenarioStore.getState();
       if (current.transicion || current.ejecucion?.idEjecucion !== id || tick.estado.idEjecucion !== id) return;
-      queryClient.setQueryData<EstadoOperacionDTO>(['estado-operacion', id], tick.estado);
-      queryClient.invalidateQueries({ queryKey: ['pedidos', id] });
+      void ingerirLote(queryClient, tick.estado, contextoActual(id));
     });
+    // Al (re)conectar se recupera lo publicado mientras no había socket.
+    const unsubscribeEstado = simulationSocket.subscribeEstado(() => {
+      if (simulationSocket.isConectado()) void ponerseAlDia(queryClient, contextoActual(id)).catch(() => undefined);
+    });
+    const respaldo = setInterval(() => {
+      if (!simulationSocket.isConectado() && !useScenarioStore.getState().transicion) {
+        void ponerseAlDia(queryClient, contextoActual(id)).catch(() => undefined);
+      }
+    }, POLL_LOTES_SIN_SOCKET_MS);
+    void ponerseAlDia(queryClient, contextoActual(id)).catch(() => undefined);
 
     return () => {
       unsubscribe();
+      unsubscribeEstado();
+      clearInterval(respaldo);
       simulationSocket.disconnect();
     };
   }, [queryClient, id, transicion]);

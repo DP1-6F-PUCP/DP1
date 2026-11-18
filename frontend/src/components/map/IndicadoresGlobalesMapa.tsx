@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Gauge, Truck, Warehouse as WarehouseIcon } from 'lucide-react';
+import React from 'react';
+import { ChevronDown, ChevronUp, Gauge, GripVertical, Truck, Warehouse as WarehouseIcon } from 'lucide-react';
 import { Vehicle, Warehouse } from '../../types';
 import { getFleetFill, getWarehousesFill, WarehousesFillLevel } from '../../utils/indicadoresGlobales';
 import { WAREHOUSE_STOCK_COLORS } from '../../utils/warehouseStock';
+import { usePanelFlotante } from '../../hooks/usePanelFlotante';
 
 interface IndicadoresGlobalesMapaProps {
   vehicles: Vehicle[];
@@ -25,83 +26,91 @@ const BarraLlenado: React.FC<{ pct: number; hex: string; label: string }> = ({ p
 );
 
 /**
- * Tarjeta flotante (esquina inferior derecha del mapa, para no tapar las notificaciones de
- * arriba) con los indicadores globales:
+ * Tarjeta flotante con los indicadores globales, compacta y movible (arranca en la esquina
+ * inferior derecha del mapa, para no tapar las notificaciones de arriba):
  *  - G01/G02: llenado de toda la flota, en % y como semáforo.
  *  - G04: llenado de los almacenes en conjunto, como semáforo (+ cuántos hay en cada color).
- * Recibe el mismo estado visual que los marcadores, así que va sincronizada con lo que se ve.
+ * Se arrastra desde el encabezado y se colapsa a una línea con los dos porcentajes; posición y
+ * estado se recuerdan en el navegador. Recibe el mismo estado visual que los marcadores.
  */
 export const IndicadoresGlobalesMapa: React.FC<IndicadoresGlobalesMapaProps> = ({ vehicles, warehouses }) => {
-  const [colapsado, setColapsado] = useState(false);
+  const panel = usePanelFlotante('paqrap.panel.indicadores', { derecha: 12, vertical: 12 }, 'abajo');
   const flota = getFleetFill(vehicles);
   const almacenes = getWarehousesFill(warehouses);
 
   return (
     <section
+      ref={panel.ref}
+      style={panel.style}
       aria-label="Indicadores globales"
-      className="absolute right-3 bottom-3 z-[1000] w-[min(280px,calc(100%-1.5rem))] rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] p-3 text-slate-100 shadow-xl backdrop-blur-sm"
+      className={`absolute z-[1000] ${panel.colapsado ? '' : 'w-[316px]'} rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)]/95 text-slate-100 shadow-xl backdrop-blur-sm select-none`}
     >
-      <button
-        type="button"
-        onClick={() => setColapsado(!colapsado)}
-        aria-expanded={!colapsado}
-        className="flex w-full items-center gap-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400 rounded"
+      <div
+        {...panel.manejadoresArrastre}
+        title="Arrastra para mover"
+        className="flex cursor-grab touch-none items-center gap-1.5 px-2 py-1.5 active:cursor-grabbing"
       >
+        <GripVertical className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
         <Gauge className="h-4 w-4 shrink-0 text-cyan-400" aria-hidden />
-        <span className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wide text-slate-300">Indicadores globales</span>
-        {colapsado && (
-          <span className="ml-auto flex items-center gap-2 font-mono-code text-[11px] font-bold">
+        {panel.colapsado ? (
+          <span className="flex items-center gap-2 font-mono-code text-sm font-bold">
             <span className="flex items-center gap-1" title={`Flota: ${flota.label}`}>
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: flota.hex }} />
-              {flota.pct}%
+              <Truck className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+              <span style={{ color: flota.hex }}>{flota.pct}%</span>
             </span>
             <span className="flex items-center gap-1" title={`Almacenes: ${almacenes.label}`}>
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: almacenes.hex }} />
-              {almacenes.pct}%
+              <WarehouseIcon className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+              <span style={{ color: almacenes.hex }}>{almacenes.pct}%</span>
             </span>
           </span>
+        ) : (
+          <span className="text-xs font-semibold text-slate-200">Indicadores globales</span>
         )}
-        {colapsado
-          ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
-          : <ChevronUp className="ml-auto h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />}
-      </button>
+        <button
+          type="button"
+          onClick={panel.alternar}
+          aria-expanded={!panel.colapsado}
+          aria-label={panel.colapsado ? 'Mostrar indicadores' : 'Colapsar indicadores'}
+          className="ml-auto rounded p-0.5 text-slate-400 hover:text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+        >
+          {panel.colapsado ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </button>
+      </div>
 
-      {!colapsado && (
-        <div className="mt-2 space-y-3 border-t border-[var(--color-sidebar-border)] pt-2.5">
+      {!panel.colapsado && (
+        <div className="space-y-2.5 px-3 pb-2.5">
           {/* G01 + G02: llenado de la flota */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: flota.hex, boxShadow: `0 0 6px ${flota.hex}` }} />
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-xs">
               <Truck className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
               <span className="font-medium text-slate-200">Flota</span>
               <span className="ml-auto font-mono-code text-sm font-bold" style={{ color: flota.hex }}>{flota.pct}%</span>
             </div>
-            <BarraLlenado pct={flota.pct} hex={flota.hex} label={`Llenado de la flota ${flota.pct}%`} />
-            <div className="flex justify-between text-[10px] text-slate-400">
-              <span style={{ color: flota.hex }} className="font-semibold">{flota.label}</span>
-              <span className="font-mono-code">{flota.load} / {flota.capacity} paq</span>
+            <BarraLlenado pct={flota.pct} hex={flota.hex} label={`Llenado de la flota ${flota.pct}%, ${flota.label}`} />
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-medium" style={{ color: flota.hex }}>{flota.label}</span>
+              <span className="font-mono-code text-slate-300">{flota.load} / {flota.capacity} paq</span>
             </div>
           </div>
 
           {/* G04: llenado de los almacenes en conjunto */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: almacenes.hex, boxShadow: `0 0 6px ${almacenes.hex}` }} />
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-xs">
               <WarehouseIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
               <span className="font-medium text-slate-200">Almacenes</span>
               <span className="ml-auto font-mono-code text-sm font-bold" style={{ color: almacenes.hex }}>{almacenes.pct}%</span>
             </div>
-            <BarraLlenado pct={almacenes.pct} hex={almacenes.hex} label={`Llenado de los almacenes ${almacenes.pct}%`} />
-            <div className="flex items-center justify-between text-[10px] text-slate-400">
-              <span style={{ color: almacenes.hex }} className="font-semibold">{almacenes.label}</span>
-              <span className="flex items-center gap-2 font-mono-code">
+            <BarraLlenado pct={almacenes.pct} hex={almacenes.hex} label={`Llenado de los almacenes ${almacenes.pct}%, ${almacenes.label}`} />
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-medium" style={{ color: almacenes.hex }}>{almacenes.label}</span>
+              <span className="flex items-center gap-2 font-mono-code text-slate-300">
                 {ORDEN_NIVELES_ALMACEN.map((nivel) => (
                   <span
                     key={nivel}
-                    className="flex items-center gap-0.5"
+                    className="flex items-center gap-1"
                     title={`${WAREHOUSE_STOCK_COLORS[nivel].label}: ${almacenes.counts[nivel]} de ${almacenes.total}`}
                   >
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: WAREHOUSE_STOCK_COLORS[nivel].hex }} />
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: WAREHOUSE_STOCK_COLORS[nivel].hex }} />
                     {almacenes.counts[nivel]}
                   </span>
                 ))}

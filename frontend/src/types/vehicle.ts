@@ -25,7 +25,11 @@ export interface TrajectoryPoint {
   x: number;
   y: number;
   t: number;
-  act: 'INACTIVO' | 'VIAJANDO' | 'ENTREGANDO' | 'EN_REFRIGERIO';
+  act: 'INACTIVO' | 'VIAJANDO' | 'ENTREGANDO' | 'EN_REFRIGERIO' | 'TRASVASANDO';
+  /** El tramo que empieza aquí va hacia un almacén sin repartir (regreso o camino a cargar). */
+  ret?: boolean;
+  /** Paquetes a bordo en ese tramo. */
+  carga?: number;
 }
 
 export interface Vehicle {
@@ -41,6 +45,9 @@ export interface Vehicle {
   /** VehiculoDTO.geometriaRetorno (camino real al almacén más cercano) cuando la unidad ya
    * entregó todo pero aún no llega de vuelta -- vacío en cualquier otro caso. */
   returnPath: Point[];
+  /** Según la trayectoria en el instante visible: va hacia un almacén sin repartir. Lo calcula el
+   * motor (useEstadoVisual) con el mismo reloj que mueve el marcador; undefined fuera de él. */
+  returningVisible?: boolean;
   /** Minutos simulados que faltan para que termine la fase actual (entrega/refrigerio) --
    * derivado de VehiculoDTO.actividadDesde + la duración configurada (tiempoServicioClienteHoras /
    * duracionRefrigerioHoras). undefined cuando status no es 'delivering'/'on_break'. */

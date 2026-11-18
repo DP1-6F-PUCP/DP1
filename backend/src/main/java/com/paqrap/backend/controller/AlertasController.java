@@ -38,7 +38,8 @@ public class AlertasController {
         EstadoOperacionDTO estado = servicioPlanificacion.consultarEstadoOperacion();
 
         List<EventoDTO> alertas = new ArrayList<>();
-        alertas.addAll(EnsambladorRespuestas.alertasRiesgoSLADesdeDTO(servicioPlanificacion.consultarPedidos(null),
+        alertas.addAll(EnsambladorRespuestas.alertasRiesgoSLADesdeDTO(
+                servicioPlanificacion.consultarPedidos(new com.paqrap.exposicion.FiltroPedidos("PENDIENTE")),
                 estado.marcaTiempoActual(), horasUmbralSLA));
         alertas.addAll(estado.eventos().stream().filter(e -> TIPOS_INCIDENCIA.contains(e.tipo())).toList());
 

@@ -10,6 +10,7 @@ import com.paqrap.dominio.Ciudad;
 import com.paqrap.dominio.ConfiguracionOperacion;
 import com.paqrap.dominio.ContextoProblema;
 import com.paqrap.dominio.EstadoParada;
+import com.paqrap.dominio.EstadoRuta;
 import com.paqrap.dominio.EstadoUnidad;
 import com.paqrap.dominio.Nodo;
 import com.paqrap.dominio.ParadaPlanificada;
@@ -62,6 +63,17 @@ public final class EnsambladorRespuestas {
         List<Bloqueo> bloqueosEnHorizonte = Bloqueo.filtrarEnHorizonte(contexto.bloqueos(),
                 anclaEventos != null ? anclaEventos : contexto.marcaTiempoActual(),
                 contexto.marcaTiempoActual().plusHours(HORAS_BLOQUEOS_VISIBLES));
+        // Paquetes de una unidad averiada que un rescate ya tiene asignados pero todavía no recogió:
+        // siguen físicamente en la averiada hasta el fin del trasvase (antes desaparecían de ella en
+        // cuanto se planificaba el rescate, y su ocupación caía a 0).
+        java.util.Map<UnidadTransporte, Integer> porRecoger = new java.util.HashMap<>();
+        for (Ruta r : rutas) {
+            if (r.tieneTrasvasePendiente()) {
+                int pendiente = r.getSecuenciaParadas().stream().filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                        .mapToInt(ParadaPlanificada::getCantidadAEntregar).sum();
+                porRecoger.merge(r.getOrigenTrasvase(), pendiente, Integer::sum);
+            }
+        }
         return new EstadoOperacionDTO(
                 contexto.marcaTiempoActual(),
                 rutas.stream()
@@ -69,7 +81,7 @@ public final class EnsambladorRespuestas {
                         .toList(),
                 contexto.vehiculos().stream()
                         .map(v -> aVehiculoDTO(v, contexto.ciudad(), bloqueosEnHorizonte, contexto.almacenes(),
-                                contexto.marcaTiempoActual()))
+                                contexto.marcaTiempoActual(), porRecoger.getOrDefault(v, 0)))
                         .toList(),
                 contexto.almacenes().stream().map(EnsambladorRespuestas::aAlmacenDTO).toList(),
                 bloqueosEnHorizonte.stream()
@@ -97,8 +109,12 @@ public final class EnsambladorRespuestas {
         Nodo origen = ruta.getNodoDespacho() != null ? ruta.getNodoDespacho() : ruta.getUnidadTransporte().getPosicion();
         LocalDateTime horaSalida = ruta.getFechaDespacho() != null ? ruta.getFechaDespacho()
                 : ruta.getHoraInicioPlanificada();
+        // Mientras va vacía al almacén a cargar, la ruta todavía no salió: se publica PLANIFICADA, así
+        // el mapa muestra a la unidad regresando (gris, sin carga) y no "en ruta" con paquetes.
+        String estado = ruta.getEstado() == EstadoRuta.EN_EJECUCION && ruta.tieneCargaPendiente()
+                ? EstadoRuta.PLANIFICADA.name() : ruta.getEstado().name();
         return new RutaDTO(ruta.getIdRuta(), ruta.getUnidadTransporte().getIdUnidad(),
-                ruta.getUnidadTransporte().getTipoVehiculo().getId(), ruta.getEstado().name(), secuencia,
+                ruta.getUnidadTransporte().getTipoVehiculo().getId(), estado, secuencia,
                 ruta.getCostoEstimado(), ruta.getDuracionEstimada(), geometria, origen.x(), origen.y(), horaSalida);
     }
 
@@ -115,6 +131,28 @@ public final class EnsambladorRespuestas {
         List<Nodo> geometria = new ArrayList<>();
         Nodo actual = ruta.getUnidadTransporte().getPosicion();
         geometria.add(actual);
+        // Rescate sin recoger aún: el camino pasa primero por la unidad averiada.
+        if (ruta.tieneTrasvasePendiente() && !actual.equals(ruta.getPuntoTrasvase())) {
+            try {
+                List<Nodo> tramo = CalculadorDistancia.caminoMasCorto(ciudad, bloqueos, instante, actual,
+                        ruta.getPuntoTrasvase());
+                geometria.addAll(tramo.subList(1, tramo.size()));
+                actual = ruta.getPuntoTrasvase();
+            } catch (IllegalStateException sinCamino) {
+                return geometria.stream().map(n -> n.x() + "," + n.y()).toList();
+            }
+        }
+        // Recarga pendiente: el camino pasa primero por el almacén donde carga.
+        if (ruta.tieneCargaPendiente() && !actual.equals(ruta.getAlmacenCarga().getPosicion())) {
+            try {
+                List<Nodo> tramo = CalculadorDistancia.caminoMasCorto(ciudad, bloqueos, instante, actual,
+                        ruta.getAlmacenCarga().getPosicion());
+                geometria.addAll(tramo.subList(1, tramo.size()));
+                actual = ruta.getAlmacenCarga().getPosicion();
+            } catch (IllegalStateException sinCamino) {
+                return geometria.stream().map(n -> n.x() + "," + n.y()).toList();
+            }
+        }
         // Bug real corregido (reporte directo: el vehiculo parecia "retroceder" en el front justo
         // despues de completar una entrega): getSecuenciaParadas() devuelve TODAS las paradas de la
         // ruta, incluidas las ya CUMPLIDAs en un lote anterior -- sin este filtro, el primer tramo de
@@ -143,10 +181,17 @@ public final class EnsambladorRespuestas {
 
     public static VehiculoDTO aVehiculoDTO(UnidadTransporte unidad, Ciudad ciudad, List<Bloqueo> bloqueos,
             List<Almacen> almacenes, LocalDateTime instante) {
-        int cargaActual = unidad.cargaActual();
+        return aVehiculoDTO(unidad, ciudad, bloqueos, almacenes, instante, 0);
+    }
+
+    /** @param porRecoger paquetes a bordo de esta unidad averiada que un rescate aún no recogió */
+    public static VehiculoDTO aVehiculoDTO(UnidadTransporte unidad, Ciudad ciudad, List<Bloqueo> bloqueos,
+            List<Almacen> almacenes, LocalDateTime instante, int porRecoger) {
+        int cargaActual = Math.min(unidad.getTipoVehiculo().getCapacidad(), unidad.cargaActual() + porRecoger);
         List<String> geometriaRetorno = calcularGeometriaRetorno(unidad, ciudad, bloqueos, almacenes, instante);
         List<PuntoTrayectoriaDTO> trayectoria = unidad.getTrayectoriaLote().stream()
-                .map(p -> new PuntoTrayectoriaDTO(p.nodo().x(), p.nodo().y(), p.instante(), p.actividad().name()))
+                .map(p -> new PuntoTrayectoriaDTO(p.nodo().x(), p.nodo().y(), p.instante(), p.actividad().name(),
+                        p.retorno(), p.cargaABordo()))
                 .toList();
         return new VehiculoDTO(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), unidad.getEstado().name(),
                 unidad.getPosicion().x(), unidad.getPosicion().y(), cargaActual, geometriaRetorno,
@@ -165,6 +210,10 @@ public final class EnsambladorRespuestas {
     private static LocalDateTime calcularActividadDesde(UnidadTransporte unidad) {
         if (unidad.getActividadActual() == ActividadVehiculo.EN_REFRIGERIO) {
             return unidad.getHoraRefrigerioProgramada();
+        }
+        if (unidad.getActividadActual() == ActividadVehiculo.TRASVASANDO) {
+            Ruta rutaEnCurso = unidad.rutaEnEjecucion();
+            return rutaEnCurso != null ? rutaEnCurso.getInicioTrasvase() : null;
         }
         if (unidad.getActividadActual() == ActividadVehiculo.ENTREGANDO) {
             Ruta rutaEnCurso = unidad.rutaEnEjecucion();
@@ -189,11 +238,13 @@ public final class EnsambladorRespuestas {
      */
     private static List<String> calcularGeometriaRetorno(UnidadTransporte unidad, Ciudad ciudad,
             List<Bloqueo> bloqueos, List<Almacen> almacenes, LocalDateTime instante) {
-        if (unidad.getEstado() != EstadoUnidad.DISPONIBLE || unidad.rutaEnEjecucion() != null) {
+        Ruta enCurso = unidad.rutaEnEjecucion();
+        boolean vaACargar = enCurso != null && enCurso.tieneCargaPendiente();
+        if (!vaACargar && (unidad.getEstado() != EstadoUnidad.DISPONIBLE || enCurso != null)) {
             return List.of();
         }
         Nodo posicionActual = unidad.getPosicion();
-        Almacen destino = Almacen.masCercanoConStock(almacenes, posicionActual);
+        Almacen destino = vaACargar ? enCurso.getAlmacenCarga() : Almacen.masCercanoConStock(almacenes, posicionActual);
         if (destino == null || posicionActual.equals(destino.getPosicion())) {
             return List.of();
         }

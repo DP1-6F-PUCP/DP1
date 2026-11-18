@@ -122,8 +122,12 @@ public class PaqRapConfig {
     public ServicioPlanificacion servicioPlanificacion(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
             List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
             CargadorRecursos cargadorRecursos) {
-        return new ServicioPlanificacionImpl(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota,
-                TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargadorRecursos);
+        ServicioPlanificacionImpl servicio = new ServicioPlanificacionImpl(ciudad, configuracionOperacion,
+                tiposVehiculo, almacenes, flota, TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargadorRecursos);
+        // Arranque rápido: 2 lotes calculados de inmediato (cada uno se publica y se empuja al mapa
+        // apenas termina), así el visualizador tiene colchón de reproducción desde el primer segundo.
+        servicio.setLotesPrecalculados(2);
+        return servicio;
     }
 
     /**

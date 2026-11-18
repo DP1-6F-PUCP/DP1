@@ -16,5 +16,7 @@ public enum ActividadVehiculo {
     /** Detenido en el destino de un pedido, dentro de la ventana de tiempoServicioClienteHoras. */
     ENTREGANDO,
     /** Pausa obligatoria de refrigerio en curso (duracionRefrigerioHoras). */
-    EN_REFRIGERIO
+    EN_REFRIGERIO,
+    /** Detenido junto a una unidad averiada, recogiendo sus paquetes (tiempoTrasvaseHoras). */
+    TRASVASANDO
 }

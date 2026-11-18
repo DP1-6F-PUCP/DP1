@@ -9,11 +9,12 @@ public abstract class Almacen {
 
     // No final: TipoSolicitud.CAMBIO_POSICION_ALMACEN permite reubicar un almacen en caliente.
     private Nodo posicion;
-    // movimientos nunca se recorta -- acumula TODO el historial de la vida del escenario, igual
-    // que UnidadTransporte.rutas (ver su comentario). Por eso tampoco puede ser
-    // CopyOnWriteArrayList: acceso encapsulado y sincronizado en su lugar (mutación O(1) vía
-    // registrarMovimiento(), lectura vía getMovimientos() sobre copia defensiva).
-    private final List<MovimientoInventario> movimientos = new ArrayList<>();
+    // Solo los últimos MAX_MOVIMIENTOS: antes acumulaba TODO el historial (un movimiento por cada
+    // despacho planificado), y como los almacenes son los mismos objetos para todas las
+    // ejecuciones del backend, crecía sin límite hasta reiniciar el servidor -- sin que nadie lo
+    // leyera (ni el front: el listado de pedidos por almacén sale del origen de cada pedido).
+    private static final int MAX_MOVIMIENTOS = 1000;
+    private final java.util.ArrayDeque<MovimientoInventario> movimientos = new java.util.ArrayDeque<>();
 
     protected Almacen(Nodo posicion) {
         this.posicion = posicion;
@@ -60,7 +61,19 @@ public abstract class Almacen {
     }
 
     protected synchronized void registrarMovimiento(TipoMovimiento tipo, int cantidad, LocalDateTime instante) {
-        movimientos.add(new MovimientoInventario(tipo, cantidad, instante));
+        movimientos.addLast(new MovimientoInventario(tipo, cantidad, instante));
+        if (movimientos.size() > MAX_MOVIMIENTOS) {
+            movimientos.removeFirst();
+        }
+    }
+
+    /**
+     * Devuelve paquetes al almacén: una reserva que no se llegó a cargar (la ruta se abandonó antes
+     * de pasar a cargar) o el sobrante que trae una unidad al llegar. El central tiene inventario
+     * infinito, así que ahí no cambia nada.
+     */
+    public void reponerStock(int cantidad, LocalDateTime instante) {
+        // por defecto (central): sin efecto
     }
 
     /**

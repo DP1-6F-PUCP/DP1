@@ -49,6 +49,12 @@ public class Ruta {
     // PLANIFICADA) -- el panel de almacenes los usa para atribuir envíos a su almacén de salida.
     private Nodo nodoDespacho;
     private LocalDateTime fechaDespacho;
+    // Trasvase (rescate de carga): antes de entregar sus paradas, la unidad debe ir hasta una
+    // unidad averiada en `puntoTrasvase` y recoger de ella los paquetes de esas paradas.
+    private UnidadTransporte origenTrasvase;
+    private Nodo puntoTrasvase;
+    private LocalDateTime inicioTrasvase;
+    private boolean trasvaseRealizado;
 
     public Ruta(String idRuta, LocalDateTime horaInicioPlanificada, UnidadTransporte unidadTransporte) {
         this.idRuta = idRuta;
@@ -108,6 +114,60 @@ public class Ruta {
     public void registrarDespacho(Nodo nodo, LocalDateTime instante) {
         this.nodoDespacho = nodo;
         this.fechaDespacho = instante;
+    }
+
+    /** Convierte esta ruta en un rescate: primero recoge la carga de {@code origen} en {@code punto}. */
+    public void programarTrasvase(UnidadTransporte origen, Nodo punto) {
+        this.origenTrasvase = origen;
+        this.puntoTrasvase = punto;
+    }
+
+    public UnidadTransporte getOrigenTrasvase() {
+        return origenTrasvase;
+    }
+
+    public Nodo getPuntoTrasvase() {
+        return puntoTrasvase;
+    }
+
+    public LocalDateTime getInicioTrasvase() {
+        return inicioTrasvase;
+    }
+
+    public void setInicioTrasvase(LocalDateTime inicioTrasvase) {
+        this.inicioTrasvase = inicioTrasvase;
+    }
+
+    public void marcarTrasvaseRealizado() {
+        this.trasvaseRealizado = true;
+    }
+
+    /** true si esta ruta todavía debe pasar a recoger la carga de una unidad averiada. */
+    public boolean tieneTrasvasePendiente() {
+        return origenTrasvase != null && !trasvaseRealizado;
+    }
+
+    // Recarga: la unidad no está en un almacén al asignarle la ruta (p. ej. volvía vacía y el lote
+    // cerró a mitad de camino), así que primero debe ir a `almacenCarga` a cargar los paquetes.
+    // Regla del curso: una unidad solo carga en un almacén con stock, nunca "aparece" cargada.
+    private Almacen almacenCarga;
+    private boolean cargaRealizada;
+
+    public void programarCarga(Almacen almacen) {
+        this.almacenCarga = almacen;
+    }
+
+    public Almacen getAlmacenCarga() {
+        return almacenCarga;
+    }
+
+    public void marcarCargaRealizada() {
+        this.cargaRealizada = true;
+    }
+
+    /** true si la unidad todavía va camino al almacén a cargar (aún no lleva los paquetes). */
+    public boolean tieneCargaPendiente() {
+        return almacenCarga != null && !cargaRealizada;
     }
 
     /**

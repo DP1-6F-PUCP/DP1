@@ -62,6 +62,16 @@ public class IPSOOptimizador {
         return ultimaIteracionMejora;
     }
 
+    /** Unidades que esta ruta lleva de cada pedido (con entregas parciales puede ser menos que lo solicitado). */
+    private java.util.Map<Pedido, Integer> cantidades = java.util.Map.of();
+
+    public IPSOOptimizador(List<Pedido> pedidos, java.util.Map<Pedido, Integer> cantidades, Nodo deposito,
+            UnidadTransporte unidad, Ciudad ciudad, List<Bloqueo> bloqueos, IPSOConfig config, LocalDateTime horaSalida,
+            ConfiguracionOperacion operacion) {
+        this(pedidos, deposito, unidad, ciudad, bloqueos, config, horaSalida, operacion);
+        this.cantidades = cantidades;
+    }
+
     public IPSOOptimizador(List<Pedido> pedidos, Nodo deposito, UnidadTransporte unidad, Ciudad ciudad,
             List<Bloqueo> bloqueos, IPSOConfig config, LocalDateTime horaSalida, ConfiguracionOperacion operacion) {
         this.pedidos = pedidos;
@@ -236,7 +246,7 @@ public class IPSOOptimizador {
         int nodoAnterior = indiceDeposito;
         for (int idx : permutacion) {
             Pedido pedido = pedidos.get(idx);
-            cargaTotal += pedido.getCantidadSolicitada();
+            cargaTotal += cantidades.getOrDefault(pedido, pedido.getCantidadSolicitada());
 
             // Bug real encontrado (ver comentario de los campos de refrigerio arriba): sin esto,
             // el PSO evaluaba secuencias como "a tiempo" ignorando que el vehiculo puede tener que

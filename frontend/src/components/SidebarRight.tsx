@@ -174,7 +174,7 @@ const SemaforoBarra: React.FC<{ load: number; capacity: number }> = ({ load, cap
 };
 
 const isVehicleReturning = (vehicle: Vehicle) =>
-  vehicle.status === 'en_route' && vehicle.returnPath.length > 1;
+  vehicle.returningVisible ?? (vehicle.status === 'en_route' && vehicle.returnPath.length > 1);
 
 /** Criterios de orden de la flota; cada uno tiene su variante _asc y _desc en FleetSortKey. */
 const FLEET_SORT_OPTIONS = [

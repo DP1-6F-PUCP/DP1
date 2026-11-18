@@ -9,7 +9,7 @@ export type EstadoUnidad = 'DISPONIBLE' | 'EN_RUTA' | 'EN_MANTENIMIENTO' | 'AVER
 
 // Que esta haciendo la unidad dentro de su EstadoUnidad general (ver ActividadVehiculo en el
 // dominio) -- distingue, p. ej., EN_RUTA viajando de EN_RUTA detenido entregando o en refrigerio.
-export type ActividadVehiculo = 'INACTIVO' | 'VIAJANDO' | 'ENTREGANDO' | 'EN_REFRIGERIO';
+export type ActividadVehiculo = 'INACTIVO' | 'VIAJANDO' | 'ENTREGANDO' | 'EN_REFRIGERIO' | 'TRASVASANDO';
 export type EstadoRuta = 'PLANIFICADA' | 'EN_EJECUCION' | 'FINALIZADA' | 'REEMPLAZADA';
 export type EstadoEjecucion = 'INICIADA' | 'EN_CURSO' | 'PAUSADA' | 'FINALIZADA' | 'DETENIDA_POR_INCUMPLIMIENTO';
 export type TipoEscenarioBackend = 'DIA_A_DIA' | 'CINCO_DIAS' | 'COLAPSO_LOGISTICO';
@@ -70,6 +70,10 @@ export interface PuntoTrayectoriaDTO {
   y: number;
   instante: string; // LocalDateTime ISO (sin zona)
   actividad: ActividadVehiculo;
+  /** El tramo que empieza aquí va hacia un almacén sin repartir (regreso o camino a cargar). */
+  retorno?: boolean;
+  /** Paquetes a bordo en ese tramo. */
+  cargaABordo?: number;
 }
 
 export interface RutaDTO {
@@ -175,6 +179,17 @@ export interface EstadoOperacionDTO {
   bloqueos: BloqueoDTO[];
   eventos: EventoDTO[];
   metricas: MetricasOperacionDTO;
+  /** Número correlativo del lote dentro de la ejecución (1, 2, 3…); un salto indica lotes perdidos. */
+  secuencia?: number;
+  /** Pedidos nuevos o cambiados desde el lote anterior (se mezclan con los ya conocidos). */
+  pedidosCambiados?: PedidoDTO[];
+}
+
+export interface PaginaPedidosDTO {
+  total: number;
+  pagina: number;
+  tamano: number;
+  pedidos: PedidoDTO[];
 }
 
 export interface EjecucionEscenarioDTO {

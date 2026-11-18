@@ -1,14 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { EjecucionEscenarioDTO, SeleccionarEscenarioRequest } from '../types/backend';
 import { escenariosApi } from './escenariosApi';
-import { estadoOperacionApi } from './estadoOperacionApi';
 import { configuracionApi } from './configuracionApi';
+import { ponerseAlDia, reiniciarIngesta } from './ingestaLotes';
 import { simulationSocket } from './simulationSocket';
 import { simulationEngine } from '../engine/simulationEngine';
 import { useScenarioStore } from '../store/scenarioStore';
 import { parseBackendSimulatedTime } from '../utils/backendTime';
 import { useMapStore } from '../store/mapStore';
-import { adaptEstadoOperacion } from '../utils/backendAdapters';
 
 const consultas = ['estado-operacion', 'pedidos', 'configuracion', 'escenario', 'escenario-activa'];
 async function cancelarConsultas(client: QueryClient) {
@@ -17,6 +16,7 @@ async function cancelarConsultas(client: QueryClient) {
 }
 function limpiarVista(client: QueryClient, conservarInicio = false) {
   simulationEngine.reset();
+  reiniciarIngesta();
   if (!conservarInicio) useScenarioStore.setState({ playbackStartedAtMs: null });
   useMapStore.setState({ selectedVehicleId: null, selectedWarehouseId: null, selectedRouteId: null,
     selectedOrderId: null, realtimePositions: {} });
@@ -32,18 +32,13 @@ async function prepararReproduccion(client: QueryClient, dto: EjecucionEscenario
   const config = await client.fetchQuery({ queryKey: ['configuracion'],
     queryFn: ({ signal: consulta }) => configuracionApi.getConfiguracion(AbortSignal.any([signal, consulta])),
     retry: false, staleTime: 0 });
+  client.setQueryData(['configuracion'], config);
+  reiniciarIngesta(dto.idEjecucion);
+  const ctx = { idEjecucion: dto.idEjecucion, sa: dto.sa, k: dto.k, scenarioStartMs: inicio, avanzando: true };
   while (true) {
     signal.throwIfAborted();
-    const [estado, pedidos] = await Promise.all([
-      client.fetchQuery({ queryKey: ['estado-operacion', dto.idEjecucion], retry: false,
-        queryFn: ({ signal: consulta }) => estadoOperacionApi.getEstado(AbortSignal.any([signal, consulta]), dto.idEjecucion), staleTime: 0 }),
-      client.fetchQuery({ queryKey: ['pedidos', dto.idEjecucion], retry: false,
-        queryFn: ({ signal: consulta }) => estadoOperacionApi.getPedidos(undefined, AbortSignal.any([signal, consulta])), staleTime: 0 }),
-    ]);
-    const frame = { ...adaptEstadoOperacion(estado, config, pedidos, inicio), estadoRaw: estado };
-    simulationEngine.ingest({ vehicles: frame.vehicles, routes: frame.routes, frame,
-      idEjecucion: dto.idEjecucion, sa: dto.sa, k: dto.k,
-      marcaTiempoActual: estado.marcaTiempoActual, avanzando: true });
+    // Lotes numerados en orden: ninguno se salta aunque el servidor publique varios seguidos.
+    await ponerseAlDia(client, ctx, signal);
     if (simulationEngine.isPlaybackReady()) break;
     const actual = await escenariosApi.consultarEscenario(dto.idEjecucion, signal);
     if (!['INICIADA', 'EN_CURSO'].includes(actual.estado)) {

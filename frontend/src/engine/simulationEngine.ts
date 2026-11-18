@@ -29,13 +29,13 @@ import { adaptBloqueo } from '../utils/backendAdapters';
 const RENDER_DELAY_RESPALDO_MS = 20_000;
 
 /**
- * Margen (ms) que se suma a `sa*60000` para formar `renderDelayMs`. El lote nuevo llega por
- * WebSocket (el backend revisa cada 250ms) o, si el socket se cae, por el polling de respaldo
- * (cada 3s): sin margen, ese retraso hacia que el render alcanzara el final del ultimo lote
- * recibido antes de tener el siguiente, y el vehiculo se congelaba y luego saltaba (reporte
- * directo: "se queda parado y luego salta de posicion" en CINCO_DIAS).
+ * Margen (ms) que se suma a `sa*60000` para formar `renderDelayMs`. Sin margen, el render
+ * alcanzaba el final del último lote antes de tener el siguiente y el vehículo se congelaba y
+ * luego saltaba. Antes eran 6 s porque el backend revisaba cada 250 ms y el respaldo sin socket
+ * consultaba cada 3 s; ahora el lote se empuja apenas se publica (y sin socket se consulta cada
+ * 1 s), así que basta con cubrir la variación del tiempo de cómputo del lote y la red.
  */
-const MARGEN_LATENCIA_POLLING_MS = 6_000;
+const MARGEN_LATENCIA_POLLING_MS = 2_000;
 
 const MAX_CUADROS = 12;
 /** Cuanto historial de trayectoria se conserva detras del instante visible (ms simulados). */
@@ -54,6 +54,9 @@ interface PosicionEnLinea {
   /** Nodo entero del ultimo punto alcanzado (para mostrar coordenadas en el panel). */
   nodo: Point;
   act: TrajectoryPoint['act'];
+  /** Tramo hacia un almacén sin repartir (regreso o camino a cargar) y su carga a bordo. */
+  ret: boolean;
+  carga?: number;
   moviendo: boolean;
   /** Grados desde el norte (+y) en sentido horario, del tramo que recorre; solo si `moviendo`. */
   rumbo?: number;
@@ -73,7 +76,7 @@ function posicionEn(linea: TrajectoryPoint[], t: number): PosicionEnLinea | null
   const a = linea[i];
   const b = linea[i + 1];
   if (!b || t <= a.t || b.t <= a.t) {
-    return { punto: { x: a.x, y: a.y }, nodo: { x: a.x, y: a.y }, act: a.act, moviendo: false };
+    return { punto: { x: a.x, y: a.y }, nodo: { x: a.x, y: a.y }, act: a.act, ret: a.ret ?? false, carga: a.carga, moviendo: false };
   }
   const f = (t - a.t) / (b.t - a.t);
   const moviendo = a.x !== b.x || a.y !== b.y;
@@ -81,6 +84,8 @@ function posicionEn(linea: TrajectoryPoint[], t: number): PosicionEnLinea | null
     punto: { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f },
     nodo: { x: a.x, y: a.y },
     act: a.act,
+    ret: a.ret ?? false,
+    carga: a.carga,
     moviendo,
     rumbo: moviendo ? (Math.atan2(b.x - a.x, b.y - a.y) * 180) / Math.PI : undefined,
   };
@@ -113,6 +118,8 @@ function normalizarTrayectoria(linea: TrajectoryPoint[]): TrajectoryPoint[] {
           ? anterior.t + (actual.t - anterior.t) * fraccionHorizontal
           : anterior.t,
         act: anterior.act,
+        ret: anterior.ret,
+        carga: anterior.carga,
       };
       normalizada.push(esquina);
     }
@@ -157,6 +164,7 @@ function statusVisible(base: VehicleStatus, act: TrajectoryPoint['act'] | undefi
   if (moviendo) return 'en_route';
   switch (act) {
     case 'ENTREGANDO':
+    case 'TRASVASANDO':
       return 'delivering';
     case 'EN_REFRIGERIO':
       return 'on_break';
@@ -385,7 +393,8 @@ export class SimulationEngine {
     for (const p of nuevos) {
       const ultimo = linea[linea.length - 1];
       if (ultimo && p.t < ultimo.t) continue; // nunca hacia atras
-      if (ultimo && p.t === ultimo.t && p.x === ultimo.x && p.y === ultimo.y && p.act === ultimo.act) continue;
+      if (ultimo && p.t === ultimo.t && p.x === ultimo.x && p.y === ultimo.y && p.act === ultimo.act
+        && p.ret === ultimo.ret && p.carga === ultimo.carga) continue;
       // Union entre lotes: si el ultimo punto acumulado y el nuevo forman una diagonal,
       // insertar una esquina Manhattan intermedia para que la interpolacion siga la grilla.
       if (ultimo && (ultimo.x !== p.x && ultimo.y !== p.y) && p.t > ultimo.t) {
@@ -397,6 +406,8 @@ export class SimulationEngine {
           y: ultimo.y,
           t: ultimo.t + (p.t - ultimo.t) * fracH,
           act: ultimo.act,
+          ret: ultimo.ret,
+          carga: ultimo.carga,
         });
       }
       linea.push(p);
@@ -412,12 +423,15 @@ export class SimulationEngine {
       this.claveVisual = '';
       return false;
     }
-    this.cuadros.push({
-      arrivalMs: performance.now(),
-      marca,
-      marcaMs: marca ? parseBackendSimulatedTime(marca) : null,
-      data,
-    });
+    const marcaMs = marca ? parseBackendSimulatedTime(marca) : null;
+    const ahora = performance.now();
+    // Un lote recuperado tarde (hueco rellenado) no debe "llegar" junto con el siguiente: se le
+    // asigna el instante en que le tocaba llegar según su marca, sin pasar de ahora.
+    let arrivalMs = ahora;
+    if (ultimo && ultimo.marcaMs != null && marcaMs != null && this.k > 0) {
+      arrivalMs = Math.min(ahora, Math.max(ultimo.arrivalMs, ultimo.arrivalMs + (marcaMs - ultimo.marcaMs) / this.k));
+    }
+    this.cuadros.push({ arrivalMs, marca, marcaMs, data });
     if (this.cuadros.length > MAX_CUADROS) {
       this.cuadros.splice(0, this.cuadros.length - MAX_CUADROS);
     }
@@ -521,7 +535,7 @@ export class SimulationEngine {
     let firma = '';
     for (const v of base.data.vehicles) {
       const e = estados.get(v.id);
-      firma += `${v.id}:${e?.moviendo ?? false}:${e?.act ?? '-'}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
+      firma += `${v.id}:${e?.moviendo ?? false}:${e?.act ?? '-'}:${e?.ret ?? false}:${e?.carga ?? ''}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
     }
     // La lista puede cambiar dentro del mismo lote, incluso sin vehículos en movimiento.
     const clave = JSON.stringify([base.arrivalMs, firma, base.data.ordersOmitted, orders.map((order) => order.id),
@@ -534,7 +548,16 @@ export class SimulationEngine {
     const vehicles = base.data.vehicles.map((v) => {
       const e = estados.get(v.id);
       if (!e) return v;
-      return { ...v, status: statusVisible(v.status, e.act, e.moviendo), position: e.nodo };
+      // Regreso o camino a cargar según la trayectoria en este instante: gris y con lo que lleva
+      // a bordo de verdad, aunque el estado del final del lote ya la muestre cargada para la ruta
+      // siguiente (antes el color cambiaba varias cuadras antes de llegar al almacén).
+      const status = statusVisible(v.status, e.act, e.moviendo);
+      const tramoRetorno = e.ret && v.status !== 'broken' && v.status !== 'maintenance';
+      // Si se detiene a almorzar a mitad del regreso, lo que se ve es el refrigerio (no "regresando"
+      // a la vez); retoma el gris de regreso cuando vuelve a moverse hacia el almacén.
+      const enRetorno = tramoRetorno && status !== 'on_break' && status !== 'delivering';
+      return { ...v, status, position: e.nodo, returningVisible: enRetorno,
+        currentLoad: tramoRetorno && e.carga != null ? e.carga : v.currentLoad };
     });
     this.estadoVisual = { ...base.data, vehicles, orders, blockedStreets, marcaVisibleMs };
     for (const fn of this.visualListeners) fn();

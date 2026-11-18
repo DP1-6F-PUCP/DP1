@@ -100,9 +100,30 @@ class BloqueosDinamicosTest {
         assertEquals(new Nodo(0, 5), u.getPosicion());
         assertEquals(0, p.cantidadEntregadaTotal());
     }
-    @Test void nuevoBloqueoDevuelvePedidosEnRutaAlPlanificador(@TempDir Path logs) throws Exception {
+    @Test void bloqueoNuevoQueNoTocaElCaminoMantieneLaRuta(@TempDir Path logs) throws Exception {
         UnidadTransporte u = unidad(new Nodo(0, 0));
-        Pedido p = pedido("en-ruta", new Nodo(10, 0));
+        Pedido p = pedido("en-ruta", new Nodo(10, 0)); // camino por y=0; el bloqueo está en y=3
+        Ruta original = ruta(u, p);
+        AtomicInteger llamadas = new AtomicInteger();
+        Planificador planificador = c -> {
+            if (llamadas.getAndIncrement() == 0) return List.of(original);
+            assertFalse(c.pedidos().contains(p), "Un bloqueo lejano no debe quitarle el pedido a su ruta");
+            return List.of();
+        };
+        var c = contexto(u, List.of(bloqueo(inicio.plusSeconds(30), inicio.plusHours(2))), List.of(p));
+        var runner = new OrquestadorOperacion(planificador, new GestorLogSimulacion(logs.toString(), false),
+                1000f, 0.1f, 0.012f, 1f, c, null);
+        try {
+            runner.iniciarCicloPeriodico(TipoEscenario.CINCO_DIAS);
+            runner.ejecutarSiguienteLote();
+            runner.ejecutarSiguienteLote();
+            assertTrue(llamadas.get() >= 2);
+            assertNotEquals(EstadoRuta.REEMPLAZADA, original.getEstado());
+        } finally { runner.detener(); }
+    }
+    @Test void nuevoBloqueoDevuelvePedidosEnRutaAlPlanificador(@TempDir Path logs) throws Exception {
+        UnidadTransporte u = unidad(new Nodo(4, 0));
+        Pedido p = pedido("en-ruta", new Nodo(4, 6)); // su camino cruza el bloqueo en (4,3)
         Ruta original = ruta(u, p);
         AtomicInteger llamadas = new AtomicInteger();
         CountDownLatch primerLote = new CountDownLatch(1);

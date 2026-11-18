@@ -82,6 +82,26 @@ public class Pedido {
         return fechaDespacho;
     }
 
+    /**
+     * Unidades de este pedido que ya van en rutas en curso (aún no entregadas). La fija el
+     * orquestador en cada lote antes de planificar; con entregas parciales un pedido puede estar
+     * repartido entre varias unidades y el planificador solo debe cubrir lo que falta.
+     */
+    private volatile int cantidadComprometida;
+
+    public int getCantidadComprometida() {
+        return cantidadComprometida;
+    }
+
+    public void setCantidadComprometida(int cantidadComprometida) {
+        this.cantidadComprometida = cantidadComprometida;
+    }
+
+    /** Unidades que todavía nadie lleva: solicitadas − entregadas − comprometidas en rutas en curso. */
+    public int cantidadPorPlanificar() {
+        return Math.max(0, cantidadSolicitada - cantidadEntregadaTotal() - cantidadComprometida);
+    }
+
     public void registrarDespacho(Nodo nodo, LocalDateTime instante) {
         this.nodoDespacho = nodo;
         this.fechaDespacho = instante;

@@ -85,6 +85,33 @@ public class OrquestadorOperacion {
     private final List<SolicitudOperacion> solicitudesPendientes = new CopyOnWriteArrayList<>();
 
     /**
+     * Cuándo se devuelven al planificador las rutas en curso (además de las que dejan de llegar a
+     * tiempo). Propiedad del sistema {@code paqrap.abandono}:
+     * <ul>
+     *   <li>{@code urgencia:H} (por defecto {@code urgencia:4}): solo las rutas cuyo camino pendiente
+     *       cruza un bloqueo nuevo; pero si hay un pedido sin ruta que vence en menos de H horas, se
+     *       liberan todas las rutas no protegidas para que el planificador reacomode la flota.</li>
+     *   <li>{@code liberar:H}: como urgencia, pero libera solo el vehículo más cercano a cada urgente.
+     *       Medido (16 fechas, 5 días, con recarga en almacén): reemplaza 62 % de las rutas en vez de
+     *       86 %, pero colapsa antes (1,59 días vs 1,86; liberar:2 1,38). Reacomodar toda la flota
+     *       rinde más que el ahorro de no cambiar destinos, así que no es el valor por defecto.</li>
+     *   <li>{@code afectadas}: solo las rutas cuyo camino cruza un bloqueo nuevo.</li>
+     *   <li>{@code todas}: comportamiento anterior, cualquier bloqueo nuevo libera todas.</li>
+     * </ul>
+     * Comparación con el banco de 5 días (7 fechas, 2026-2028): "urgencia:4" colapsa igual o más
+     * tarde que "todas" con carga alta (2027-08: 3,25 vs 2,77 días; 2027-11: 2,29 vs 1,95; 2028-06:
+     * 1,62 vs 1,62) y con carga normal abandona ~90 % menos rutas, con menor costo.
+     */
+    private final String modoAbandono = System.getProperty("paqrap.abandono", "urgencia:4");
+
+    /** Lotes que se calculan de inmediato al iniciar (ver iniciarCicloPeriodico). */
+    private int lotesPrecalculados = 1;
+
+    public void setLotesPrecalculados(int lotesPrecalculados) {
+        this.lotesPrecalculados = Math.max(1, lotesPrecalculados);
+    }
+
+    /**
      * Carga bajo demanda los datos oficiales del curso (pedidos, bloqueos, mantenimiento) a medida
      * que el reloj simulado los necesita, para que la operación no dependa de que alguien suba
      * archivos por la API mes a mes -- ver {@link #asegurarDatosOficialesCargados}. {@code null}
@@ -113,6 +140,7 @@ public class OrquestadorOperacion {
     private final List<Pedido> pedidosPorIncorporar = new ArrayList<>();
 
     private final Planificador planificador;
+    private final GestorLogSimulacion gestorLog;
     private final MotorSimulacion motorSimulacion;
     // Historial de consulta por ejecución; los entregados salen del pool de planificación,
     // pero siguen disponibles para el mapa y las listas con su estado final.
@@ -141,6 +169,7 @@ public class OrquestadorOperacion {
             float k, float tiempoMaximoComputoSegundos, ContextoProblema contextoInicial,
             CargadorRecursos cargadorRecursos) {
         this.planificador = planificador;
+        this.gestorLog = gestorLog;
         this.motorSimulacion = new MotorSimulacion(gestorLog);
         this.sa = sa;
         this.ta = ta;
@@ -244,6 +273,9 @@ public class OrquestadorOperacion {
                 ? contextoProblema.marcaTiempoActual().plusDays(5)
                 : null;
         this.ejecucionActual.iniciar();
+        // Historial completo de eventos de esta ejecución en disco (evidencia); en memoria solo los recientes.
+        gestorLog.iniciarArchivo("ejecucion-" + tipoEscenario + "-"
+                + contextoProblema.marcaTiempoActual().toLocalDate() + "-" + ejecucionActual.getIdEjecucion());
         this.detenido = false;
         this.bloqueosNotificados.clear();
         this.bloqueosEnUltimaPlanificacion = Set.of();
@@ -251,10 +283,13 @@ public class OrquestadorOperacion {
 
         this.programador = Executors.newSingleThreadScheduledExecutor();
         long periodoMs = Math.round(sa * 60_000.0);
-        // Pre-calcula los 3 lotes iniciales de colchón sin esperar 2*sa segundos reales entre ellos:
-        // así el visualizador cumple su buffer anti-saltos en < 1 s al iniciar cualquier escenario.
+        // Pre-calcula los lotes iniciales de colchón sin esperar sa segundos reales entre ellos: así el
+        // visualizador llena su buffer anti-saltos en < 1 s. Cada lote precalculado agrega sa*k de
+        // desfase entre el mapa y el servidor (3 lotes = 37,5 min simulados en 5 días), por eso es un
+        // parámetro: el visualizador ya no pierde ninguno porque se publican numerados.
+        int precalcular = lotesPrecalculados;
         programador.execute(() -> {
-            for (int i = 0; i < 3 && !detenido; i++) {
+            for (int i = 0; i < precalcular && !detenido; i++) {
                 ejecutarLoteProtegido();
             }
         });
@@ -457,19 +492,48 @@ public class OrquestadorOperacion {
         LocalDateTime instanteEvaluacion = contextoProblema.marcaTiempoActual();
         Set<Bloqueo> bloqueosActuales = todosLosBloqueos.stream()
                 .filter(b -> b.estaVigente(instanteEvaluacion)).collect(java.util.stream.Collectors.toSet());
-        boolean nuevosBloqueos = !bloqueosEnUltimaPlanificacion.containsAll(bloqueosActuales);
+        // Antes, CUALQUIER bloqueo nuevo en la ciudad abandonaba la ruta de toda la flota (medido:
+        // 105 rutas abandonadas en 6 lotes de 5 días, y el bloqueo solo tocaba el camino de 1). Ahora
+        // solo se abandona la ruta cuyo camino pendiente pasa por un bloqueo nuevo; el resto sigue
+        // si todavía llega a tiempo (sigueSiendoFactible ya considera todos los bloqueos vigentes).
+        Set<Bloqueo> bloqueosPrevios = bloqueosEnUltimaPlanificacion;
+        Set<Nodo> nodosBloqueosNuevos = bloqueosActuales.stream()
+                .filter(b -> !bloqueosPrevios.contains(b))
+                .flatMap(b -> b.getSecuenciaNodos().stream())
+                .collect(java.util.stream.Collectors.toSet());
         bloqueosEnUltimaPlanificacion = bloqueosActuales;
+        boolean modoLiberar = modoAbandono.startsWith("liberar:");
+        double horasUrgencia = modoAbandono.startsWith("urgencia:") ? Double.parseDouble(modoAbandono.substring(9))
+                : modoLiberar ? Double.parseDouble(modoAbandono.substring(8)) : -1;
+        Set<Pedido> pedidosConRuta = rutasEnEjecucion.stream().flatMap(r -> r.getSecuenciaParadas().stream())
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA).map(ParadaPlanificada::getPedido)
+                .collect(java.util.stream.Collectors.toSet());
+        List<Pedido> urgentesSinRuta = horasUrgencia <= 0 ? List.of() : contextoProblema.pedidos().stream()
+                .filter(p -> p.getEstado() == EstadoPedido.PENDIENTE && !pedidosConRuta.contains(p)
+                        && p.getFechaLimite().isBefore(instanteEvaluacion.plusMinutes(Math.round(horasUrgencia * 60))))
+                .sorted(java.util.Comparator.comparing(Pedido::getFechaLimite))
+                .toList();
+        boolean hayUrgenteSinRuta = !urgentesSinRuta.isEmpty();
+        java.util.function.Predicate<Ruta> protegida = r ->
+                r.getUnidadTransporte().getActividadActual() == com.paqrap.dominio.ActividadVehiculo.ENTREGANDO
+                        || r.getUnidadTransporte().getActividadActual() == com.paqrap.dominio.ActividadVehiculo.TRASVASANDO
+                        // Entrega a medias (servicio iniciado y no terminado): nunca se abandona.
+                        || r.getSecuenciaParadas().stream().anyMatch(p -> p.getHoraInicioServicio() != null
+                                && p.getEstado() != EstadoParada.CUMPLIDA);
+        Set<Ruta> liberadasPorUrgencia = modoLiberar
+                ? rutasALiberarPorUrgencia(urgentesSinRuta, rutasEnEjecucion.stream().filter(protegida.negate()).toList(),
+                        instanteEvaluacion)
+                : Set.of();
         List<Ruta> rutasEnCurso = rutasEnEjecucion.stream()
-                .filter(r -> r.getUnidadTransporte().getActividadActual() == com.paqrap.dominio.ActividadVehiculo.ENTREGANDO
-                        || (!nuevosBloqueos && sigueSiendoFactible(r, instanteEvaluacion)))
+                .filter(r -> protegida.test(r)
+                        || (("todas".equals(modoAbandono)
+                                        ? nodosBloqueosNuevos.isEmpty()
+                                        : modoLiberar
+                                                ? !liberadasPorUrgencia.contains(r) && !caminoPendienteCruza(r, nodosBloqueosNuevos, List.copyOf(bloqueosPrevios), instanteEvaluacion)
+                                                : !hayUrgenteSinRuta && !caminoPendienteCruza(r, nodosBloqueosNuevos, List.copyOf(bloqueosPrevios), instanteEvaluacion))
+                                && sigueSiendoFactible(r, instanteEvaluacion)))
                 .toList();
         abandonarRutasParaReplanificar(rutasEnEjecucion, rutasEnCurso);
-        Set<Pedido> pedidosEnRutasEnCurso = rutasEnCurso.stream()
-                .flatMap(r -> r.getSecuenciaParadas().stream())
-                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
-                .map(ParadaPlanificada::getPedido)
-                .collect(java.util.stream.Collectors.toSet());
-
         List<Pedido> pedidosDelLote = new ArrayList<>(contextoProblema.pedidos());
         // pedidosPorIncorporar puede traer de golpe el archivo de un mes entero (p. ej. 5000
         // pedidos) apenas se auto-carga -- solo se le entregan al planificador los que ya
@@ -488,18 +552,37 @@ public class OrquestadorOperacion {
 
         pedidosDelLote.forEach(p -> historialPedidos.put(p.getIdPedido(), p));
 
-        // Al planificador se le ofrecen todos los pedidos vigentes salvo los de una ruta protegida
-        // (vehículo ENTREGANDO ahora mismo, ver arriba) -- todo lo demás, incluidos los pedidos de
-        // una ruta recién abandonada por abandonarRutasParaReplanificar, SÍ vuelve a competir.
-        List<Pedido> pedidosParaPlanificar = pedidosDelLote.stream()
-                .filter(p -> !pedidosEnRutasEnCurso.contains(p))
-                .toList();
-
         // Recorta el universo completo de bloqueos al horizonte real de ESTE lote (desde el
         // ingreso más temprano hasta el plazo más lejano de los pedidos vigentes) -- evita que
         // cada consulta de distancia tenga que descartar, una y otra vez, bloqueos de meses que
         // no tienen nada que ver con lo que se está planificando ahora mismo.
         List<Bloqueo> bloqueosDelLote = bloqueosDelLote(pedidosDelLote, contextoProblema.marcaTiempoActual());
+
+        // Trasvase: antes del planificador, rescatar la carga de las unidades averiadas que siguen
+        // en el sitio. Lo rescatado no se le ofrece al planificador (ya tiene unidad asignada).
+        List<Ruta> rutasTrasvase = PlanificadorTrasvase.planificar(contextoProblema.vehiculos(),
+                new PlanificadorTrasvase.ContextoProblemaVista(contextoProblema.marcaTiempoActual(),
+                        contextoProblema.ciudad(), bloqueosDelLote, todosLosMantenimientos,
+                        contextoProblema.configuracionOperacion()));
+        for (Ruta rescate : rutasTrasvase) {
+            rescate.getUnidadTransporte().agregarRuta(rescate);
+            log.info("Trasvase planificado: {} recoge de {} los pedidos {}", rescate.getUnidadTransporte(),
+                    rescate.getOrigenTrasvase(), rescate.getSecuenciaParadas().stream()
+                            .map(p -> p.getPedido().getIdPedido()).toList());
+        }
+
+        // Entregas parciales: un pedido puede ir repartido entre varias unidades. Se marca cuánto de
+        // cada uno ya va en rutas que siguen (en curso o de trasvase) y al planificador se le ofrece
+        // solo lo que falta -- incluidos los pedidos de una ruta recién abandonada, que vuelven a competir.
+        java.util.Map<Pedido, Integer> comprometido = new java.util.HashMap<>();
+        java.util.stream.Stream.concat(rutasEnCurso.stream(), rutasTrasvase.stream())
+                .flatMap(r -> r.getSecuenciaParadas().stream())
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA && p.getEstado() != EstadoParada.REASIGNADA)
+                .forEach(p -> comprometido.merge(p.getPedido(), p.getCantidadAEntregar(), Integer::sum));
+        pedidosDelLote.forEach(p -> p.setCantidadComprometida(comprometido.getOrDefault(p, 0)));
+        List<Pedido> pedidosParaPlanificar = pedidosDelLote.stream()
+                .filter(p -> p.cantidadPorPlanificar() > 0)
+                .toList();
         ContextoProblema contextoDelLote = new ContextoProblema(contextoProblema.marcaTiempoActual(),
                 pedidosParaPlanificar, bloqueosDelLote, todosLosMantenimientos,
                 contextoProblema.almacenes(), contextoProblema.vehiculos(), contextoProblema.ciudad(),
@@ -514,6 +597,22 @@ public class OrquestadorOperacion {
         // en todo el código antes de este fix).
         for (Ruta ruta : rutasNuevas) {
             ruta.getUnidadTransporte().agregarRuta(ruta);
+            // Red de seguridad para cualquier planificador (IPSO ya lo programa con su elección de
+            // almacén): una ruta con paquetes que parte fuera de un almacén primero pasa a cargar.
+            Nodo posicion = ruta.getUnidadTransporte().getPosicion();
+            if (!ruta.getSecuenciaParadas().isEmpty() && ruta.getAlmacenCarga() == null && !ruta.tieneTrasvasePendiente()
+                    && ruta.cargaTotal() > ruta.getUnidadTransporte().getCargaABordo()
+                    && contextoProblema.almacenes().stream().noneMatch(a -> a.getPosicion().equals(posicion))) {
+                Almacen carga = Almacen.masCercanoConStock(contextoProblema.almacenes(), posicion);
+                if (carga != null) {
+                    ruta.programarCarga(carga);
+                }
+            }
+            // Si el planificador atendió con stock de almacén un pedido que también estaba a bordo
+            // de una unidad averiada, esos paquetes pasan a ser sobrantes: vuelven al central con ella.
+            for (ParadaPlanificada parada : ruta.getSecuenciaParadas()) {
+                contextoProblema.vehiculos().forEach(u -> u.quitarCargaVarada(parada.getPedido()));
+            }
         }
         double segundosComputo = (System.currentTimeMillis() - inicioMs) / 1000.0;
         // Instrumentacion temporal para recalibrar ConfiguracionALNS.maxIteraciones contra carga
@@ -540,6 +639,7 @@ public class OrquestadorOperacion {
         }
 
         List<Ruta> todasLasRutas = new ArrayList<>(rutasEnCurso);
+        todasLasRutas.addAll(rutasTrasvase);
         todasLasRutas.addAll(rutasNuevas);
 
         double horasAvance = (sa / 60.0) * k;
@@ -559,6 +659,9 @@ public class OrquestadorOperacion {
         // Solo se suma el costo de las rutas NUEVAS -- el de las que ya venían EN_EJECUCION se
         // contabilizó una única vez, en el lote donde se planificaron por primera vez.
         for (Ruta ruta : rutasNuevas) {
+            reporte.sumarCosto(ruta.getCostoEstimado());
+        }
+        for (Ruta ruta : rutasTrasvase) {
             reporte.sumarCosto(ruta.getCostoEstimado());
         }
         reporte.incrementarEntregados(motorSimulacion.getPedidosCompletados().size());
@@ -641,8 +744,23 @@ public class OrquestadorOperacion {
         }
     }
 
+    /**
+     * Descarta los bloqueos que ya terminaron hace más de un margen. Antes cada mes cargado se
+     * quedaba para siempre en {@link #todosLosBloqueos} (y en {@link #bloqueosNotificados}), y cada
+     * lote los recorría todos al filtrar, notificar y calcular caminos: en un colapso de meses, la
+     * lista crecía con todos los meses ya pasados. El margen (al menos 2 h, o dos lotes) conserva
+     * los que el mapa aún reproduce del lote anterior.
+     */
+    private void purgarBloqueosVencidos(LocalDateTime ahora) {
+        double horasLote = (sa / 60.0) * k;
+        LocalDateTime limite = ahora.minusMinutes(Math.round(Math.max(2.0, 2 * horasLote) * 60));
+        todosLosBloqueos.removeIf(b -> b.getFechaFin().isBefore(limite));
+        bloqueosNotificados.removeIf(b -> b.getFechaFin().isBefore(limite));
+    }
+
     private void registrarBloqueosActivos() {
         LocalDateTime ahora = contextoProblema.marcaTiempoActual();
+        purgarBloqueosVencidos(ahora);
         todosLosBloqueos.stream()
                 .filter(bloqueo -> bloqueo.estaVigente(ahora))
                 .filter(bloqueo -> bloqueosNotificados.add(bloqueo))
@@ -676,6 +794,7 @@ public class OrquestadorOperacion {
             ejecucionActual.registrarFin();
             notificarCierreDeLote();
         }
+        gestorLog.cerrar();
     }
 
     public String getMotivoFinalizacion() {
@@ -729,17 +848,21 @@ public class OrquestadorOperacion {
         // plazo 14:18 dejaba el pedido INCUMPLIDA a las 14:30, a mitad del servicio, y detenía la
         // simulación. Un pedido con servicio iniciado dentro del plazo sigue PENDIENTE hasta que
         // ese servicio termine.
-        Set<Pedido> llegadosATiempo = rutas.stream()
+        // Con entregas parciales, un pedido solo está a salvo si TODAS sus unidades ya se entregaron o
+        // están en servicio iniciado a tiempo (no basta con que haya llegado una de sus partes).
+        java.util.Map<Pedido, Integer> enServicioATiempo = new java.util.HashMap<>();
+        rutas.stream()
                 .filter(r -> r.getEstado() == EstadoRuta.EN_EJECUCION)
                 .flatMap(r -> r.getSecuenciaParadas().stream())
                 .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA && p.getEstado() != EstadoParada.REASIGNADA
                         && p.getHoraInicioServicio() != null
                         && !p.getHoraInicioServicio().isAfter(p.getPedido().getFechaLimite()))
-                .map(ParadaPlanificada::getPedido)
-                .collect(java.util.stream.Collectors.toSet());
+                .forEach(p -> enServicioATiempo.merge(p.getPedido(), p.getCantidadAEntregar(), Integer::sum));
         List<Pedido> vigentes = new ArrayList<>();
         for (Pedido pedido : pedidos) {
-            pedido.actualizarEstado(llegadosATiempo.contains(pedido) ? pedido.getFechaLimite() : nuevoInstante);
+            boolean llegoATiempo = enServicioATiempo.containsKey(pedido)
+                    && pedido.cantidadEntregadaTotal() + enServicioATiempo.get(pedido) >= pedido.getCantidadSolicitada();
+            pedido.actualizarEstado(llegoATiempo ? pedido.getFechaLimite() : nuevoInstante);
             if (pedido.getEstado() == EstadoPedido.PENDIENTE) {
                 vigentes.add(pedido);
             } else if (pedido.getEstado() == EstadoPedido.INCUMPLIDA) {
@@ -857,13 +980,16 @@ public class OrquestadorOperacion {
                 // las retome el próximo lote, en vez de dejarla EN_EJECUCION para siempre.
                 Ruta rutaEnCurso = unidad.rutaEnEjecucion();
                 if (rutaEnCurso != null) {
+                    // Vuelve al central con lo que lleve: esos paquetes regresan al stock, y si iba a
+                    // un rescate sin haber recogido, la carga sigue en la unidad averiada.
+                    devolverCargaSiTrasvasePendiente(rutaEnCurso);
                     rutaEnCurso.setEstado(EstadoRuta.REEMPLAZADA);
                     long liberadas = rutaEnCurso.getSecuenciaParadas().stream()
                             .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
                             .peek(p -> p.setEstado(EstadoParada.REASIGNADA))
                             .count();
-                    motorSimulacion.registrarReplanificacion(0.0, contextoProblema, unidad.getIdUnidad(),
-                            (int) liberadas, "mantenimiento programado");
+                    eventosIncidenciaLote.add(motorSimulacion.registrarReplanificacion(0.0, contextoProblema,
+                            unidad.getIdUnidad(), (int) liberadas, "mantenimiento programado"));
                 }
                 unidad.setEstado(EstadoUnidad.EN_MANTENIMIENTO);
                 unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
@@ -891,17 +1017,145 @@ public class OrquestadorOperacion {
      * el alcance simplificado del curso; si se necesita modelar la recarga física entre tramos,
      * este es el punto a revisar.
      */
+    /**
+     * Modo {@code liberar:H}: en vez de liberar TODA la flota cuando existe algún pedido urgente sin
+     * ruta (en saturación eso ocurre en casi cada lote, y medido: 1439 de 1694 rutas terminaban
+     * reemplazadas, con vehículos cambiando de destino una y otra vez), se libera solo un vehículo
+     * por urgente: el más cercano a su destino, salvo que ya haya uno libre más cerca.
+     */
+    private Set<Ruta> rutasALiberarPorUrgencia(List<Pedido> urgentes, List<Ruta> liberables, LocalDateTime ahora) {
+        Set<Ruta> liberadas = new HashSet<>();
+        List<UnidadTransporte> libres = new ArrayList<>(contextoProblema.vehiculos().stream()
+                .filter(u -> u.estaDisponibleParaRuta(ahora) && u.rutaEnEjecucion() == null).toList());
+        List<Ruta> candidatas = new ArrayList<>(liberables);
+        for (Pedido urgente : urgentes) {
+            Nodo destino = urgente.getDestino();
+            java.util.function.ToIntFunction<UnidadTransporte> distancia = u ->
+                    Math.abs(u.getPosicion().x() - destino.x()) + Math.abs(u.getPosicion().y() - destino.y());
+            UnidadTransporte libreCercana = libres.stream()
+                    .min(java.util.Comparator.comparingInt(distancia)).orElse(null);
+            Ruta rutaCercana = candidatas.stream()
+                    .min(java.util.Comparator.comparingInt(r -> distancia.applyAsInt(r.getUnidadTransporte())))
+                    .orElse(null);
+            if (rutaCercana == null && libreCercana == null) {
+                break;
+            }
+            if (rutaCercana != null && (libreCercana == null
+                    || distancia.applyAsInt(rutaCercana.getUnidadTransporte()) < distancia.applyAsInt(libreCercana))) {
+                liberadas.add(rutaCercana);
+                candidatas.remove(rutaCercana);
+            } else {
+                libres.remove(libreCercana); // ya hay una unidad libre más cerca: no hace falta liberar otra
+            }
+        }
+        return liberadas;
+    }
+
     private void abandonarRutasParaReplanificar(List<Ruta> rutasEnEjecucion, List<Ruta> protegidas) {
         for (Ruta ruta : rutasEnEjecucion) {
             if (protegidas.contains(ruta)) {
                 continue;
             }
+            devolverCargaSiTrasvasePendiente(ruta);
             ruta.setEstado(EstadoRuta.REEMPLAZADA);
             ruta.getSecuenciaParadas().stream()
                     .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
                     .forEach(p -> p.setEstado(EstadoParada.REASIGNADA));
             ruta.getUnidadTransporte().setEstado(EstadoUnidad.DISPONIBLE);
         }
+    }
+
+    /**
+     * true si el camino que le falta a la ruta (con los bloqueos que ya conocía) pasa por algún nodo
+     * de un bloqueo recién vigente. Solo esas rutas se devuelven al planificador por el bloqueo.
+     */
+    private boolean caminoPendienteCruza(Ruta ruta, Set<Nodo> nodosBloqueosNuevos, List<Bloqueo> bloqueosPrevios,
+            LocalDateTime ahora) {
+        if (nodosBloqueosNuevos.isEmpty()) {
+            return false;
+        }
+        List<Nodo> puntos = new ArrayList<>();
+        puntos.add(ruta.getUnidadTransporte().getPosicion());
+        if (ruta.tieneTrasvasePendiente()) {
+            puntos.add(ruta.getPuntoTrasvase());
+        }
+        ruta.getSecuenciaParadas().stream()
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                .forEach(p -> puntos.add(p.getPedido().getDestino()));
+        for (int i = 0; i + 1 < puntos.size(); i++) {
+            try {
+                for (Nodo n : com.paqrap.dominio.CalculadorDistancia.caminoMasCorto(contextoProblema.ciudad(),
+                        bloqueosPrevios, ahora, puntos.get(i), puntos.get(i + 1))) {
+                    if (nodosBloqueosNuevos.contains(n)) {
+                        return true;
+                    }
+                }
+            } catch (IllegalStateException sinCamino) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Si se abandona un rescate antes de recoger la carga, los paquetes nunca salieron de la unidad
+     * averiada: vuelven a su carga varada (mientras siga en el sitio) para que otro lote los rescate.
+     */
+    /**
+     * Ruta abandonada antes de pasar a cargar: el planificador ya había descontado su carga del
+     * almacén, pero los paquetes nunca salieron. La reserva se devuelve al instante. (Si ya había
+     * cargado, los paquetes siguen a bordo de la unidad -- cargaABordo -- y vuelven al almacén
+     * cuando ella llegue a uno, ver MotorSimulacion.)
+     */
+    private void devolverReservaSiNoCargo(Ruta ruta) {
+        if (!ruta.tieneCargaPendiente()) {
+            return;
+        }
+        int reservado = ruta.getSecuenciaParadas().stream()
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                .mapToInt(ParadaPlanificada::getCantidadAEntregar).sum();
+        ruta.getAlmacenCarga().reponerStock(reservado, contextoProblema.marcaTiempoActual());
+        ruta.marcarCargaRealizada(); // ya no hay reserva que devolver (evita hacerlo dos veces)
+    }
+
+    private void devolverCargaSiTrasvasePendiente(Ruta ruta) {
+        devolverReservaSiNoCargo(ruta);
+        if (!ruta.tieneTrasvasePendiente()) {
+            return;
+        }
+        UnidadTransporte origen = ruta.getOrigenTrasvase();
+        Averia averia = origen.getAveriaActual();
+        boolean sigueEnSitio = origen.getEstado() == EstadoUnidad.AVERIADO && averia != null
+                && (averia.fechaTrasladoAlmacen() == null
+                        || contextoProblema.marcaTiempoActual().isBefore(averia.fechaTrasladoAlmacen()));
+        if (!sigueEnSitio) {
+            return;
+        }
+        ruta.getSecuenciaParadas().stream()
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                .forEach(p -> origen.agregarCargaVarada(p.getPedido(), p.getCantidadAEntregar()));
+    }
+
+    /**
+     * Al averiarse una unidad, lo que aún no entregó queda a bordo: se vuelve su carga varada
+     * (disponible para trasvase). Si iba camino a un rescate sin haber recogido nada, no lleva
+     * esos paquetes: siguen en la unidad de origen.
+     */
+    private void registrarCargaVarada(UnidadTransporte unidad, Ruta rutaAbandonada) {
+        if (rutaAbandonada.tieneCargaPendiente()) {
+            // Iba a cargar: los paquetes de esta ruta siguen en el almacén (se libera la reserva);
+            // lo que ya llevara a bordo de antes sigue en cargaABordo.
+            devolverReservaSiNoCargo(rutaAbandonada);
+            return;
+        }
+        if (rutaAbandonada.tieneTrasvasePendiente()) {
+            devolverCargaSiTrasvasePendiente(rutaAbandonada);
+            return;
+        }
+        unidad.setCargaABordo(0); // lo de la ruta queda registrado como carga varada (trasvase)
+        rutaAbandonada.getSecuenciaParadas().stream()
+                .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
+                .forEach(p -> unidad.agregarCargaVarada(p.getPedido(), p.getCantidadAEntregar()));
     }
 
     /**
@@ -921,7 +1175,9 @@ public class OrquestadorOperacion {
         double velocidad = unidad.getTipoVehiculo().getVelocidadKmH();
         long servicioSeg = Math.round(operacion.tiempoServicioClienteHoras() * 3600.0);
         long refrigerioSeg = Math.round(operacion.duracionRefrigerioHoras() * 3600.0);
-        LocalDateTime t = ahora;
+        LocalDateTime t = unidad.getDisponibleDesde() != null && unidad.getDisponibleDesde().isAfter(ahora)
+                ? unidad.getDisponibleDesde()
+                : ahora;
         // Mismo criterio que MotorSimulacion: el refrigerio pendiente se toma a más tardar en su
         // último inicio permitido; uno ya en curso termina antes de seguir.
         LocalDateTime turno = operacion.inicioTurnoQueContiene(ahora);
@@ -933,6 +1189,42 @@ public class OrquestadorOperacion {
             refrigerioPendiente = false;
         }
         Nodo posicion = unidad.getPosicion();
+        // Rescate todavía sin recoger: primero el viaje a la unidad averiada y el trasvase.
+        if (ruta.tieneTrasvasePendiente()) {
+            UnidadTransporte origen = ruta.getOrigenTrasvase();
+            Averia averiaOrigen = origen.getAveriaActual();
+            if (origen.getEstado() != EstadoUnidad.AVERIADO || averiaOrigen == null
+                    || (averiaOrigen.fechaTrasladoAlmacen() != null && !ahora.isBefore(averiaOrigen.fechaTrasladoAlmacen()))) {
+                return false; // la carga ya no está en el sitio
+            }
+            long trasvaseSeg = Math.round(operacion.tiempoTrasvaseHoras() * 3600.0);
+            if (ruta.getInicioTrasvase() == null) {
+                double kmPunto;
+                try {
+                    kmPunto = com.paqrap.dominio.CalculadorDistancia.distanciaKm(contextoProblema.ciudad(),
+                            todosLosBloqueos, t, posicion, ruta.getPuntoTrasvase());
+                } catch (IllegalStateException sinCamino) {
+                    return false;
+                }
+                t = t.plusSeconds(Math.round(kmPunto / velocidad * 3600.0) + trasvaseSeg);
+            } else {
+                LocalDateTime fin = ruta.getInicioTrasvase().plusSeconds(trasvaseSeg);
+                t = fin.isAfter(t) ? fin : t;
+            }
+            posicion = ruta.getPuntoTrasvase();
+        }
+        // Todavía camino al almacén a cargar: primero ese tramo.
+        if (ruta.tieneCargaPendiente()) {
+            Nodo almacen = ruta.getAlmacenCarga().getPosicion();
+            try {
+                double kmAlmacen = com.paqrap.dominio.CalculadorDistancia.distanciaKm(contextoProblema.ciudad(),
+                        todosLosBloqueos, t, posicion, almacen);
+                t = t.plusSeconds(Math.round(kmAlmacen / velocidad * 3600.0));
+            } catch (IllegalStateException sinCamino) {
+                return false;
+            }
+            posicion = almacen;
+        }
         for (ParadaPlanificada parada : ruta.getSecuenciaParadas()) {
             if (parada.getEstado() == EstadoParada.CUMPLIDA) {
                 continue;
@@ -986,11 +1278,26 @@ public class OrquestadorOperacion {
                             .filter(AlmacenCentral.class::isInstance)
                             .findFirst()
                             .ifPresent(central -> unidad.setPosicion(central.getPosicion()));
+                    // Averías 2 y 3: lo que nadie recogió llega al central con la unidad (inventario
+                    // infinito: no hay stock que reponer).
+                    unidad.vaciarCargaVarada();
+                    unidad.setCargaABordo(0);
                 }
                 if (!instante.isBefore(averia.fechaFinEstimada())) {
+                    // Avería 1: reparada en el sitio. Lo que nadie rescató sigue físicamente a bordo:
+                    // pasa a cargaABordo, así la unidad puede entregarlo sin volver a cargar o lo
+                    // devuelve al almacén al que llegue. Sus pedidos ya compiten en el planificador.
+                    int aBordo = unidad.getCargaVarada().stream().mapToInt(ParadaPlanificada::getCantidadAEntregar).sum();
+                    unidad.setCargaABordo(Math.min(unidad.getTipoVehiculo().getCapacidad(), unidad.getCargaABordo() + aBordo));
+                    unidad.vaciarCargaVarada();
                     unidad.setAveriaActual(null);
                     unidad.setEstado(EstadoUnidad.DISPONIBLE);
-                    unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
+                    // Reparada en la calle: si este lote no le asignan nada, debe volver al almacén
+                    // (con INACTIVO el simulador la daba por estacionada en uno y quedaba quieta ahí).
+                    Nodo pos = unidad.getPosicion();
+                    boolean enAlmacen = contextoProblema.almacenes().stream().anyMatch(a -> a.getPosicion().equals(pos));
+                    unidad.setActividadActual(enAlmacen ? com.paqrap.dominio.ActividadVehiculo.INACTIVO
+                            : com.paqrap.dominio.ActividadVehiculo.VIAJANDO);
                 }
             }
         }
@@ -1014,13 +1321,14 @@ public class OrquestadorOperacion {
                     // siempre y MotorSimulacion seguiría intentando avanzar un vehículo averiado.
                     Ruta rutaEnCurso = unidad.rutaEnEjecucion();
                     if (rutaEnCurso != null) {
+                        registrarCargaVarada(unidad, rutaEnCurso);
                         rutaEnCurso.setEstado(EstadoRuta.REEMPLAZADA);
                         long liberadas = rutaEnCurso.getSecuenciaParadas().stream()
                                 .filter(p -> p.getEstado() != EstadoParada.CUMPLIDA)
                                 .peek(p -> p.setEstado(EstadoParada.REASIGNADA))
                                 .count();
-                        motorSimulacion.registrarReplanificacion(0.0, contextoProblema, unidad.getIdUnidad(),
-                                (int) liberadas, "avería " + tipo);
+                        eventosIncidenciaLote.add(motorSimulacion.registrarReplanificacion(0.0, contextoProblema,
+                                unidad.getIdUnidad(), (int) liberadas, "avería " + tipo));
                     }
 
                     // Tipo 1 permanece 2h en el lugar y se repara ahí mismo. Tipo 2 y Tipo 3
@@ -1034,8 +1342,8 @@ public class OrquestadorOperacion {
                     unidad.setEstado(EstadoUnidad.AVERIADO);
                     unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
                     reporte.incrementarAverias();
-                    motorSimulacion.registrarAveriaVehiculo(0.0, contextoProblema, unidad.getIdUnidad(),
-                            unidad.getPosicion(), tipo.name());
+                    eventosIncidenciaLote.add(motorSimulacion.registrarAveriaVehiculo(0.0, contextoProblema,
+                            unidad.getIdUnidad(), unidad.getPosicion(), tipo.name()));
                 });
     }
 

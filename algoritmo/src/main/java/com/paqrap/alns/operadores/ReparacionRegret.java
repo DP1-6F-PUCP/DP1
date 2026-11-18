@@ -44,7 +44,7 @@ public class ReparacionRegret implements OperadorReparacion {
                     for (int pos = 0; pos <= ruta.getSecuenciaParadas().size(); pos++) {
                         Ruta rutaPrueba = Solucion.copiarRuta(ruta);
                         rutaPrueba.getSecuenciaParadas().add(pos,
-                                new ParadaPlanificada(pedido, pedido.getCantidadSolicitada()));
+                                new ParadaPlanificada(pedido, pedido.cantidadPorPlanificar()));
                         OperadorUtil.recalcular(rutaPrueba, contexto);
 
                         if (esFactible(ruta, rutaPrueba, solucion, contexto)) {
@@ -82,7 +82,7 @@ public class ReparacionRegret implements OperadorReparacion {
 
             if (pedidoMaxRegret != null) {
                 rutaMaxRegret.getSecuenciaParadas().add(posMaxRegret,
-                        new ParadaPlanificada(pedidoMaxRegret, pedidoMaxRegret.getCantidadSolicitada()));
+                        new ParadaPlanificada(pedidoMaxRegret, pedidoMaxRegret.cantidadPorPlanificar()));
                 OperadorUtil.recalcular(rutaMaxRegret, contexto);
                 pedidosNoAsignados.remove(pedidoMaxRegret);
             } else {

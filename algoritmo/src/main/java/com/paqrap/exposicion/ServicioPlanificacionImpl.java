@@ -170,16 +170,100 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      */
     private volatile EstadoOperacionDTO estadoPublicado;
     private volatile List<PedidoDTO> pedidosPublicados;
+    /** Subconjunto PENDIENTE de pedidosPublicados (alertas de SLA sin recorrer todo el historial). */
+    private volatile List<PedidoDTO> pedidosPendientesPublicados = List.of();
     private record CierrePublicado(EstadoOperacionDTO estado, List<PedidoDTO> pedidos) {}
     private final Map<String, CierrePublicado> planificacionesEstables = new ConcurrentHashMap<>();
     private final Map<String, ReporteSimulacionDTO> reportesFinales = new ConcurrentHashMap<>();
 
+    /** Lotes que se conservan para que el visualizador recupere los que no le llegaron. */
+    private static final int LOTES_CONSERVADOS = 12;
+    private final java.util.ArrayDeque<EstadoOperacionDTO> ultimosLotes = new java.util.ArrayDeque<>();
+    private long secuenciaPublicacion;
+    /** Pedidos tal como se publicaron la última vez, para enviar solo los que cambian. */
+    private Map<String, PedidoDTO> pedidosAnteriores = new java.util.HashMap<>();
+    private final List<java.util.function.Consumer<EstadoOperacionDTO>> oyentes = new CopyOnWriteArrayList<>();
+    private int lotesPrecalculados = 1;
+
+    /** Lotes calculados de inmediato al iniciar cada escenario (ver OrquestadorOperacion.setLotesPrecalculados). */
+    public void setLotesPrecalculados(int lotesPrecalculados) {
+        this.lotesPrecalculados = lotesPrecalculados;
+    }
+
+    @Override
+    public void suscribirPublicaciones(java.util.function.Consumer<EstadoOperacionDTO> oyente) {
+        oyentes.add(oyente);
+    }
+
+    @Override
+    public List<EstadoOperacionDTO> consultarLotesDesde(long desde) {
+        synchronized (ultimosLotes) {
+            return ultimosLotes.stream().filter(e -> e.secuencia() >= desde).toList();
+        }
+    }
+
+    @Override
+    public PaginaPedidosDTO consultarHistorialPedidos(String estado, String texto, LocalDateTime desde,
+            LocalDateTime hasta, int pagina, int tamano) {
+        List<PedidoDTO> fuente = pedidosPublicados != null ? pedidosPublicados : List.of();
+        String buscado = texto == null ? null : texto.trim().toLowerCase();
+        List<PedidoDTO> filtrados = fuente.stream()
+                .filter(p -> estado == null || p.estado().equalsIgnoreCase(estado))
+                .filter(p -> buscado == null || buscado.isEmpty() || p.idPedido().toLowerCase().contains(buscado)
+                        || p.idCliente().toLowerCase().contains(buscado))
+                .filter(p -> desde == null || !p.fechaIngreso().isBefore(desde))
+                .filter(p -> hasta == null || !p.fechaIngreso().isAfter(hasta))
+                .sorted(Comparator.comparing(PedidoDTO::fechaIngreso).reversed())
+                .toList();
+        int tam = Math.max(1, Math.min(tamano, 500));
+        int desdeIdx = Math.min(filtrados.size(), Math.max(0, pagina) * tam);
+        return new PaginaPedidosDTO(filtrados.size(), Math.max(0, pagina), tam,
+                filtrados.subList(desdeIdx, Math.min(filtrados.size(), desdeIdx + tam)));
+    }
+
     private void publicarEstado(OrquestadorOperacion orquestador) {
         ContextoProblema contexto = orquestador.getContextoProblema();
-        pedidosPublicados = orquestador.getPedidosRecibidos().stream().map(EnsambladorRespuestas::aPedidoDTO).toList();
+        // Solo se vuelven a convertir los pedidos que todavía pueden cambiar: uno ENTREGADA ya no
+        // cambia nunca, así que se reutiliza su DTO. Antes se convertían y comparaban TODOS los
+        // pedidos de la ejecución en cada lote (trabajo proporcional al total acumulado: en un
+        // colapso de meses, decenas de miles de DTO cada 5 s).
+        List<PedidoDTO> cambiados = new ArrayList<>();
+        List<PedidoDTO> todos = new ArrayList<>(pedidosAnteriores.size() + 64);
+        List<PedidoDTO> pendientes = new ArrayList<>();
+        for (Pedido pedido : orquestador.getPedidosRecibidos()) {
+            PedidoDTO previo = pedidosAnteriores.get(pedido.getIdPedido());
+            PedidoDTO actual = previo != null && "ENTREGADA".equals(previo.estado()) ? previo
+                    : EnsambladorRespuestas.aPedidoDTO(pedido);
+            if (actual != previo) {
+                if (!actual.equals(previo)) {
+                    cambiados.add(actual);
+                }
+                pedidosAnteriores.put(actual.idPedido(), actual);
+            }
+            todos.add(actual);
+            if ("PENDIENTE".equals(actual.estado())) {
+                pendientes.add(actual);
+            }
+        }
+        pedidosPublicados = java.util.Collections.unmodifiableList(todos);
+        pedidosPendientesPublicados = java.util.Collections.unmodifiableList(pendientes);
         estadoPublicado = EnsambladorRespuestas.ensamblarEstado(contexto, orquestador.getUltimasRutas(),
                 orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte())
-                .conEjecucion(orquestador.getEjecucionActual().getIdEjecucion());
+                .conEjecucion(orquestador.getEjecucionActual().getIdEjecucion())
+                .conPublicacion(++secuenciaPublicacion, cambiados);
+        synchronized (ultimosLotes) {
+            ultimosLotes.addLast(estadoPublicado);
+            while (ultimosLotes.size() > LOTES_CONSERVADOS) {
+                ultimosLotes.removeFirst();
+            }
+        }
+        for (var oyente : oyentes) {
+            try {
+                oyente.accept(estadoPublicado);
+            } catch (RuntimeException ex) {
+                log.warn("Un oyente de publicaciones falló: {}", ex.getMessage());
+            }
+        }
         String id = orquestador.getEjecucionActual().getIdEjecucion();
         CierrePublicado cierre = new CierrePublicado(estadoPublicado, pedidosPublicados);
         // El lote que produce el colapso no reemplaza la última planificación sin incumplimientos.
@@ -282,6 +366,12 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         String estadoFiltro = filtro != null ? filtro.estado() : null;
         List<PedidoDTO> publicados = ejecucionActivaOrquestador() != null ? pedidosPublicados : null;
         if (publicados != null) {
+            if (estadoFiltro == null) {
+                return publicados; // ya es inmutable: sin copiar la lista completa en cada consulta
+            }
+            if ("PENDIENTE".equalsIgnoreCase(estadoFiltro)) {
+                return pedidosPendientesPublicados;
+            }
             return publicados.stream()
                     .filter(p -> estadoFiltro == null || p.estado().equalsIgnoreCase(estadoFiltro))
                     .toList();
@@ -348,6 +438,13 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         // Se registra ANTES de iniciar el ciclo: el primer lote corre de inmediato (delay 0).
         estadoPublicado = null;
         pedidosPublicados = null;
+        pedidosPendientesPublicados = List.of();
+        pedidosAnteriores = new java.util.HashMap<>();
+        secuenciaPublicacion = 0;
+        synchronized (ultimosLotes) {
+            ultimosLotes.clear();
+        }
+        orquestador.setLotesPrecalculados(lotesPrecalculados);
         orquestador.setAlCerrarLote(() -> publicarEstado(orquestador));
 
         EjecucionEscenario ejecucion = orquestador.iniciarCicloPeriodico(tipo);

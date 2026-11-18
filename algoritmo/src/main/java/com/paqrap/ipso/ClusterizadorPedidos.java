@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Agrupa los pedidos pendientes en lotes por unidad de transporte (cluster-first / route-second):
@@ -53,6 +54,8 @@ public class ClusterizadorPedidos {
         public final Almacen almacen;
         /** En orden de asignación (por urgencia) -- factible tal cual, por construcción. */
         public final List<Pedido> pedidos = new ArrayList<>();
+        /** Unidades que esta unidad lleva de cada pedido (entregas parciales: puede ser menos que lo solicitado). */
+        public final Map<Pedido, Integer> cantidades = new LinkedHashMap<>();
 
         public LoteVehiculo(UnidadTransporte unidad, Almacen almacen) {
             this.unidad = unidad;
@@ -70,6 +73,10 @@ public class ClusterizadorPedidos {
         boolean refrigerioTomado;
         int carga;
         LoteVehiculo lote;
+        /** Km desde la posición inicial hasta cada almacén (se reutiliza entre pedidos candidatos). */
+        final Map<Almacen, Double> kmHastaAlmacen = new java.util.HashMap<>();
+        /** Paquetes que ya lleva a bordo fuera de un almacén (sirven sin volver a cargar). */
+        int aBordo;
 
         Plan(UnidadTransporte unidad, LocalDateTime ahora, ConfiguracionOperacion operacion,
                 LocalDateTime inicioMantenimiento) {
@@ -96,68 +103,168 @@ public class ClusterizadorPedidos {
             List<Almacen> almacenes, LocalDateTime instanteReferencia, int maxParadasPorRuta,
             ConfiguracionOperacion operacion, Ciudad ciudad, List<Bloqueo> bloqueos, List<Mantenimiento> mantenimientos) {
 
-        List<Pedido> pendientes = new ArrayList<>(pedidosPendientes);
-        pendientes.sort(Comparator.comparing(Pedido::getFechaLimite));
-
         List<Plan> planes = new ArrayList<>();
         for (UnidadTransporte unidad : flotaDisponible) {
             if (unidad.estaDisponibleParaRuta(instanteReferencia)) {
-                planes.add(new Plan(unidad, instanteReferencia, operacion,
-                        proximoMantenimiento(unidad, mantenimientos, instanteReferencia)));
+                Plan plan = new Plan(unidad, instanteReferencia, operacion,
+                        proximoMantenimiento(unidad, mantenimientos, instanteReferencia));
+                boolean enAlmacen = almacenes.stream().anyMatch(a -> a.getPosicion().equals(unidad.getPosicion()));
+                plan.aBordo = enAlmacen ? 0 : unidad.getCargaABordo();
+                planes.add(plan);
             }
         }
+
+        // Postergación indefinida: en cada lote se reordena TODO lo pendiente por fecha límite (EDF), de
+        // modo que un pedido que no se pudo asignar sube de prioridad lote a lote y nunca queda
+        // detrás de pedidos que llegaron después con plazo más holgado. Además, lo comprometido en
+        // rutas en curso se descuenta (cantidadPorPlanificar) y el saldo vuelve a la cola.
+        //
+        // Parámetros (propiedades del sistema), medidos con el banco 5D sobre 16 fechas (días hasta
+        // el colapso, promedio; mayor es mejor), tras corregir el refrigerio a mitad de servicio:
+        //   orden=edf     parcial=necesaria 2.97   <- por defecto
+        //   orden=edf     parcial=urgente:4 2.83
+        //   orden=holgura parcial=necesaria 2.73
+        //   orden=holgura parcial=urgente:4 2.54
+        //   orden=edf     parcial=siempre   2.44
+        //   orden=holgura parcial=siempre   2.26
+        // Tras exigir que la unidad pase por un almacén a cargar (antes casi la mitad de los despachos
+        // salían cargados desde la calle), el mismo banco da: necesaria 1.86, urgente:4 1.78; con
+        // abandono=todas 1.64 y abandono=afectadas 1.36. Se mantienen edf + necesaria + urgencia:4.
+        // "necesaria": el pedido se divide entre vehículos solo si supera la capacidad del tipo más
+        // grande de la flota (los pedidos grandes que el profesor anticipa desde ago-2028); dividir de
+        // más gasta capacidad de flota en viajes extra y adelanta el colapso.
+        List<Pedido> pendientes = new ArrayList<>(pedidosPendientes);
+        Map<Pedido, LocalDateTime> holgura = new java.util.HashMap<>();
+        for (Pedido p : pendientes) {
+            double horasMin = planes.stream()
+                    .mapToDouble(pl -> (Math.abs(pl.posicion.x() - p.getDestino().x())
+                            + Math.abs(pl.posicion.y() - p.getDestino().y())) * (double) ciudad.distanciaEntreNodos()
+                            / pl.unidad.getTipoVehiculo().getVelocidadKmH())
+                    .min().orElse(0.0);
+            holgura.put(p, p.getFechaLimite().minusSeconds(Math.round(horasMin * 3600.0)));
+        }
+        String modoOrden = System.getProperty("paqrap.orden", "edf");
+        String modoParcial = System.getProperty("paqrap.parcial", "necesaria");
+        if ("edf".equals(modoOrden)) {
+            pendientes.sort(Comparator.comparing(Pedido::getFechaLimite));
+        } else {
+            pendientes.sort(Comparator.comparing(holgura::get));
+        }
+        // Capacidad del tipo más grande de la FLOTA (no solo de las libres ahora): un pedido que cabe en
+        // un auto no se divide solo porque en este instante los autos estén ocupados.
+        int capacidadMaxima = flotaDisponible.stream().mapToInt(u -> u.getTipoVehiculo().getCapacidad()).max().orElse(0);
 
         long servicioSeg = Math.round(operacion.tiempoServicioClienteHoras() * 3600.0);
         long refrigerioSeg = Math.round(operacion.duracionRefrigerioHoras() * 3600.0);
         Map<UnidadTransporte, LoteVehiculo> lotes = new LinkedHashMap<>();
 
         for (Pedido pedido : pendientes) {
-            int cantidad = pedido.getCantidadSolicitada();
-            List<Candidato> candidatos = new ArrayList<>();
-            for (Plan plan : planes) {
-                int paradas = plan.lote == null ? 0 : plan.lote.pedidos.size();
-                if (paradas >= maxParadasPorRuta || plan.carga + cantidad > plan.unidad.getTipoVehiculo().getCapacidad()) {
-                    continue;
+            int restante = pedido.cantidadPorPlanificar();
+            Set<Plan> usados = new java.util.HashSet<>();
+            while (restante > 0) {
+                // Candidatas: llegan a tiempo y tienen espacio libre (aunque no alcance para todo).
+                List<Candidato> candidatos = new ArrayList<>();
+                for (Plan plan : planes) {
+                    if (usados.contains(plan)) {
+                        continue; // una unidad lleva una sola parte de cada pedido
+                    }
+                    int paradas = plan.lote == null ? 0 : plan.lote.pedidos.size();
+                    int libre = plan.unidad.getTipoVehiculo().getCapacidad() - plan.carga;
+                    if (paradas >= maxParadasPorRuta || libre <= 0) {
+                        continue;
+                    }
+                    int parte = Math.min(restante, libre);
+                    Almacen almacen;
+                    Llegada llegada;
+                    if (plan.lote != null) {
+                        // Ya tiene pedidos: sigue de cliente en cliente con la misma fuente de carga
+                        // (el almacén donde carga, o lo que ya lleva a bordo si almacen es null).
+                        almacen = plan.lote.almacen;
+                        boolean alcanza = almacen != null ? almacen.tieneStock(parte) : plan.carga + parte <= plan.aBordo;
+                        llegada = alcanza ? estimarLlegada(plan, pedido, ciudad, bloqueos, refrigerioSeg, null) : null;
+                    } else if (plan.aBordo >= parte) {
+                        // Venía de una ruta replanificada con paquetes a bordo: el producto es uno solo,
+                        // así que los entrega a este cliente sin volver a cargar.
+                        almacen = null;
+                        llegada = estimarLlegada(plan, pedido, ciudad, bloqueos, refrigerioSeg, null);
+                    } else {
+                        // Primer pedido de la unidad: debe cargar en un almacén con stock. Si ya está en
+                        // uno, sale de ahí; si no (volvía vacía), se elige el almacén que la deja antes
+                        // en el cliente pasando a cargar.
+                        almacen = null;
+                        llegada = null;
+                        Almacen aqui = almacenes.stream()
+                                .filter(a -> a.getPosicion().equals(plan.posicion) && a.tieneStock(parte))
+                                .findFirst().orElse(null);
+                        for (Almacen a : aqui != null ? List.of(aqui) : almacenes) {
+                            if (!a.tieneStock(parte)) {
+                                continue;
+                            }
+                            Llegada l = estimarLlegada(plan, pedido, ciudad, bloqueos, refrigerioSeg, aqui != null ? null : a);
+                            if (l != null && (llegada == null || l.instante().isBefore(llegada.instante()))) {
+                                llegada = l;
+                                almacen = a;
+                            }
+                        }
+                    }
+                    if (llegada == null || llegada.instante().isAfter(pedido.getFechaLimite())) {
+                        continue;
+                    }
+                    LocalDateTime finServicio = llegada.instante().plusSeconds(servicioSeg);
+                    // Q&A (nota 2 del plan de mantenimiento): "eso deben evitarlo en la planificación".
+                    if (plan.inicioMantenimiento != null && finServicio.isAfter(plan.inicioMantenimiento)) {
+                        continue;
+                    }
+                    candidatos.add(new Candidato(plan, almacen, llegada, parte));
                 }
-                Almacen almacen = plan.lote != null ? plan.lote.almacen
-                        : almacenMasCercanoConStock(plan.posicion, almacenes, cantidad, instanteReferencia, ciudad, bloqueos);
-                if (almacen == null || !almacen.tieneStock(cantidad)) {
-                    continue;
+                if (candidatos.isEmpty()) {
+                    break; // lo que falte queda pendiente para el próximo lote
                 }
-                Llegada llegada = estimarLlegada(plan, pedido, ciudad, bloqueos, refrigerioSeg);
-                if (llegada == null || llegada.instante().isAfter(pedido.getFechaLimite())) {
-                    continue;
+                final int falta = restante;
+                List<Candidato> completas = candidatos.stream().filter(c -> c.parte() == falta).toList();
+                boolean puedeDividir = "siempre".equals(modoParcial) || falta > capacidadMaxima
+                        || (modoParcial.startsWith("urgente:") && pedido.getFechaLimite().isBefore(instanteReferencia
+                                .plusMinutes(Math.round(Double.parseDouble(modoParcial.substring(8)) * 60))));
+                if (completas.isEmpty() && !puedeDividir) {
+                    break; // todavía hay tiempo: esperar a una unidad que lo lleve completo
                 }
-                LocalDateTime finServicio = llegada.instante().plusSeconds(servicioSeg);
-                // Q&A (nota 2 del plan de mantenimiento): "eso deben evitarlo en la planificación".
-                if (plan.inicioMantenimiento != null && finServicio.isAfter(plan.inicioMantenimiento)) {
-                    continue;
+                Candidato elegido;
+                if (!completas.isEmpty()) {
+                    // Una sola unidad puede llevar todo lo que falta: mismo criterio de antes, la que
+                    // llega antes y, entre las casi igual de rápidas, la de menor capacidad suficiente.
+                    LocalDateTime mejor = completas.stream().map(c -> c.llegada().instante()).min(LocalDateTime::compareTo).get();
+                    LocalDateTime tope = mejor.plusSeconds(Math.round(MARGEN_EMPATE_HORAS * 3600.0));
+                    elegido = completas.stream()
+                            .filter(c -> !c.llegada().instante().isAfter(tope))
+                            .min(Comparator.<Candidato>comparingInt(c -> c.plan().unidad.getTipoVehiculo().getCapacidad())
+                                    .thenComparing(c -> c.llegada().instante()))
+                            .get();
+                } else {
+                    // Entrega parcial: ninguna unidad lleva todo a tiempo. Se toma la parte más grande
+                    // posible de la unidad que llega antes y se repite con lo que falte.
+                    elegido = candidatos.stream()
+                            .min(Comparator.<Candidato, LocalDateTime>comparing(c -> c.llegada().instante())
+                                    .thenComparing(Comparator.comparingInt(Candidato::parte).reversed()))
+                            .get();
                 }
-                candidatos.add(new Candidato(plan, almacen, llegada));
-            }
-            if (candidatos.isEmpty()) {
-                continue; // queda PENDIENTE para el próximo lote
-            }
 
-            LocalDateTime mejor = candidatos.stream().map(c -> c.llegada().instante()).min(LocalDateTime::compareTo).get();
-            LocalDateTime tope = mejor.plusSeconds(Math.round(MARGEN_EMPATE_HORAS * 3600.0));
-            Candidato elegido = candidatos.stream()
-                    .filter(c -> !c.llegada().instante().isAfter(tope))
-                    .min(Comparator.<Candidato>comparingInt(c -> c.plan().unidad.getTipoVehiculo().getCapacidad())
-                            .thenComparing(c -> c.llegada().instante()))
-                    .get();
-
-            Plan plan = elegido.plan();
-            if (plan.lote == null) {
-                plan.lote = new LoteVehiculo(plan.unidad, elegido.almacen());
-                lotes.put(plan.unidad, plan.lote);
+                Plan plan = elegido.plan();
+                if (plan.lote == null) {
+                    plan.lote = new LoteVehiculo(plan.unidad, elegido.almacen());
+                    lotes.put(plan.unidad, plan.lote);
+                }
+                plan.lote.pedidos.add(pedido);
+                plan.lote.cantidades.put(pedido, elegido.parte());
+                plan.carga += elegido.parte();
+                plan.posicion = pedido.getDestino();
+                plan.libreDesde = elegido.llegada().instante().plusSeconds(servicioSeg);
+                plan.refrigerioTomado = plan.refrigerioTomado || elegido.llegada().tomoRefrigerio();
+                if (plan.lote.almacen != null) {
+                    plan.lote.almacen.descontarStock(elegido.parte(), instanteReferencia);
+                }
+                usados.add(plan);
+                restante -= elegido.parte();
             }
-            plan.lote.pedidos.add(pedido);
-            plan.carga += cantidad;
-            plan.posicion = pedido.getDestino();
-            plan.libreDesde = elegido.llegada().instante().plusSeconds(servicioSeg);
-            plan.refrigerioTomado = plan.refrigerioTomado || elegido.llegada().tomoRefrigerio();
-            plan.lote.almacen.descontarStock(cantidad, instanteReferencia);
         }
 
         return new ArrayList<>(lotes.values());
@@ -166,12 +273,14 @@ public class ClusterizadorPedidos {
     private record Llegada(LocalDateTime instante, boolean tomoRefrigerio) {
     }
 
-    private record Candidato(Plan plan, Almacen almacen, Llegada llegada) {
+    private record Candidato(Plan plan, Almacen almacen, Llegada llegada, int parte) {
     }
 
     /** Llegada del vehículo a {@code pedido} desde donde queda libre, con el refrigerio obligatorio
-     * si corresponde antes de salir (mismo criterio que MotorSimulacion). null si no hay camino. */
-    private Llegada estimarLlegada(Plan plan, Pedido pedido, Ciudad ciudad, List<Bloqueo> bloqueos, long refrigerioSeg) {
+     * si corresponde antes de salir (mismo criterio que MotorSimulacion). Con {@code cargarEn}, el
+     * viaje pasa primero por ese almacén a cargar. null si no hay camino. */
+    private Llegada estimarLlegada(Plan plan, Pedido pedido, Ciudad ciudad, List<Bloqueo> bloqueos, long refrigerioSeg,
+            Almacen cargarEn) {
         LocalDateTime salida = plan.libreDesde.isBefore(pedido.getFechaIngreso()) ? pedido.getFechaIngreso() : plan.libreDesde;
         boolean tomoRefrigerio = false;
         if (!plan.refrigerioTomado && !salida.isBefore(plan.refrigerioIdeal)) {
@@ -180,7 +289,19 @@ public class ClusterizadorPedidos {
         }
         double km;
         try {
-            km = CalculadorDistancia.distanciaKm(ciudad, bloqueos, salida, plan.posicion, pedido.getDestino());
+            if (cargarEn != null) {
+                final LocalDateTime salidaFinal = salida;
+                Double hastaAlmacen = plan.kmHastaAlmacen.get(cargarEn);
+                if (hastaAlmacen == null) {
+                    hastaAlmacen = CalculadorDistancia.distanciaKm(ciudad, bloqueos, salidaFinal, plan.posicion,
+                            cargarEn.getPosicion());
+                    plan.kmHastaAlmacen.put(cargarEn, hastaAlmacen);
+                }
+                km = hastaAlmacen + CalculadorDistancia.distanciaKm(ciudad, bloqueos, salida, cargarEn.getPosicion(),
+                        pedido.getDestino());
+            } else {
+                km = CalculadorDistancia.distanciaKm(ciudad, bloqueos, salida, plan.posicion, pedido.getDestino());
+            }
         } catch (IllegalStateException sinCamino) {
             return null;
         }

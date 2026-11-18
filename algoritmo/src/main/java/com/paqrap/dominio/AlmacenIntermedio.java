@@ -61,6 +61,15 @@ public class AlmacenIntermedio extends Almacen {
     }
 
     @Override
+    public void reponerStock(int cantidad, LocalDateTime instante) {
+        int repuesto = Math.min(cantidad, capacidadMaxima - stockActual);
+        if (repuesto > 0) {
+            stockActual += repuesto;
+            registrarMovimiento(TipoMovimiento.ENTRADA_DEVOLUCION, repuesto, instante);
+        }
+    }
+
+    @Override
     public void recargar(LocalDateTime instante) {
         int cantidadRecargada = capacidadMaxima - stockActual;
         stockActual = capacidadMaxima;

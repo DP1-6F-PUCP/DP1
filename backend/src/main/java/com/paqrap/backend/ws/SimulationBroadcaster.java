@@ -6,22 +6,24 @@ import com.paqrap.backend.dto.TickUpdateDTO;
 import com.paqrap.exposicion.EnsambladorRespuestas;
 import com.paqrap.exposicion.EstadoOperacionDTO;
 import com.paqrap.exposicion.ServicioPlanificacion;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * Revisa cada 250ms si se cerró un lote nuevo (compara {@code marcaTiempoActual}, que es el ancla
- * del último lote) y, de ser así, lo empuja por WebSocket a todas las sesiones abiertas. No
- * consulta el estado si no hay nadie escuchando -- evita trabajo innecesario cuando no hay
- * visualizador conectado.
+ * Empuja cada lote por WebSocket en el momento en que se publica (antes se revisaba cada 250 ms
+ * comparando la marca de tiempo: si dos lotes se publicaban dentro de esa ventana, p. ej. los
+ * precalculados al arrancar, el primero se perdía y el mapa nunca dibujaba esa trayectoria).
  *
- * <p>250ms (antes 1s): con sa=5s, 1s de latencia era el 20% del intervalo entre lotes y se comía
- * el margen del buffer de interpolación del front. Revisar es barato: consultarEstadoOperacion
- * devuelve la instantánea ya publicada al cierre del lote, no la reconstruye.
+ * <p>El envío corre en un hilo propio para no demorar el ciclo de planificación, y en orden: un
+ * único hilo garantiza que el lote N siempre sale antes que el N+1. Cada lote lleva su
+ * {@code secuencia}; si al front igualmente le falta alguno (reconexión), lo pide a
+ * {@code GET /api/estado-operacion/lotes?desde=N}.
  */
 @Slf4j
 @Component
@@ -34,24 +36,31 @@ public class SimulationBroadcaster {
     private final SimulationWebSocketHandler handler;
     private final ObjectMapper objectMapper;
 
-    private volatile LocalDateTime ultimaMarcaEnviada;
+    private final ExecutorService envios = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "ws-difusion-lotes");
+        t.setDaemon(true);
+        return t;
+    });
 
-    @Scheduled(fixedRate = 250)
-    public void difundirSiHayLoteNuevo() {
-        if (!handler.hayOyentes()) {
+    @PostConstruct
+    void suscribir() {
+        servicioPlanificacion.suscribirPublicaciones(estado -> envios.execute(() -> difundir(estado)));
+    }
+
+    @PreDestroy
+    void cerrar() {
+        envios.shutdownNow();
+    }
+
+    private void difundir(EstadoOperacionDTO estado) {
+        if (!handler.hayOyentes() || estado.marcaTiempoActual() == null) {
             return;
         }
-
-        EstadoOperacionDTO estado = servicioPlanificacion.consultarEstadoOperacion();
-        if (estado.marcaTiempoActual() == null || estado.marcaTiempoActual().equals(ultimaMarcaEnviada)) {
-            return;
-        }
-        ultimaMarcaEnviada = estado.marcaTiempoActual();
-
-        var alertas = EnsambladorRespuestas.alertasRiesgoSLADesdeDTO(servicioPlanificacion.consultarPedidos(null),
+        // Solo los pendientes pueden estar en riesgo de SLA: no recorrer el historial completo.
+        var alertas = EnsambladorRespuestas.alertasRiesgoSLADesdeDTO(
+                servicioPlanificacion.consultarPedidos(new com.paqrap.exposicion.FiltroPedidos("PENDIENTE")),
                 estado.marcaTiempoActual(), HORAS_UMBRAL_SLA);
         TickUpdateDTO tick = new TickUpdateDTO("LOTE_ACTUALIZADO", estado, alertas);
-
         try {
             handler.difundir(objectMapper.writeValueAsString(tick));
         } catch (JsonProcessingException ex) {

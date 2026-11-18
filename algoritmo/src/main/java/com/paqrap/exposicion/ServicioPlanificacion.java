@@ -49,6 +49,23 @@ public interface ServicioPlanificacion {
     EstadoOperacionDTO consultarEstadoOperacion();
 
     /**
+     * Lotes publicados de la ejecución activa con número de secuencia mayor o igual a {@code desde}
+     * (se conservan los últimos). El visualizador los pide cuando detecta un hueco en la numeración.
+     */
+    List<EstadoOperacionDTO> consultarLotesDesde(long desde);
+
+    /** Recibe cada lote en el momento en que se publica (lo usa el WebSocket para empujarlo sin demora). */
+    void suscribirPublicaciones(java.util.function.Consumer<EstadoOperacionDTO> oyente);
+
+    /**
+     * Historial paginado de pedidos de la ejecución activa, filtrable por estado, por texto (id de
+     * pedido o de cliente) y por rango de fecha de ingreso. Pensado para buscar pedidos ya
+     * entregados sin que el visualizador tenga que recibir la lista completa en cada lote.
+     */
+    PaginaPedidosDTO consultarHistorialPedidos(String estado, String texto, LocalDateTime desde, LocalDateTime hasta,
+            int pagina, int tamano);
+
+    /**
      * @return la configuración vigente del sistema (ciudad, operación, flota, almacenes)
      */
     ConfiguracionActualDTO consultarConfiguracionActual();

@@ -10,7 +10,6 @@ import { MapErrorBoundary } from '../components/map/MapErrorBoundary';
 import { RouteMap } from '../components/map/RouteMap';
 import { MapSlotContext } from '../contexts/MapSlotContext';
 import { SeleccionarEscenarioGate } from '../features/escenario/components/SeleccionarEscenarioGate';
-import { SidebarLeft } from '../components/SidebarLeft';
 import { SidebarRight } from '../components/SidebarRight';
 import { ConfigModal } from '../components/ConfigModal';
 import { useSimulationSocket } from '../hooks/useSimulationSocket';
@@ -21,6 +20,7 @@ import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useScenarioStore } from '../store/scenarioStore';
 import { useThemeStore } from '../store/themeStore';
 import { OperacionTopbar } from '../components/OperacionTopbar';
+import { RelojesOperacion } from '../components/RelojesOperacion';
 import { SimulationFinishedModal } from '../components/SimulationFinishedModal';
 import { useReporteFinal } from '../hooks/useReporteFinal';
 
@@ -35,8 +35,6 @@ const RootLayout: React.FC = () => {
   const transicion = useScenarioStore((s) => s.transicion);
   const isDark = useThemeStore((s) => s.isDark);
   const ejecucion = useScenarioStore((s) => s.ejecucion);
-  const selectedScenarioType = useScenarioStore((s) => s.selectedScenarioType);
-  const setSelectedScenarioType = useScenarioStore((s) => s.setSelectedScenarioType);
   const setEjecucion = useScenarioStore((s) => s.setEjecucion);
   const navigate = useNavigate();
 
@@ -44,6 +42,15 @@ const RootLayout: React.FC = () => {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+
+  // El panel de operación (SidebarRight) arranca colapsado cada vez que empieza una ejecución --
+  // también al recargar con una ya en curso -- para dejar todo el ancho al mapa. Se abre solo al
+  // seleccionar un vehículo, almacén o pedido, o con su botón.
+  const [ejecucionVista, setEjecucionVista] = useState(false);
+  if (hasActiveExecution !== ejecucionVista) {
+    setEjecucionVista(hasActiveExecution);
+    setIsSidebarCollapsed(hasActiveExecution);
+  }
 
   // Mapa persistente montado una sola vez aqui
   const [mapSlot, setMapSlot] = useState<HTMLDivElement | null>(null);
@@ -62,27 +69,12 @@ const RootLayout: React.FC = () => {
     <LiveAnnouncer>
       <ToastProvider historyScope={ejecucion?.idEjecucion ?? 'global'}>
         <div className="relative flex h-screen w-screen overflow-hidden bg-[#0B111E] text-slate-100 font-sans select-none">
-          {/* SIDEBAR IZQUIERDO:
-              - Antes de la simulación: SidebarLeft (logo, Carga de Datos, selección de escenarios, Config)
-              - Durante la simulación: SidebarRight (Operación, Semáforo de flota, Seguimiento, Averías)
-          */}
-          {hasActiveExecution ? (
+          {/* Barra lateral solo durante la operación (SidebarRight). Antes de simular, la pantalla de
+              inicio (SeleccionarEscenarioGate) ocupa todo: logo, modo/fecha/hora y Configuración. */}
+          {hasActiveExecution && (
             <SidebarRight
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            />
-          ) : (
-            <SidebarLeft
-              currentScenario={selectedScenarioType}
-              onSelectScenario={(scenario) => {
-                setSelectedScenarioType(scenario);
-              }}
-              isCollapsed={isSidebarCollapsed}
-              onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-              onOpenConfig={() => setIsConfigOpen(true)}
-              onOpenDataFiles={() => {}}
-              isDataFilesActive={false}
-              hasActiveExecution={false}
             />
           )}
 
@@ -94,7 +86,8 @@ const RootLayout: React.FC = () => {
 
             {/* Contenido de la Ruta con Gate de Escenario */}
             <main className="flex-1 flex overflow-hidden relative">
-              <SeleccionarEscenarioGate>
+              {hasActiveExecution && <RelojesOperacion />}
+              <SeleccionarEscenarioGate onOpenConfig={() => setIsConfigOpen(true)}>
                 <MapSlotContext.Provider value={{ slot: mapSlot, setSlot: setMapSlot }}>
                   <Outlet />
                 </MapSlotContext.Provider>

@@ -34,7 +34,38 @@ public class UnidadTransporte {
      * Un punto del recorrido real de la unidad: desde {@code instante} y hasta el punto siguiente,
      * la unidad hace {@code actividad} (si el punto siguiente está en otro nodo, viaja hacia él).
      */
-    public record PuntoTrayectoria(Nodo nodo, LocalDateTime instante, ActividadVehiculo actividad) {
+    public record PuntoTrayectoria(Nodo nodo, LocalDateTime instante, ActividadVehiculo actividad, boolean retorno,
+            int cargaABordo) {
+        public PuntoTrayectoria(Nodo nodo, LocalDateTime instante, ActividadVehiculo actividad) {
+            this(nodo, instante, actividad, false, 0);
+        }
+    }
+
+    /**
+     * true mientras la unidad viaja hacia un almacén sin estar repartiendo: regreso tras sus
+     * entregas, o camino a cargar para una ruta nueva. Se graba en cada punto de la trayectoria
+     * para que el mapa la pinte gris exactamente hasta que llega al almacén (antes lo decidía con el
+     * estado del FINAL del lote, y el color cambiaba varias cuadras antes de llegar).
+     */
+    private boolean enRetorno;
+
+    public synchronized boolean isEnRetorno() {
+        return enRetorno;
+    }
+
+    /**
+     * Cambia el modo y marca un punto en {@code nodo} (donde está la unidad en ese instante de la
+     * simulación: {@code posicion} solo se actualiza al cerrar el lote), así el tramo que empieza
+     * ahí ya lleva el modo nuevo.
+     */
+    public synchronized void setEnRetorno(boolean enRetorno, Nodo nodo, LocalDateTime instante) {
+        if (this.enRetorno == enRetorno) {
+            return;
+        }
+        this.enRetorno = enRetorno;
+        if (nodo != null && instante != null) {
+            registrarPuntoTrayectoria(nodo, instante, actividadActual);
+        }
     }
 
     /**
@@ -47,9 +78,52 @@ public class UnidadTransporte {
      */
     private final List<PuntoTrayectoria> trayectoriaLote = new ArrayList<>();
 
+    /**
+     * Paquetes que quedaron a bordo cuando la unidad se averió (uno por pedido no entregado). Mientras
+     * la unidad siga averiada en el sitio funciona como un "almacén móvil": otra unidad puede ir a
+     * recogerlos (trasvase). Se vacía cuando se trasladan al almacén central (avería 2/3), cuando la
+     * unidad se repara (avería 1) o a medida que se trasvasan o se reasignan a otra unidad.
+     */
+    private final List<ParadaPlanificada> cargaVarada = new ArrayList<>();
+
+    /**
+     * Instante real en que la unidad llega a su posición actual cuando el lote anterior cerró a mitad
+     * de una cuadra: la cuadra se termina a su velocidad normal y el lote siguiente no puede mover
+     * esta unidad antes de ese instante (antes la cuadra se "terminaba" al cierre del lote, a veces en
+     * segundos: medido, 3x la velocidad nominal en mediana y hasta 24x).
+     */
+    private LocalDateTime disponibleDesde;
+
+    public synchronized LocalDateTime getDisponibleDesde() {
+        return disponibleDesde;
+    }
+
+    public synchronized void setDisponibleDesde(LocalDateTime disponibleDesde) {
+        this.disponibleDesde = disponibleDesde;
+    }
+
+    public synchronized List<ParadaPlanificada> getCargaVarada() {
+        return new ArrayList<>(cargaVarada);
+    }
+
+    public synchronized void agregarCargaVarada(Pedido pedido, int cantidad) {
+        cargaVarada.removeIf(p -> p.getPedido().equals(pedido));
+        cargaVarada.add(new ParadaPlanificada(pedido, cantidad));
+    }
+
+    public synchronized void quitarCargaVarada(Pedido pedido) {
+        cargaVarada.removeIf(p -> p.getPedido().equals(pedido));
+    }
+
+    public synchronized void vaciarCargaVarada() {
+        cargaVarada.clear();
+    }
+
     public synchronized void iniciarTrayectoria(LocalDateTime instante) {
         trayectoriaLote.clear();
-        trayectoriaLote.add(new PuntoTrayectoria(posicion, instante, actividadActual));
+        // Si todavía termina la cuadra del lote anterior, el primer punto es su llegada real.
+        LocalDateTime desde = disponibleDesde != null && disponibleDesde.isAfter(instante) ? disponibleDesde : instante;
+        trayectoriaLote.add(new PuntoTrayectoria(posicion, desde, actividadActual, enRetorno, cargaABordo));
     }
 
     public synchronized void registrarPuntoTrayectoria(Nodo nodo, LocalDateTime instante, ActividadVehiculo actividad) {
@@ -59,11 +133,12 @@ public class UnidadTransporte {
             if (instante.isBefore(ultimo.instante())) {
                 instante = ultimo.instante(); // nunca hacia atrás en el tiempo
             }
-            if (ultimo.nodo().equals(nodo) && ultimo.instante().equals(instante) && ultimo.actividad() == actividad) {
+            if (ultimo.nodo().equals(nodo) && ultimo.instante().equals(instante) && ultimo.actividad() == actividad
+                    && ultimo.retorno() == enRetorno && ultimo.cargaABordo() == cargaABordo) {
                 return;
             }
         }
-        trayectoriaLote.add(new PuntoTrayectoria(nodo, instante, actividad));
+        trayectoriaLote.add(new PuntoTrayectoria(nodo, instante, actividad, enRetorno, cargaABordo));
     }
 
     public synchronized List<PuntoTrayectoria> getTrayectoriaLote() {
@@ -123,7 +198,16 @@ public class UnidadTransporte {
     /** Único punto de escritura de {@code rutas}; reemplaza el antiguo {@code getRutas().add(...)}. */
     public synchronized void agregarRuta(Ruta ruta) {
         rutas.add(ruta);
+        // Solo se usa la última (rutaEnEjecucion). Antes se guardaban TODAS -- incluida la ruta vacía
+        // que el planificador crea para cada unidad libre en cada lote --, decenas de miles por 5 días
+        // y sin límite en un colapso largo, cada una reteniendo sus paradas y pedidos. Nada las leía:
+        // el historial por almacén/pedido sale de los propios pedidos (nodo y hora de despacho).
+        while (rutas.size() > RUTAS_CONSERVADAS) {
+            rutas.remove(0);
+        }
     }
+
+    private static final int RUTAS_CONSERVADAS = 2;
 
     public LocalDateTime getTiempoInicioTurnoActual() {
         return tiempoInicioTurnoActual;
@@ -165,6 +249,26 @@ public class UnidadTransporte {
         this.refrigerioTomado = false;
         this.actividadActual = ActividadVehiculo.INACTIVO;
         this.trayectoriaLote.clear();
+        this.cargaVarada.clear();
+        this.disponibleDesde = null;
+        this.cargaABordo = 0;
+        this.enRetorno = false;
+    }
+
+    /**
+     * Paquetes de producto P que lleva físicamente la unidad. El producto es uno solo, así que lo
+     * que sobra de una ruta abandonada (replanificación) sirve para cualquier otro cliente: la
+     * unidad solo vuelve a un almacén a cargar si la ruta nueva necesita más de lo que ya lleva.
+     * Se fija al salir de un almacén, baja con cada entrega y vuelve a 0 al llegar a un almacén.
+     */
+    private int cargaABordo;
+
+    public synchronized int getCargaABordo() {
+        return cargaABordo;
+    }
+
+    public synchronized void setCargaABordo(int cargaABordo) {
+        this.cargaABordo = Math.max(0, cargaABordo);
     }
 
     public ActividadVehiculo getActividadActual() {
@@ -176,15 +280,23 @@ public class UnidadTransporte {
     }
 
     /**
-     * Calcula la carga actualmente comprometida en la ruta en ejecución.
+     * Paquetes que la unidad lleva físicamente ahora (lo que muestra el mapa como ocupación).
      *
-     * @return suma de las cantidades a entregar de las paradas aún no cumplidas de la ruta activa;
-     *         cero si no hay ruta en ejecución
+     * @return con ruta en ejecución, lo que falta entregar de ella; sin ruta, la carga varada (una
+     *         avería abandona la ruta, pero los paquetes siguen a bordo hasta un trasvase o el
+     *         traslado al central) o lo que le sobró a bordo de una ruta replanificada
      */
     public int cargaActual() {
         Ruta enEjecucion = rutaEnEjecucion();
         if (enEjecucion == null) {
-            return 0;
+            // Antes devolvía 0: al registrar una avería la ocupación caía a 0 en el acto aunque
+            // los paquetes siguieran en el vehículo detenido.
+            int varada = getCargaVarada().stream().mapToInt(ParadaPlanificada::getCantidadAEntregar).sum();
+            return varada > 0 ? varada : getCargaABordo();
+        }
+        if (enEjecucion.tieneCargaPendiente() || enEjecucion.tieneTrasvasePendiente()) {
+            // Camino al almacén a cargar, o a recoger la carga de una averiada: solo lo que ya llevaba.
+            return getCargaABordo();
         }
         return enEjecucion.getSecuenciaParadas().stream()
                 .filter(parada -> parada.getEstado() != EstadoParada.CUMPLIDA)

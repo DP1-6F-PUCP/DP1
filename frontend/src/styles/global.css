@@ -43,6 +43,24 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Vehículo entregando (o en trasvase): parpadea para distinguirlo de uno detenido. Solo el
+   vehículo; los distintivos (avería, refrigerio) quedan fijos. */
+@keyframes parpadeo-entrega {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
+
+.vehiculo-entregando .vehicle-glyph {
+  animation: parpadeo-entrega 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vehiculo-entregando .vehicle-glyph {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

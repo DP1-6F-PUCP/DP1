@@ -231,7 +231,7 @@ public class SolucionadorALNS implements PlanificadorRutas {
 
         List<Pedido> noAsignados = new ArrayList<>();
         for (Pedido pedido : contexto.pedidos()) {
-            if (pedido.getEstado() == EstadoPedido.PENDIENTE) {
+            if (pedido.getEstado() == EstadoPedido.PENDIENTE && pedido.cantidadPorPlanificar() > 0) {
                 noAsignados.add(pedido);
             }
         }

@@ -5,7 +5,6 @@ import { configuracionApi } from '../services/configuracionApi';
 import { adaptEstadoOperacion, EstadoAdaptado } from '../utils/backendAdapters';
 import type { PedidoDTO } from '../types/backend';
 import { useScenarioStore } from '../store/scenarioStore';
-import { useSocketConectado } from './useSimulationSocket';
 
 const ESTADO_VACIO: EstadoAdaptado = { vehicles: [], orders: [], ordersTotal: 0, routes: [], warehouses: [], blockedStreets: [] };
 const SIN_PEDIDOS: PedidoDTO[] = [];
@@ -27,11 +26,10 @@ function adaptarCompartido(...entrada: EntradaAdaptacion): EstadoAdaptado {
   return resultado;
 }
 
-/** Con el WebSocket abierto, cada lote llega por push (y los pedidos se piden en ese momento, ver
- * useSimulationSocket): el polling queda solo como red de seguridad lenta. Sin socket, vuelve a
- * ser la fuente principal. */
-const POLL_CON_SOCKET_MS = 30_000;
-const POLL_SIN_SOCKET_MS = 3_000;
+/** Los lotes llegan por push o, sin socket, por GET /lotes cada 1 s (ver useSimulationSocket), con
+ * los pedidos como cambios. Estas consultas solo cargan el estado al abrir/recargar la página y
+ * quedan como red de seguridad lenta; ya no descargan la lista completa de pedidos cada 3 s. */
+const POLL_RESPALDO_MS = 60_000;
 
 /**
  * Punto unico de lectura del estado operativo EN VIVO: GET /api/estado-operacion + GET
@@ -45,8 +43,7 @@ export function useEstadoOperacion() {
   const activa = ejecucion && ['INICIADA', 'EN_CURSO', 'PAUSADA'].includes(ejecucion.estado);
   const id = activa ? ejecucion.idEjecucion : null;
   const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
-  const socketConectado = useSocketConectado();
-  const intervalo = socketConectado ? POLL_CON_SOCKET_MS : POLL_SIN_SOCKET_MS;
+  const intervalo = POLL_RESPALDO_MS;
 
   const estadoQuery = useQuery({
     queryKey: ['estado-operacion', id],
@@ -59,7 +56,9 @@ export function useEstadoOperacion() {
     queryKey: ['pedidos', id],
     queryFn: ({ signal }) => estadoOperacionApi.getPedidos(undefined, signal),
     enabled: Boolean(id) && !transicion,
-    refetchInterval: intervalo,
+    // La lista completa se baja una sola vez; después se mantiene con los cambios de cada lote.
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
   });
 
   const configuracionQuery = useQuery({

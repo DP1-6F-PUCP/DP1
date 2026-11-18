@@ -38,7 +38,7 @@ public class ReparacionVoraz implements OperadorReparacion {
 
                 for (int pos = 0; pos <= ruta.getSecuenciaParadas().size(); pos++) {
                     Ruta rutaPrueba = Solucion.copiarRuta(ruta);
-                    rutaPrueba.getSecuenciaParadas().add(pos, new ParadaPlanificada(pedido, pedido.getCantidadSolicitada()));
+                    rutaPrueba.getSecuenciaParadas().add(pos, new ParadaPlanificada(pedido, pedido.cantidadPorPlanificar()));
                     OperadorUtil.recalcular(rutaPrueba, contexto);
 
                     if (esFactible(ruta, rutaPrueba, solucion, contexto)) {
@@ -54,7 +54,7 @@ public class ReparacionVoraz implements OperadorReparacion {
 
             if (mejorRuta != null) {
                 mejorRuta.getSecuenciaParadas().add(mejorIndiceInsercion,
-                        new ParadaPlanificada(pedido, pedido.getCantidadSolicitada()));
+                        new ParadaPlanificada(pedido, pedido.cantidadPorPlanificar()));
                 OperadorUtil.recalcular(mejorRuta, contexto);
                 pedidosNoAsignados.remove(pedido);
             }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { CarFront, MapPin, Warehouse as WarehouseGlyph } from 'lucide-react';
+import { Coffee, MapPin, Warehouse as WarehouseGlyph } from 'lucide-react';
 import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
@@ -52,11 +52,63 @@ const BREAKDOWN_LABELS: Record<number, string> = {
   3: 'Avería Tipo 3 (Mayor)',
 };
 
-const getVehicleIconMarkup = (vehicle: Vehicle) => {
+/** Tamaño (px) del glifo del vehículo: sin burbuja de fondo, el propio vehículo es el marcador. */
+const TAMANO_GLIFO = 22;
+/** Taza de café del distintivo de refrigerio, centrada en (-8.5, -8.5) del marcador. Los cubiertos
+ * cruzados se leían como una "X" a este tamaño; la taza con asa se distingue mejor. */
+const iconoRefrigerio = renderToStaticMarkup(
+  <Coffee x={-12.5} y={-12.5} size={8} strokeWidth={2.6} color="#1f2937" aria-hidden />
+);
+
+/** Extensión total del marcador de vehículo, incluidos los distintivos de avería/refrigerio (±14 px). */
+const EXTENSION_VEHICULO = 28;
+/** Tamaño (px) natural del ícono de almacén (solo la imagen, sin recuadro). */
+const TAMANO_ALMACEN = 24;
+/** Ningún ícono (vehículo o almacén) puede ocupar más de 2×2 cuadras de la grilla. */
+const CUADRAS_MAX_ICONO = 2;
+
+/**
+ * Escala de los íconos según el zoom: en CRS.Simple una cuadra (1 unidad) mide 2^zoom px. Al
+ * alejar, el ícono se achica para no pasar de 2×2 cuadras; al acercar, nunca crece más que su
+ * tamaño natural. Se publica como variables CSS en el contenedor, así no hay que regenerar los
+ * íconos en cada zoom.
+ */
+const actualizarEscalaIconos = (map: L.Map) => {
+  const pxCuadra = map.getZoomScale(map.getZoom(), 0);
+  const maxPx = CUADRAS_MAX_ICONO * pxCuadra;
+  const contenedor = map.getContainer();
+  contenedor.style.setProperty('--escala-vehiculo', String(Math.min(1, maxPx / EXTENSION_VEHICULO)));
+  contenedor.style.setProperty('--escala-almacen', String(Math.min(1, maxPx / TAMANO_ALMACEN)));
+  // Pin de destino: 28 px; seleccionado, con halo y aro, ocupa 44×48 (se toma el lado mayor).
+  contenedor.style.setProperty('--escala-pin', String(Math.min(1, maxPx / 28)));
+  contenedor.style.setProperty('--escala-pin-sel', String(Math.min(1, maxPx / 48)));
+  // Bolita de "N vehículos detenidos": 24 px + distintivo de averías (~30 px). Se escala desde su
+  // punto de anclaje, así también se achica la separación respecto del almacén.
+  contenedor.style.setProperty('--escala-grupo', String(Math.min(1, maxPx / 30)));
+};
+
+/**
+ * Auto visto desde arriba con el frente hacia arriba (parabrisas grande arriba, luneta abajo).
+ * Rotado con el rumbo apunta siempre hacia donde avanza; un auto "de frente" (CarFront) quedaba de
+ * cabeza al bajar por la pantalla.
+ */
+const autoVistaSuperior = (color: string) => `
+  <svg xmlns="http://www.w3.org/2000/svg" width="${TAMANO_GLIFO}" height="${TAMANO_GLIFO}" viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="4.3" y="5.2" width="2.2" height="4.2" rx="1" fill="#1f2937"/>
+    <rect x="17.5" y="5.2" width="2.2" height="4.2" rx="1" fill="#1f2937"/>
+    <rect x="4.3" y="14.8" width="2.2" height="4.2" rx="1" fill="#1f2937"/>
+    <rect x="17.5" y="14.8" width="2.2" height="4.2" rx="1" fill="#1f2937"/>
+    <path d="M8.2 2.2h7.6a2.6 2.6 0 0 1 2.6 2.6v14.4a2.6 2.6 0 0 1-2.6 2.6H8.2a2.6 2.6 0 0 1-2.6-2.6V4.8a2.6 2.6 0 0 1 2.6-2.6z"
+      fill="${color}"/>
+    <path d="M7.9 8.4Q12 6.7 16.1 8.4L15.3 10.9Q12 10 8.7 10.9Z" fill="#e0f2fe"/>
+    <path d="M8.9 17.3Q12 18.1 15.1 17.3L15.5 18.9Q12 19.7 8.5 18.9Z" fill="#e0f2fe" opacity="0.85"/>
+  </svg>`;
+
+const getVehicleIconMarkup = (vehicle: Vehicle, color: string) => {
   const iconProps = {
-    size: 15,
-    strokeWidth: 2.3,
-    color: '#ffffff',
+    size: TAMANO_GLIFO,
+    strokeWidth: 2.4,
+    color,
     'aria-hidden': true,
   } as const;
 
@@ -66,7 +118,7 @@ const getVehicleIconMarkup = (vehicle: Vehicle) => {
   if (vehicle.type === 'motorcycle') {
     return renderToStaticMarkup(<FaMotorcycle {...iconProps} />);
   }
-  return renderToStaticMarkup(<CarFront {...iconProps} />);
+  return autoVistaSuperior(color);
 };
 
 export interface LeafletManhattanMapProps {
@@ -225,6 +277,9 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       m.fitBounds(bounds, { padding: [12, 12], animate: false });
     };
     ajustar();
+    actualizarEscalaIconos(map);
+    // 'zoom' se dispara también durante la animación y al reajustar por cambio de tamaño.
+    map.on('zoom zoomend', () => actualizarEscalaIconos(map));
 
     // Ensure map bounds are maximized on next tick
     const fitTimer = setTimeout(ajustar, 60);
@@ -424,15 +479,19 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         />
       );
 
+      // Mismo tope que vehículos y almacenes (2×2 cuadras): se escala desde la punta del pin (su
+      // ancla), así sigue marcando exactamente la esquina de entrega.
       const html = isSelected
-        ? `<div style="position: relative; width: 44px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        ? `<div style="position: relative; width: 44px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+              transform: scale(var(--escala-pin-sel, 1)); transform-origin: 22px 40px;">
             <div style="position: absolute; width: 38px; height: 38px; border-radius: 50%; background: #38bdf8; opacity: 0.35; filter: blur(2px);"></div>
             <div style="position: absolute; width: 42px; height: 42px; border-radius: 50%; border: 2px dashed #38bdf8;"></div>
             <div style="position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));">
               ${pinMarkup}
             </div>
           </div>`
-        : `<div style="cursor: pointer; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));">
+        : `<div style="width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+              transform: scale(var(--escala-pin, 1)); transform-origin: 14px 28px;">
             ${pinMarkup}
           </div>`;
       const icon = L.divIcon({
@@ -523,9 +582,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
       const deliveryPath = activeRoute?.waypoints ?? [];
       const returnPath = vehicle.returnPath ?? [];
-      const isReturning = deliveryPath.length < 2 && (
+      // Con trayectoria, manda lo que hace el vehículo en el instante visible (regreso o camino a
+      // cargar): sin línea de reparto hasta que sale cargado del almacén.
+      const isReturning = vehicle.returningVisible ?? (deliveryPath.length < 2 && (
         hasVisiblePath ? simulationEngine.sinEntregasPendientes(vehicle.id) : returnPath.length > 1
-      );
+      ));
       if (isReturning || (vehicle.status !== 'en_route' && !carriesSelectedOrder)) return;
 
       const isSelected = selectedVehicleId === vehicle.id || carriesSelectedOrder;
@@ -594,50 +655,48 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const pct = stock.pct;
       const isEmpty = stock.level === 'empty';
 
-      // El recuadro y el trazo del glifo (Warehouse de lucide) llevan el color del semáforo.
-      // Vacío = gris con borde punteado. Seleccionado = borde celeste más grueso (el glifo
-      // conserva su color de semáforo para no perder el estado al seleccionar).
-      const borderColor = isSelected ? '#38bdf8' : stock.hex;
-      const baseFill = isDarkTheme ? '#0f172a' : '#ffffff';
+      // Solo la imagen, sin recuadro ni contorno (igual que los vehículos). El glifo lleva el color
+      // del semáforo de stock (gris si está vacío) y la selección se marca con un resplandor.
       const glyphColor = stock.hex;
       const glyph = renderToStaticMarkup(
-        <WarehouseGlyph size={16} strokeWidth={2.2} color={glyphColor} aria-hidden />
+        <WarehouseGlyph size={TAMANO_ALMACEN} strokeWidth={2.4} color={glyphColor} aria-hidden />
       );
+      const resplandor = isSelected
+        ? `drop-shadow(0 0 2px ${isDarkTheme ? '#38bdf8' : '#1F3864'}) drop-shadow(0 0 4px ${isDarkTheme ? '#38bdf8' : '#1F3864'})`
+        : 'none';
       const warehouseIcon = L.divIcon({
         className: 'svg-style-warehouse-marker',
         html: `
           <div style="
             position: relative;
-            width: 28px;
-            height: 28px;
-            box-sizing: border-box;
+            width: ${TAMANO_ALMACEN}px;
+            height: ${TAMANO_ALMACEN}px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 7px;
-            background: ${baseFill};
-            border: ${isSelected ? 3 : 2.5}px ${isEmpty && !isSelected ? 'dashed' : 'solid'} ${borderColor};
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             cursor: pointer;
+            opacity: ${isEmpty && !isSelected ? 0.75 : 1};
+            filter: ${resplandor};
+            transform: scale(var(--escala-almacen, 1));
+            transform-origin: center;
           ">
             ${glyph}
             ${isInfinite ? `<span style="
               position: absolute;
-              top: -7px;
-              right: -7px;
-              width: 13px;
-              height: 13px;
+              top: 0;
+              right: 0;
+              width: 9px;
+              height: 9px;
               border-radius: 50%;
               background: #3b82f6;
-              border: 1.5px solid ${baseFill};
               color: #ffffff;
-              font: 700 8px/10px system-ui, sans-serif;
+              font: 700 6px/9px system-ui, sans-serif;
               text-align: center;
             ">P</span>` : ''}
           </div>
         `,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
+        iconSize: [TAMANO_ALMACEN, TAMANO_ALMACEN],
+        iconAnchor: [TAMANO_ALMACEN / 2, TAMANO_ALMACEN / 2],
       });
 
       const marker = L.marker([w.coords.y, w.coords.x], { icon: warehouseIcon, pane: 'warehouseMarkers' });
@@ -698,10 +757,12 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       const activeRoute = routes.find(
         (route) => route.vehicleId === v.id && route.status === 'in_progress'
       );
-      const isReturning =
+      // Gris mientras va hacia un almacén sin repartir, según su trayectoria en el instante visible
+      // (no según el estado del final del lote, que cambiaba el color cuadras antes de llegar).
+      const isReturning = v.returningVisible ?? (
         v.status === 'en_route' &&
         (activeRoute?.waypoints?.length ?? 0) < 2 &&
-        (v.returnPath?.length ?? 0) > 1;
+        (v.returnPath?.length ?? 0) > 1);
       // Bug real reportado: un vehiculo en refrigerio (VehiculoDTO.actividad=EN_REFRIGERIO) se
       // veia en el mapa IDENTICO a uno viajando normalmente -- el semaforo solo mira riesgo de
       // SLA, y el badge con la etiqueta "En refrigerio" vive en el panel lateral, no en el mapa.
@@ -719,7 +780,12 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         : isReturning
           ? '#6B7280'
           : loadStatus.hex;
-      const vehicleIconMarkup = getVehicleIconMarkup(v);
+      const vehicleIconMarkup = getVehicleIconMarkup(v, bubbleFill);
+      // Solo la imagen (pedido del profesor: sin burbuja, halo ni contorno). La selección se marca
+      // con un resplandor, que es lo único que distingue al vehículo elegido en el mapa.
+      const contornoGlifo = isSelected
+        ? `drop-shadow(0 0 2px ${isDarkTheme ? '#38bdf8' : '#1F3864'}) drop-shadow(0 0 4px ${isDarkTheme ? '#38bdf8' : '#1F3864'})`
+        : 'none';
 
       const vehicleIcon = L.divIcon({
         className: 'svg-style-vehicle-marker',
@@ -728,64 +794,17 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
             width="44"
             height="46"
             viewBox="-22 -22 44 46"
-            style="overflow: visible; cursor: pointer; display: block;"
+            class="${v.status === 'delivering' ? 'vehiculo-entregando' : ''}"
+            style="overflow: visible; cursor: pointer; display: block; filter: ${contornoGlifo};
+              transform: scale(var(--escala-vehiculo, 1)); transform-origin: 22px 22px;"
           >
             <title>${v.code}: ${v.currentLoad}/${v.capacity} paquetes, ${loadStatus.label}</title>
-            <!-- Selection Indicator Ring -->
-            ${
-              isSelected
-                ? `<circle
-                    cx="0"
-                    cy="0"
-                    r="14"
-                    fill="none"
-                    stroke="${isDarkTheme ? '#38bdf8' : '#1F3864'}"
-                    stroke-width="1.8"
-                    stroke-dasharray="3, 2"
-                  />`
-                : ''
-            }
 
-            <!-- Status halo for delayed or broken vehicles -->
-            ${
-              isDelayedOrBroken
-                ? `<circle
-                    cx="0"
-                    cy="0"
-                    r="10"
-                    fill="${v.status === 'broken' ? breakdownColor : '#C62828'}"
-                    fill-opacity="0.35"
-                  />`
-                : ''
-            }
-
-            <!-- Indicador de rumbo (como en un GPS): flecha en el borde del circulo. Oculto hasta
-                 conocer el rumbo; el bucle de frames (suscripcion a simulationEngine) lo rota. -->
-            <g class="vehicle-heading" display="none">
-              <path
-                d="M0 -18.5 L5.2 -10.2 Q0 -12.6 -5.2 -10.2 Z"
-                fill="${bubbleFill}"
-                stroke="#ffffff"
-                stroke-width="1.3"
-                stroke-linejoin="round"
-              />
-            </g>
-
-            <!-- Vehicle Body Bubble centered exactly at (0, 0) -->
-            <circle
-              cx="0"
-              cy="0"
-              r="10.5"
-              fill="${bubbleFill}"
-              stroke="#ffffff"
-              stroke-width="1.7"
-            />
-
-            <!-- Always render the vehicle type icon (Auto, Moto, Bici) so the transport unit type is immediately identifiable even when broken -->
-            <!-- El bucle de frames rota este grupo con el rumbo: el auto se ve de frente (avanza
-                 "hacia arriba"); moto y bici se ven de perfil (avanzan "hacia la derecha"). -->
+            <!-- El propio vehículo es el marcador. El bucle de frames rota este grupo con el
+                 rumbo: el auto se ve desde arriba (avanza "hacia arriba"); moto y bici se ven de
+                 perfil (avanzan "hacia la derecha") y se reflejan al ir hacia el oeste. -->
             <g class="vehicle-glyph" data-adelante="${v.type === 'car' ? 'arriba' : 'derecha'}">
-              <g transform="translate(-7.5 -7.5)">
+              <g transform="translate(${-TAMANO_GLIFO / 2} ${-TAMANO_GLIFO / 2})">
                 ${vehicleIconMarkup}
               </g>
             </g>
@@ -826,11 +845,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
                 : ''
             }
 
-            <!-- Icono de pausa para refrigerio (dos barras verticales) -->
+            <!-- Refrigerio: taza de café sobre un círculo ámbar, en la esquina superior izquierda -->
             ${
               !isDelayedOrBroken && isEnRefrigerio
-                ? `<rect x="-2" y="-2" width="1.4" height="4" rx="0.3" fill="#ffffff" />
-                   <rect x="0.6" y="-2" width="1.4" height="4" rx="0.3" fill="#ffffff" />`
+                ? `<circle cx="-8.5" cy="-8.5" r="5.5" fill="#FBBF24" stroke="#ffffff" stroke-width="0.9" />
+                   ${iconoRefrigerio}`
                 : ''
             }
 
@@ -944,7 +963,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         const label = brokenMembers.length > 0
           ? `${members.length} vehículos detenidos (${brokenMembers.length} con avería)`
           : `${members.length} vehículos detenidos`;
-        const html = `<div title="${label}" aria-label="${label}" style="position:relative;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F3864;border:2.5px solid ${groupBorderColor};color:#ffffff;font:700 11px system-ui;box-shadow:0 2px 5px #0006;cursor:pointer">${members.length}${brokenMembers.length > 0 ? `<span style="position:absolute;top:-5px;right:-6px;background:${groupBorderColor};color:#fff;border-radius:999px;padding:0 3.5px;font:800 8px system-ui;line-height:12px;border:1px solid #fff">!${brokenMembers.length}</span>` : ''}</div>`;
+        const html = `<div title="${label}" aria-label="${label}" style="transform:scale(var(--escala-grupo, 1));transform-origin:-12px 28px;position:relative;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1F3864;border:2.5px solid ${groupBorderColor};color:#ffffff;font:700 11px system-ui;box-shadow:0 2px 5px #0006;cursor:pointer">${members.length}${brokenMembers.length > 0 ? `<span style="position:absolute;top:-5px;right:-6px;background:${groupBorderColor};color:#fff;border-radius:999px;padding:0 3.5px;font:800 8px system-ui;line-height:12px;border:1px solid #fff">!${brokenMembers.length}</span>` : ''}</div>`;
         if ((groupMarker.getIcon().options as L.DivIconOptions).html !== html) {
           groupMarker.setIcon(L.divIcon({ className: 'parked-vehicles-marker', html, iconSize: [24, 24], iconAnchor: [-12, 28] }));
         }

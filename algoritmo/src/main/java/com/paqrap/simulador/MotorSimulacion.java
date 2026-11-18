@@ -101,6 +101,11 @@ public class MotorSimulacion {
                 .findFirst()
                 .orElse(null);
         for (UnidadTransporte unidad : contexto.vehiculos()) {
+            if (unidad.getEstado() == EstadoUnidad.EN_MANTENIMIENTO && almacenCentral != null
+                    && !unidad.getPosicion().equals(almacenCentral.getPosicion())) {
+                retornarACentralPorMantenimiento(unidad, almacenCentral, contexto, horaBase, tiempoFinMaxHoras,
+                        eventosFase);
+            }
             var averia = unidad.getAveriaActual();
             if (unidad.getEstado() == EstadoUnidad.AVERIADO
                     && averia != null
@@ -113,6 +118,10 @@ public class MotorSimulacion {
                         : averia.fechaTrasladoAlmacen();
                 unidad.registrarPuntoTrayectoria(unidad.getPosicion(), instanteTraslado, ActividadVehiculo.INACTIVO);
                 unidad.setPosicion(almacenCentral.getPosicion());
+                unidad.setCargaABordo(0);
+                unidad.setEnRetorno(false, null, null);
+                // Los paquetes que nadie recogió viajan con ella al central (vuelven al stock).
+                unidad.vaciarCargaVarada();
                 unidad.registrarPuntoTrayectoria(almacenCentral.getPosicion(), instanteTraslado, ActividadVehiculo.INACTIVO);
             }
             unidad.registrarPuntoTrayectoria(unidad.getPosicion(), finLote, unidad.getActividadActual());
@@ -165,8 +174,9 @@ public class MotorSimulacion {
         if (destino != null && !nodoActual.equals(destino.getPosicion())) {
             unidad.setActividadActual(ActividadVehiculo.VIAJANDO);
             ResultadoTramo retorno = simularRetornoAlmacen(unidad, nodoActual, destino, contexto, horaBase,
-                    unidad.getTipoVehiculo().getVelocidadKmH(), unidad.getTipoVehiculo().getCostoPorKm(), 0.0, 0.0,
-                    tiempoFinMaxHoras, refrigerioTomado, tiempoInicioRefrigerio, duracionRefrigerio, eventosFase);
+                    unidad.getTipoVehiculo().getVelocidadKmH(), unidad.getTipoVehiculo().getCostoPorKm(),
+                    inicioDe(unidad, contexto), 0.0, tiempoFinMaxHoras, refrigerioTomado, tiempoInicioRefrigerio,
+                    duracionRefrigerio, eventosFase);
             nodoActual = retorno.nodoFinal();
             retornoPendiente = retorno.interrumpido();
         }
@@ -228,22 +238,18 @@ public class MotorSimulacion {
         int cargaActual = paradasPendientes.stream().mapToInt(ParadaPlanificada::getCantidadAEntregar).sum();
 
         Nodo nodoActual = unidad.getPosicion();
-        double tiempoActual = Math.max(tiempoInicioHoras, horasDesdeAnchor(contexto, ruta.getHoraInicioPlanificada()));
+        double tiempoActual = Math.max(Math.max(tiempoInicioHoras, inicioDe(unidad, contexto)),
+                horasDesdeAnchor(contexto, ruta.getHoraInicioPlanificada()));
         double distanciaRecorrida = 0.0;
 
         if (esDespachoNuevo) {
             unidad.setEstado(EstadoUnidad.EN_RUTA);
             ruta.setEstado(EstadoRuta.EN_EJECUCION);
-            LocalDateTime instanteDespacho = contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0));
-            ruta.registrarDespacho(nodoActual, instanteDespacho);
-            for (ParadaPlanificada pendiente : paradasPendientes) {
-                pendiente.getPedido().registrarDespacho(nodoActual, instanteDespacho);
+            // Si primero debe ir a cargar, el despacho se registra al salir del almacén (más abajo).
+            if (!ruta.tieneCargaPendiente()) {
+                registrarDespacho(ruta, unidad, paradasPendientes, nodoActual, tiempoActual, cargaActual, contexto,
+                        horaBase, eventosFase);
             }
-            eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.DESPACHO_VEHICULO,
-                    unidad.getIdUnidad(), null, nodoActual.x(), nodoActual.y(),
-                    String.format("Vehículo despachado desde %s con %d pedidos", nodoActual, paradasPendientes.size()),
-                    String.format(Locale.US, "Carga: %d/%d paq. | Vel: %.0f km/h", cargaActual,
-                            tipoVehiculo.getCapacidad(), velocidad)));
         }
 
         // El turno de la unidad se recalcula cada lote contra el turno REAL que contiene el
@@ -266,6 +272,82 @@ public class MotorSimulacion {
                 contexto.configuracionOperacion().inicioRefrigerioMasTardio(turnoActual));
         boolean refrigerioTomado = unidad.isRefrigerioTomado();
 
+        // Recarga: la unidad no estaba en un almacén al recibir la ruta (volvía vacía). Primero va al
+        // almacén asignado, vacía (en el mapa se ve como regreso), y recién ahí carga y sale. Si no
+        // llega dentro de este lote, la ruta sigue EN_EJECUCION y el próximo lote continúa el tramo.
+        if (ruta.tieneCargaPendiente()) {
+            Nodo almacen = ruta.getAlmacenCarga().getPosicion();
+            ResultadoRefrigerio ref = manejarRefrigerio(unidad, tiempoActual, refrigerioTomado, tiempoInicioRefrigerio,
+                    duracionRefrigerio, tiempoFinMaxHoras, contexto, horaBase, nodoActual, eventosFase);
+            tiempoActual = ref.tiempoActual();
+            refrigerioTomado = ref.refrigerioTomado();
+            // Va vacía (o con lo que le sobró) al almacén: en el mapa, gris como un regreso.
+            unidad.setEnRetorno(true, nodoActual, instanteDe(contexto, tiempoActual));
+            // Como mucho dos tramos: antes y después de un refrigerio tomado en el camino.
+            for (int intento = 0; intento < 2 && tiempoActual < tiempoFinMaxHoras && !nodoActual.equals(almacen); intento++) {
+                try {
+                    List<Nodo> camino = CalculadorDistancia.caminoMasCorto(contexto.ciudad(), contexto.bloqueos(),
+                            instanteDe(contexto, tiempoActual), nodoActual, almacen);
+                    unidad.setActividadActual(ActividadVehiculo.VIAJANDO);
+                    ResultadoTramo tramo = recorrerCamino(camino, unidad, null, contexto, horaBase, velocidad, costoKm,
+                            tiempoActual, distanciaRecorrida, tiempoFinMaxHoras, eventosFase,
+                            TipoEvento.MOVIMIENTO_TRAMO, almacen,
+                            refrigerioTomado ? Double.MAX_VALUE : tiempoInicioRefrigerio);
+                    tiempoActual = tramo.tiempo();
+                    distanciaRecorrida = tramo.distancia();
+                    nodoActual = tramo.nodoFinal();
+                    if (tramo.pausaRefrigerio() && !tramo.interrumpido()) {
+                        ResultadoRefrigerio pausa = manejarRefrigerio(unidad, tiempoActual, false, tiempoActual,
+                                duracionRefrigerio, tiempoFinMaxHoras, contexto, horaBase, nodoActual, eventosFase);
+                        tiempoActual = pausa.tiempoActual();
+                        refrigerioTomado = pausa.refrigerioTomado();
+                    }
+                    if (tramo.interrumpido()) {
+                        break;
+                    }
+                } catch (IllegalStateException sinCamino) {
+                    break; // sin camino por ahora: se reintenta el próximo lote (o el orquestador la abandona)
+                }
+            }
+            if (!nodoActual.equals(almacen) || tiempoActual >= tiempoFinMaxHoras) {
+                unidad.setPosicion(nodoActual);
+                unidad.setRefrigerioTomado(refrigerioTomado);
+                if (unidad.getActividadActual() != ActividadVehiculo.EN_REFRIGERIO) {
+                    unidad.setActividadActual(ActividadVehiculo.VIAJANDO);
+                }
+                return;
+            }
+            ruta.marcarCargaRealizada();
+            unidad.setEnRetorno(false, null, null); // llegó: desde aquí sale cargada
+            // Descarga lo que sobraba y carga exactamente lo de la ruta (ya descontado al planificar).
+            ruta.getAlmacenCarga().reponerStock(unidad.getCargaABordo(), instanteDe(contexto, tiempoActual));
+            unidad.setCargaABordo(0);
+            unidad.registrarPuntoTrayectoria(almacen, instanteDe(contexto, tiempoActual), ActividadVehiculo.VIAJANDO);
+            eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.LLEGADA_ALMACEN,
+                    unidad.getIdUnidad(), null, almacen.x(), almacen.y(),
+                    String.format("Carga en almacén %s para su nueva ruta", almacen),
+                    String.format("Paquetes: %d", cargaActual)));
+            registrarDespacho(ruta, unidad, paradasPendientes, almacen, tiempoActual, cargaActual, contexto, horaBase,
+                    eventosFase);
+        }
+
+        // Trasvase: antes de entregar, ir hasta la unidad averiada y recoger sus paquetes. Si no
+        // termina dentro de este lote, la ruta sigue EN_EJECUCION y el próximo lote lo retoma.
+        if (ruta.tieneTrasvasePendiente()) {
+            ResultadoTrasvase trasvase = simularTrasvase(ruta, unidad, contexto, horaBase, velocidad, costoKm,
+                    tiempoActual, distanciaRecorrida, nodoActual, refrigerioTomado, tiempoInicioRefrigerio,
+                    duracionRefrigerio, tiempoFinMaxHoras, eventosFase);
+            tiempoActual = trasvase.tiempo();
+            distanciaRecorrida = trasvase.distancia();
+            nodoActual = trasvase.nodo();
+            refrigerioTomado = trasvase.refrigerioTomado();
+            if (!trasvase.completado()) {
+                unidad.setPosicion(nodoActual);
+                unidad.setRefrigerioTomado(refrigerioTomado);
+                return;
+            }
+        }
+
         for (ParadaPlanificada parada : paradasPendientes) {
             Pedido pedido = parada.getPedido();
             if (tiempoActual >= tiempoFinMaxHoras) {
@@ -273,11 +355,16 @@ public class MotorSimulacion {
             }
             tiempoActual = Math.max(tiempoActual, horasDesdeAnchor(contexto, pedido.getFechaIngreso()));
 
-            ResultadoRefrigerio resRefrigerio = manejarRefrigerio(unidad, tiempoActual, refrigerioTomado,
-                    tiempoInicioRefrigerio, duracionRefrigerio, tiempoFinMaxHoras, contexto, horaBase, nodoActual,
-                    eventosFase);
-            tiempoActual = resRefrigerio.tiempoActual();
-            refrigerioTomado = resRefrigerio.refrigerioTomado();
+            // Con un servicio ya iniciado en esta parada, el refrigerio espera a que termine: antes se
+            // podía iniciar a mitad de la entrega, la actividad pasaba a EN_REFRIGERIO y la ruta
+            // perdía su protección y se abandonaba con la entrega a medias.
+            if (parada.getHoraInicioServicio() == null) {
+                ResultadoRefrigerio resRefrigerio = manejarRefrigerio(unidad, tiempoActual, refrigerioTomado,
+                        tiempoInicioRefrigerio, duracionRefrigerio, tiempoFinMaxHoras, contexto, horaBase, nodoActual,
+                        eventosFase);
+                tiempoActual = resRefrigerio.tiempoActual();
+                refrigerioTomado = resRefrigerio.refrigerioTomado();
+            }
 
             if (tiempoActual >= tiempoFinMaxHoras) {
                 break;
@@ -384,7 +471,8 @@ public class MotorSimulacion {
                 break; // el servicio no termina en este lote -- se retoma el siguiente
             }
 
-            cargaActual -= pedido.getCantidadSolicitada();
+            cargaActual -= parada.getCantidadAEntregar();
+            unidad.setCargaABordo(unidad.getCargaABordo() - parada.getCantidadAEntregar());
             pedidosCompletados.add(pedido.getIdPedido());
             ruta.marcarParadaCumplida(pedido, parada.getCantidadAEntregar(), horaFinServicioAbs);
 
@@ -427,6 +515,114 @@ public class MotorSimulacion {
         }
     }
 
+    private void registrarDespacho(Ruta ruta, UnidadTransporte unidad, List<ParadaPlanificada> paradasPendientes,
+            Nodo nodo, double tiempoActual, int carga, ContextoProblema contexto, double horaBase,
+            List<EventoSimulacion> eventosFase) {
+        LocalDateTime instanteDespacho = contexto.marcaTiempoActual().plusSeconds(Math.round(tiempoActual * 3600.0));
+        // Sale a repartir (desde un almacén, o desde la calle con carga a bordo): deja de ser regreso.
+        unidad.setEnRetorno(false, nodo, instanteDespacho);
+        ruta.registrarDespacho(nodo, instanteDespacho);
+        unidad.setCargaABordo(Math.max(unidad.getCargaABordo(), carga));
+        for (ParadaPlanificada pendiente : paradasPendientes) {
+            pendiente.getPedido().registrarDespacho(nodo, instanteDespacho);
+        }
+        eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.DESPACHO_VEHICULO,
+                unidad.getIdUnidad(), null, nodo.x(), nodo.y(),
+                String.format("Vehículo despachado desde %s con %d pedidos", nodo, paradasPendientes.size()),
+                String.format(Locale.US, "Carga: %d/%d paq. | Vel: %.0f km/h", carga,
+                        unidad.getTipoVehiculo().getCapacidad(), unidad.getTipoVehiculo().getVelocidadKmH())));
+    }
+
+    private record ResultadoTrasvase(double tiempo, double distancia, Nodo nodo, boolean refrigerioTomado,
+            boolean completado) {
+    }
+
+    /**
+     * Viaje hasta la unidad averiada y recojo de su carga ({@code tiempoTrasvaseHoras}). El inicio
+     * del trasvase se ancla a un instante absoluto en la ruta (igual que el servicio de entrega), así
+     * que un trasvase que no cabe en un lote continúa en el siguiente sin reiniciarse.
+     */
+    private ResultadoTrasvase simularTrasvase(Ruta ruta, UnidadTransporte unidad, ContextoProblema contexto,
+            double horaBase, double velocidad, double costoKm, double tiempoActual, double distancia, Nodo nodoActual,
+            boolean refrigerioTomado, double tiempoInicioRefrigerio, double duracionRefrigerio, double tiempoFinMaxHoras,
+            List<EventoSimulacion> eventosFase) {
+        Nodo punto = ruta.getPuntoTrasvase();
+        String idAveriada = ruta.getOrigenTrasvase().getIdUnidad();
+        if (ruta.getInicioTrasvase() == null && (ruta.getOrigenTrasvase().getEstado() != EstadoUnidad.AVERIADO
+                || !ruta.getOrigenTrasvase().getPosicion().equals(punto))) {
+            // La carga ya no está ahí (reparada o trasladada al central): el orquestador abandona
+            // este rescate en el próximo lote y los pedidos vuelven al planificador.
+            return new ResultadoTrasvase(tiempoActual, distancia, nodoActual, refrigerioTomado, false);
+        }
+        if (ruta.getInicioTrasvase() == null) {
+            ResultadoRefrigerio ref = manejarRefrigerio(unidad, tiempoActual, refrigerioTomado, tiempoInicioRefrigerio,
+                    duracionRefrigerio, tiempoFinMaxHoras, contexto, horaBase, nodoActual, eventosFase);
+            tiempoActual = ref.tiempoActual();
+            refrigerioTomado = ref.refrigerioTomado();
+            if (tiempoActual >= tiempoFinMaxHoras) {
+                return new ResultadoTrasvase(tiempoActual, distancia, nodoActual, refrigerioTomado, false);
+            }
+            if (!nodoActual.equals(punto)) {
+                List<Nodo> camino;
+                try {
+                    camino = CalculadorDistancia.caminoMasCorto(contexto.ciudad(), contexto.bloqueos(),
+                            instanteDe(contexto, tiempoActual), nodoActual, punto);
+                } catch (IllegalStateException sinCamino) {
+                    return new ResultadoTrasvase(tiempoActual, distancia, nodoActual, refrigerioTomado, false);
+                }
+                unidad.setActividadActual(ActividadVehiculo.VIAJANDO);
+                ResultadoTramo tramo = recorrerCamino(camino, unidad, null, contexto, horaBase, velocidad, costoKm,
+                        tiempoActual, distancia, tiempoFinMaxHoras, eventosFase, TipoEvento.MOVIMIENTO_TRAMO, punto);
+                tiempoActual = tramo.tiempo();
+                distancia = tramo.distancia();
+                nodoActual = tramo.nodoFinal();
+                if (tramo.interrumpido() || tiempoActual >= tiempoFinMaxHoras || !nodoActual.equals(punto)) {
+                    return new ResultadoTrasvase(tiempoActual, distancia, nodoActual, refrigerioTomado, false);
+                }
+            }
+            ruta.setInicioTrasvase(instanteDe(contexto, tiempoActual));
+            unidad.registrarPuntoTrayectoria(punto, instanteDe(contexto, tiempoActual), ActividadVehiculo.TRASVASANDO);
+            eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.INICIO_TRASVASE,
+                    unidad.getIdUnidad(), null, punto.x(), punto.y(),
+                    String.format("%s inicia trasvase de paquetes desde la unidad averiada %s", unidad.getIdUnidad(),
+                            idAveriada),
+                    String.format(Locale.US, "Paquetes a recoger: %d | Duración: %.1fh", ruta.cargaTotal(),
+                            contexto.configuracionOperacion().tiempoTrasvaseHoras())));
+        }
+        nodoActual = punto;
+        unidad.setActividadActual(ActividadVehiculo.TRASVASANDO);
+        double fin = horasDesdeAnchor(contexto, ruta.getInicioTrasvase()
+                .plusSeconds(Math.round(contexto.configuracionOperacion().tiempoTrasvaseHoras() * 3600.0)));
+        if (fin > tiempoFinMaxHoras) {
+            return new ResultadoTrasvase(tiempoFinMaxHoras, distancia, nodoActual, refrigerioTomado, false);
+        }
+        tiempoActual = Math.max(tiempoActual, fin);
+        ruta.marcarTrasvaseRealizado();
+        unidad.setCargaABordo(Math.min(unidad.getTipoVehiculo().getCapacidad(), unidad.getCargaABordo() + ruta.cargaTotal()));
+        unidad.registrarPuntoTrayectoria(punto, instanteDe(contexto, tiempoActual), ActividadVehiculo.VIAJANDO);
+        eventosFase.add(new EventoSimulacion(tiempoActual, horaBase, TipoEvento.FIN_TRASVASE, unidad.getIdUnidad(),
+                null, punto.x(), punto.y(),
+                String.format("%s recogió %d paquete(s) de %s y continúa a sus clientes", unidad.getIdUnidad(),
+                        ruta.cargaTotal(), idAveriada),
+                "Pedidos: " + ruta.getSecuenciaParadas().stream().map(p -> p.getPedido().getIdPedido()).toList()));
+        return new ResultadoTrasvase(tiempoActual, distancia, nodoActual, refrigerioTomado, true);
+    }
+
+    /**
+     * Mantenimiento preventivo: la unidad debe estar en el almacén central (clases del profesor) y,
+     * si al empezar está fuera, "debe retornar de inmediato" (Q&A pregunta 19, nota 2). Recorre el
+     * camino real hasta el central; la ventana de mantenimiento cuenta desde su hora programada.
+     */
+    private void retornarACentralPorMantenimiento(UnidadTransporte unidad, Almacen central, ContextoProblema contexto,
+            double horaBase, double tiempoFinMaxHoras, List<EventoSimulacion> eventosFase) {
+        unidad.setActividadActual(ActividadVehiculo.VIAJANDO);
+        ResultadoTramo retorno = simularRetornoAlmacen(unidad, unidad.getPosicion(), central, contexto, horaBase,
+                unidad.getTipoVehiculo().getVelocidadKmH(), unidad.getTipoVehiculo().getCostoPorKm(),
+                inicioDe(unidad, contexto), 0.0, tiempoFinMaxHoras, true, Double.MAX_VALUE, 0.0, eventosFase);
+        unidad.setPosicion(retorno.nodoFinal());
+        unidad.setActividadActual(retorno.interrumpido() ? ActividadVehiculo.VIAJANDO : ActividadVehiculo.INACTIVO);
+    }
+
     /**
      * Bug real corregido: antes devolvía solo el tiempo y los llamadores fijaban la posición en el
      * almacén SIEMPRE, aunque el lote terminara a mitad del regreso -- la unidad se teletransportaba
@@ -459,11 +655,16 @@ public class MotorSimulacion {
             return new ResultadoTramo(tiempoActual, distanciaRecorrida, nodoActual, true);
         }
 
+        unidad.setEnRetorno(true, nodoActual, instante); // el mapa la pinta gris desde aquí
         ResultadoTramo resultado = recorrerCamino(caminoRetorno, unidad, null, contexto, horaBase, velocidad, costoKm,
                 tiempoActual, distanciaRecorrida, tiempoFinMaxHoras, eventosFase, TipoEvento.MOVIMIENTO_TRAMO, null);
 
         boolean llego = !resultado.interrumpido && resultado.nodoFinal.equals(destino.getPosicion());
         if (llego) {
+            unidad.setEnRetorno(false, null, null); // el punto de llegada ya va sin modo regreso
+            // Lo que sobraba a bordo se descarga en este almacén (repone su stock hasta su capacidad).
+            destino.reponerStock(unidad.getCargaABordo(), instanteDe(contexto, resultado.tiempo));
+            unidad.setCargaABordo(0);
             unidad.registrarPuntoTrayectoria(destino.getPosicion(), instanteDe(contexto, resultado.tiempo),
                     ActividadVehiculo.INACTIVO);
             eventosFase.add(new EventoSimulacion(resultado.tiempo, horaBase, TipoEvento.LLEGADA_ALMACEN,
@@ -609,10 +810,14 @@ public class MotorSimulacion {
             double costoAcum = distanciaRecorrida * costoKm;
 
             if (tiempoActual > tiempoFinMaxHoras) {
-                // Simplificación existente: el tramo en curso se completa al cierre del lote.
-                unidad.registrarPuntoTrayectoria(destinoPaso, instanteDe(contexto, tiempoFinMaxHoras),
-                        ActividadVehiculo.VIAJANDO);
-                return new ResultadoTramo(tiempoFinMaxHoras, distanciaRecorrida, destinoPaso, true);
+                // El lote cerró a mitad de esta cuadra: se termina a su velocidad normal, con su hora
+                // real de llegada (aunque caiga en el lote siguiente), y el próximo lote no mueve a esta
+                // unidad antes de ese instante. Antes se "terminaba" al cierre del lote: el último tramo
+                // de cada lote iba en mediana 3x más rápido (medido en una corrida de 5 días).
+                LocalDateTime llegadaReal = instanteDe(contexto, tiempoActual);
+                unidad.registrarPuntoTrayectoria(destinoPaso, llegadaReal, ActividadVehiculo.VIAJANDO);
+                unidad.setDisponibleDesde(llegadaReal);
+                return new ResultadoTramo(tiempoActual, distanciaRecorrida, destinoPaso, true);
             }
             unidad.registrarPuntoTrayectoria(destinoPaso, instanteDe(contexto, tiempoActual), ActividadVehiculo.VIAJANDO);
 
@@ -624,6 +829,12 @@ public class MotorSimulacion {
         }
 
         return new ResultadoTramo(tiempoActual, distanciaRecorrida, nodoActual, false, tiempoActual > corteRefrigerio);
+    }
+
+    /** Primer instante (horas desde el ancla del lote) en que esta unidad puede moverse en este lote. */
+    private double inicioDe(UnidadTransporte unidad, ContextoProblema contexto) {
+        LocalDateTime desde = unidad.getDisponibleDesde();
+        return desde == null ? 0.0 : Math.max(0.0, horasDesdeAnchor(contexto, desde));
     }
 
     private double horasDesdeAnchor(ContextoProblema contexto, LocalDateTime instante) {
@@ -641,14 +852,17 @@ public class MotorSimulacion {
         return evento;
     }
 
-    public void registrarAveriaVehiculo(double tiempoHoras, ContextoProblema contexto, String idUnidad, Nodo posicion,
-            String motivo) {
-        gestorLog.registrarEvento(new EventoSimulacion(tiempoHoras,
+    /** Devuelve el evento para que el orquestador lo publique en el lote (alertas y registro de eventos). */
+    public EventoSimulacion registrarAveriaVehiculo(double tiempoHoras, ContextoProblema contexto, String idUnidad,
+            Nodo posicion, String motivo) {
+        EventoSimulacion evento = new EventoSimulacion(tiempoHoras,
                 contexto.marcaTiempoActual().getHour() + contexto.marcaTiempoActual().getMinute() / 60.0,
                 TipoEvento.INCIDENCIA_AVERIA_VEHICULO, idUnidad, null, posicion.x(), posicion.y(),
                 String.format("EMERGENCIA DE FLOTA: Vehículo %s sufrió avería mecánica en %s. Fuera de servicio.",
                         idUnidad, posicion),
-                "Motivo: " + motivo + " | Acción: Reasignación forzosa de pedidos"));
+                "Motivo: " + motivo + " | Acción: Reasignación forzosa de pedidos");
+        gestorLog.registrarEvento(evento);
+        return evento;
     }
 
     /**
@@ -657,14 +871,16 @@ public class MotorSimulacion {
      * / {@code aplicarMantenimientos}. Antes de esto, {@code TipoEvento.REPLANIFICACION_RUTAS}
      * estaba declarado pero nunca se emitía en ningún lugar del código.
      */
-    public void registrarReplanificacion(double tiempoHoras, ContextoProblema contexto, String idUnidad,
+    public EventoSimulacion registrarReplanificacion(double tiempoHoras, ContextoProblema contexto, String idUnidad,
             int cantidadParadasLiberadas, String motivo) {
-        gestorLog.registrarEvento(new EventoSimulacion(tiempoHoras,
+        EventoSimulacion evento = new EventoSimulacion(tiempoHoras,
                 contexto.marcaTiempoActual().getHour() + contexto.marcaTiempoActual().getMinute() / 60.0,
                 TipoEvento.REPLANIFICACION_RUTAS, idUnidad, null, -1, -1,
                 String.format("REPLANIFICACIÓN: %d parada(s) de %s liberadas y pendientes de reasignación",
                         cantidadParadasLiberadas, idUnidad),
-                "Motivo: " + motivo));
+                "Motivo: " + motivo);
+        gestorLog.registrarEvento(evento);
+        return evento;
     }
 
     public void registrarNuevoPedido(double tiempoHoras, ContextoProblema contexto, Pedido pedido) {

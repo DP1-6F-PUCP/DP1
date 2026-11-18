@@ -5,7 +5,7 @@ import { useScenarioStore } from '../../../store/scenarioStore';
 import { useConfigInicialStore } from '../../../store/configInicialStore';
 import { formatDateForInput } from '../../../utils/simulation';
 import { TipoEscenarioBackend } from '../../../types/backend';
-import { Play, Loader2, Radio, Calendar, AlertCircle } from 'lucide-react';
+import { Play, Loader2, Radio, Calendar, AlertCircle, SlidersHorizontal } from 'lucide-react';
 
 const ESTADOS_ACTIVOS = new Set(['INICIADA', 'EN_CURSO', 'PAUSADA']);
 const FECHA_MIN_DATOS = '2026-01-01';
@@ -14,16 +14,24 @@ const FECHA_MAX_DATOS = '2028-12-31';
 const MODOS_OPERACION: Array<{
   tipo: TipoEscenarioBackend;
   label: string;
+  /** Qué hace el modo, en una línea: la opción se entiende sin explicación previa. */
+  detalle: string;
   Icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { tipo: 'DIA_A_DIA', label: 'Tiempo Real', Icon: Radio },
-  { tipo: 'CINCO_DIAS', label: '5 Días', Icon: Calendar },
-  { tipo: 'COLAPSO_LOGISTICO', label: 'Colapso', Icon: AlertCircle },
+  { tipo: 'DIA_A_DIA', label: 'Tiempo real', detalle: 'Desde ahora, al ritmo real', Icon: Radio },
+  { tipo: 'CINCO_DIAS', label: '5 días', detalle: '5 días simulados, acelerado', Icon: Calendar },
+  { tipo: 'COLAPSO_LOGISTICO', label: 'Colapso', detalle: 'Hasta que un pedido falle', Icon: AlertCircle },
 ];
 
+/**
+ * Pantalla de inicio (sin barra lateral): logo, modo, fecha y hora, y el botón para iniciar. La
+ * configuración se abre desde el botón de la esquina superior derecha. Con una ejecución activa
+ * muestra directamente la operación (children).
+ */
 export const SeleccionarEscenarioGate: React.FC<{
   children: React.ReactNode;
-}> = ({ children }) => {
+  onOpenConfig?: () => void;
+}> = ({ children, onOpenConfig }) => {
   const { ejecucion, iniciarEscenario, isIniciando, error } = useEscenario();
   const { verificando } = useDescubrirEjecucionActiva();
   const tipo = useScenarioStore((s) => s.selectedScenarioType);
@@ -64,158 +72,160 @@ export const SeleccionarEscenarioGate: React.FC<{
     return <>{children}</>;
   }
 
+  const tiempoReal = tipo === 'DIA_A_DIA';
+  const puedeIniciar = !isIniciando && !fechaFueraDeRango && Boolean(fecha);
+  // "Miércoles, 18 de noviembre de 2026": mayúscula solo al inicio (capitalize de CSS la ponía en cada palabra).
+  const fechaLargaCruda = fecha
+    ? new Date(`${fecha}T12:00:00`).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : '';
+  const fechaLarga = fechaLargaCruda.charAt(0).toUpperCase() + fechaLargaCruda.slice(1);
+
+  const iniciar = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!puedeIniciar) return;
+    iniciarEscenario({
+      tipo,
+      fechaInicioSimulada: tiempoReal ? new Date().toISOString() : `${fecha}T${hora || '00:00'}:00Z`,
+      ajustesIniciales: ajustesPendientes.length > 0 ? ajustesPendientes : undefined,
+    });
+  };
+
+  const campo =
+    'h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition scheme-light focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:scheme-dark';
+
   return (
-    <div className="absolute inset-0 z-10 flex h-full w-full items-center justify-center overflow-auto bg-[var(--color-background)] px-5 py-10 text-[var(--color-text-primary)] animate-in fade-in">
+    // Fondo degradado: un halo del azul de la marca desde arriba (detrás del logo) que se funde con
+    // el fondo de la app hacia abajo. Sutil, para no restar contraste a los controles.
+    <div className="absolute inset-0 z-10 flex h-full w-full items-center justify-center overflow-auto bg-[radial-gradient(ellipse_90%_70%_at_50%_0%,#dbeafe_0%,#eef3fb_40%,#F5F6F8_75%)] px-5 py-8 text-[var(--color-text-primary)] dark:bg-[radial-gradient(ellipse_90%_70%_at_50%_0%,#16305e_0%,#0f1d38_40%,#0B111E_75%)]">
+      {onOpenConfig && (
+        <button
+          type="button"
+          id="btn-open-system-config-inicio"
+          onClick={onOpenConfig}
+          className="absolute right-4 top-4 flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+        >
+          <SlidersHorizontal className="h-4 w-4" aria-hidden />
+          Configuración
+        </button>
+      )}
+
       {verificando ? (
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-          <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-          <span>Verificando ejecución activa...</span>
+        <div role="status" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+          <Loader2 className="h-4 w-4 animate-spin text-blue-500" aria-hidden />
+          <span>Verificando si hay una ejecución activa…</span>
         </div>
       ) : (
-        <div className="w-full max-w-[420px] space-y-6">
-          <div className="text-center">
-            <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-              Escenario:
-              <strong className="font-semibold text-slate-800 dark:text-slate-200">
-                {tipo === 'DIA_A_DIA' ? 'Tiempo Real' : tipo === 'CINCO_DIAS' ? 'Simulación 5 Días' : 'Colapso Logístico'}
-              </strong>
-            </div>
-            <h1 className="text-[26px] font-bold tracking-tight text-slate-950 dark:text-slate-100">Inicio de ejecución</h1>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {tipo === 'DIA_A_DIA'
-                ? 'El tiempo real comienza obligatoriamente en la fecha y hora actuales'
-                : 'Selecciona el modo, fecha y hora para comenzar la operación'}
-            </p>
-          </div>
+        <form onSubmit={iniciar} className="w-full max-w-[440px]" aria-labelledby="titulo-inicio">
+          {/* Dos versiones del logo: colores originales en claro; "Sys" aclarado y azules con más brillo en oscuro. */}
+          <img src="/sysmile-logo-fondo-claro.png" alt="SysMile — Last-mile delivery software" className="mx-auto h-40 w-auto dark:hidden" />
+          <img src="/sysmile-logo-fondo-oscuro.png" alt="SysMile — Last-mile delivery software" className="mx-auto hidden h-40 w-auto dark:block" />
+          {/* Sin título visible: el logo y los controles bastan. Se conserva para lectores de pantalla. */}
+          <h1 id="titulo-inicio" className="sr-only">Iniciar operación</h1>
 
-          <div className="space-y-5">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-700 dark:text-slate-300">
-                Modo de operación
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {MODOS_OPERACION.map(({ tipo: modoTipo, label, Icon }) => {
-                  const activo = tipo === modoTipo;
-                  return (
-                    <button
-                      key={modoTipo}
-                      type="button"
-                      onClick={() => setSelectedScenarioType(modoTipo)}
-                      className={`flex flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2.5 text-xs font-semibold transition cursor-pointer ${
-                        activo
-                          ? 'border-blue-600 bg-blue-600/10 text-blue-600 dark:border-blue-500 dark:bg-blue-500/20 dark:text-blue-300'
-                          : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
-                <label htmlFor="fecha-inicio-simulada">Fecha</label>
-                {tipo !== 'DIA_A_DIA' && (
+          {/* Modo: radio group con descripción, para que cada opción se entienda sin explicación. */}
+          <fieldset className="mt-7">
+            <legend className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">Modo de operación</legend>
+            <div role="radiogroup" className="grid grid-cols-3 gap-2">
+              {MODOS_OPERACION.map(({ tipo: modoTipo, label, detalle, Icon }) => {
+                const activo = tipo === modoTipo;
+                return (
                   <button
+                    key={modoTipo}
                     type="button"
-                    className="text-blue-600 hover:text-blue-700"
-                    onClick={() => setFecha(formatDateForInput(new Date()))}
+                    role="radio"
+                    aria-checked={activo}
+                    onClick={() => setSelectedScenarioType(modoTipo)}
+                    className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-center transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
+                      activo
+                        ? 'border-blue-600 bg-blue-50 text-blue-800 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-200'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500'
+                    }`}
                   >
-                    Hoy
+                    <Icon className={`h-5 w-5 ${activo ? 'text-blue-600 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`} />
+                    <span className="text-sm font-semibold">{label}</span>
+                    <span className={`text-[11px] leading-snug ${activo ? 'text-blue-700 dark:text-blue-200/80' : 'text-slate-500 dark:text-slate-400'}`}>{detalle}</span>
                   </button>
-                )}
-              </div>
-              <div>
-                <input
-                  id="fecha-inicio-simulada"
-                  type="date"
-                  value={fecha}
-                  min={FECHA_MIN_DATOS}
-                  max={FECHA_MAX_DATOS}
-                  disabled={tipo === 'DIA_A_DIA'}
-                  onChange={(e) => setFecha(e.target.value)}
-                  className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900"
-                />
-              </div>
-              <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-                {new Date(`${fecha}T12:00:00`).toLocaleDateString('es-ES', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </p>
+                );
+              })}
             </div>
+          </fieldset>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-700 dark:text-slate-300" htmlFor="hora-inicio-simulada">
-                Hora
-              </label>
-              <div>
-                <input
-                  id="hora-inicio-simulada"
-                  type="time"
-                  value={hora}
-                  disabled={tipo === 'DIA_A_DIA'}
-                  onChange={(e) => setHora(e.target.value)}
-                  className="scheme-light h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70 dark:scheme-dark dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:ring-blue-900"
-                />
+          {/* Inicio: fecha y hora en una fila. En tiempo real se muestran como dato, no como campos
+              deshabilitados (que se leen mal y parecen un error). */}
+          <fieldset className="mt-6">
+            <legend className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">Inicio</legend>
+            {tiempoReal ? (
+              <div className="flex items-center justify-between rounded-xl border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/60">
+                <span className="text-sm text-slate-700 dark:text-slate-300">{fechaLarga}</span>
+                <span className="font-mono-code text-sm font-semibold text-slate-900 dark:text-slate-100">{hora}</span>
               </div>
-            </div>
-          </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-[1fr_7.5rem] gap-2">
+                  <div>
+                    <label htmlFor="fecha-inicio-simulada" className="sr-only">Fecha</label>
+                    <input
+                      id="fecha-inicio-simulada"
+                      type="date"
+                      value={fecha}
+                      min={FECHA_MIN_DATOS}
+                      max={FECHA_MAX_DATOS}
+                      onChange={(e) => setFecha(e.target.value)}
+                      aria-invalid={fechaFueraDeRango}
+                      className={campo}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="hora-inicio-simulada" className="sr-only">Hora</label>
+                    <input
+                      id="hora-inicio-simulada"
+                      type="time"
+                      value={hora}
+                      onChange={(e) => setHora(e.target.value)}
+                      className={campo}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </fieldset>
 
           {ajustesPendientes.length > 0 && (
-            <p className="rounded-xl border border-blue-200 bg-blue-50 p-2.5 text-xs text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-300">
-              Se aplicarán {ajustesPendientes.length} ajuste(s) de parámetros guardados en Configuración.
+            <p className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
+              Se aplicarán {ajustesPendientes.length} ajuste(s) guardados en Configuración.
             </p>
           )}
 
           {fechaFueraDeRango && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
-              Solo hay datos del curso entre el 01/01/2026 y el 31/12/2028. Elige una fecha dentro de ese rango.
+            <p role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+              No hay datos para esa fecha. Elige un día entre el 01/01/2026 y el 31/12/2028.
             </p>
           )}
 
           {error && (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
+            <p role="alert" className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
               {(error as Error).message || 'No se pudo iniciar el escenario seleccionado.'}
-            </div>
+            </p>
           )}
 
           <button
-            type="button"
-            disabled={isIniciando || fechaFueraDeRango || !fecha}
-            onClick={() =>
-              iniciarEscenario({
-                tipo,
-                fechaInicioSimulada:
-                  tipo === 'DIA_A_DIA'
-                    ? new Date().toISOString()
-                    : fecha
-                      ? `${fecha}T${hora || '00:00'}:00Z`
-                      : undefined,
-                ajustesIniciales: ajustesPendientes.length > 0 ? ajustesPendientes : undefined,
-              })
-            }
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            type="submit"
+            disabled={!puedeIniciar}
+            className="mx-auto mt-7 flex h-12 w-full max-w-[13rem] items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isIniciando ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Iniciando simulación...</span>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                <span>Iniciando…</span>
               </>
             ) : (
               <>
-                <Play className="h-4 w-4 fill-current" />
-                <span>Iniciar Simulación</span>
+                <Play className="h-4 w-4 fill-current" aria-hidden />
+                <span>Iniciar</span>
               </>
             )}
           </button>
-        </div>
+        </form>
       )}
     </div>
   );
