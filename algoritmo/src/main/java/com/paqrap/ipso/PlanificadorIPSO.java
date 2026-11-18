@@ -146,8 +146,13 @@ public class PlanificadorIPSO implements Planificador {
 
     /** true si recorriendo {@code secuencia} en ese orden se llega a cada pedido antes de su plazo. */
     private boolean esPuntual(UnidadTransporte unidad, List<Pedido> secuencia, ContextoProblema contexto) {
-        List<LocalDateTime> llegadas = llegadasEstimadas(unidad, contexto.marcaTiempoActual(), secuencia,
-                unidad.getTipoVehiculo().getVelocidadKmH(), contexto);
+        final List<LocalDateTime> llegadas;
+        try {
+            llegadas = llegadasEstimadas(unidad, contexto.marcaTiempoActual(), secuencia,
+                    unidad.getTipoVehiculo().getVelocidadKmH(), contexto);
+        } catch (IllegalStateException sinCamino) {
+            return false;
+        }
         for (int i = 0; i < secuencia.size(); i++) {
             if (llegadas.get(i).isAfter(secuencia.get(i).getFechaLimite())) {
                 return false;
