@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { CarFront, Bike as Bicycle, MapPin, Warehouse as WarehouseGlyph } from 'lucide-react';
-import { FaMotorcycle } from 'react-icons/fa';
+import { CarFront, MapPin, Warehouse as WarehouseGlyph } from 'lucide-react';
+import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
 import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
@@ -61,7 +61,7 @@ const getVehicleIconMarkup = (vehicle: Vehicle) => {
   } as const;
 
   if (vehicle.type === 'bicycle') {
-    return renderToStaticMarkup(<Bicycle {...iconProps} />);
+    return renderToStaticMarkup(<FaBicycle {...iconProps} />);
   }
   if (vehicle.type === 'motorcycle') {
     return renderToStaticMarkup(<FaMotorcycle {...iconProps} />);

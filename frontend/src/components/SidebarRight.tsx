@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   Car,
-  Bike,
   Warehouse as WarehouseIcon,
   Activity,
   Search,
@@ -37,7 +36,7 @@ import {
   getBreakdownLevelConfig,
   VEHICLE_TYPE_META,
 } from '../utils/vehicleStatus';
-import { FaMotorcycle } from 'react-icons/fa';
+import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { useSemaforoStore } from '../store/semaforoStore';
 import { getWarehouseStockStatus } from '../utils/warehouseStock';
 import {
@@ -1061,7 +1060,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                             { value: 'all', label: 'Todos' },
                             { value: 'car', label: <><Car className="h-3 w-3" />Autos</>, title: 'Autos / camionetas (TA)' },
                             { value: 'motorcycle', label: <><FaMotorcycle className="h-3 w-3" />Motos</>, title: 'Motocicletas (TM)' },
-                            { value: 'bicycle', label: <><Bike className="h-3 w-3" />Bicis</>, title: 'Bicicletas (TB)' },
+                            { value: 'bicycle', label: <><FaBicycle className="h-3 w-3" />Bicis</>, title: 'Bicicletas (TB)' },
                           ]}
                         />
                       </FilterRow>
@@ -1262,7 +1261,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                   ) : v.type === 'motorcycle' ? (
                                     <FaMotorcycle className="h-4 w-4" />
                                   ) : (
-                                    <Bike className="h-4 w-4" />
+                                    <FaBicycle className="h-4 w-4" />
                                   )}
                                 </div>
                                 <div className="flex items-center gap-1.5">
@@ -1724,7 +1723,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
                             <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-950/50">
                               <span className="text-[11px] font-medium flex items-center gap-1.5 text-slate-200">
-                                <Bike className="h-3.5 w-3.5 text-purple-400" /> Motos (TM)
+                                <FaMotorcycle className="h-3.5 w-3.5 text-purple-400" /> Motos (TM)
                               </span>
                               <span className="font-mono-code text-xs">
                                 <span className="font-bold text-emerald-400">{operatingMotorcycles.length}</span>
@@ -1734,7 +1733,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
                             <div className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border border-slate-800 bg-slate-950/50">
                               <span className="text-[11px] font-medium flex items-center gap-1.5 text-slate-200">
-                                <Bike className="h-3.5 w-3.5 text-emerald-400" /> Bicis (TB)
+                                <FaBicycle className="h-3.5 w-3.5 text-emerald-400" /> Bicis (TB)
                               </span>
                               <span className="font-mono-code text-xs">
                                 <span className="font-bold text-emerald-400">{operatingBicycles.length}</span>

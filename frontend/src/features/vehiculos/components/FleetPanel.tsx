@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertOctagon,
-  Bike,
   Car,
   ChevronDown,
   MapPin,
@@ -11,7 +10,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { FaMotorcycle } from 'react-icons/fa';
+import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { BreakdownType, Order, Vehicle, VehicleStatus, VehicleType, Warehouse } from '../../../types';
 import {
   BREAKDOWN_LEVEL_CONFIGS,
@@ -335,7 +334,7 @@ export const FleetPanel: React.FC<FleetPanelProps> = ({
       ) : filteredVehicles.map(({ vehicle, assignedOrders, loadPercent, etaMinutes, departureMinutes, semaforo }) => {
         const isSelected = selectedVehicleId === vehicle.id;
         const isBroken = vehicle.status === 'broken';
-        const Icon = vehicle.type === 'car' ? Car : vehicle.type === 'motorcycle' ? FaMotorcycle : Bike;
+        const Icon = vehicle.type === 'car' ? Car : vehicle.type === 'motorcycle' ? FaMotorcycle : FaBicycle;
         const typeMeta = VEHICLE_TYPE_META[vehicle.type] ?? VEHICLE_TYPE_META.car;
         const breakdownCfg = isBroken
           ? getBreakdownLevelConfig(vehicle.breakdownType ?? vehicle.breakdownInfo?.type)

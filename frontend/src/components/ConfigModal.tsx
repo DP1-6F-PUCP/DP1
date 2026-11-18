@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Bike,
   Car,
   Check,
   Clock,
@@ -12,6 +11,7 @@ import {
   Warehouse,
   X,
 } from 'lucide-react';
+import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
 import { useThemeStore } from '../store/themeStore';
@@ -287,8 +287,8 @@ const inputClass =
 
 const IconoTipo: React.FC<{ id: string }> = ({ id }) => {
   const lower = id.toLowerCase();
-  if (lower.includes('moto')) return <Bike className="h-3 w-3 text-purple-400" />;
-  if (lower.includes('bici')) return <Bike className="h-3 w-3 text-emerald-400" />;
+  if (lower.includes('moto')) return <FaMotorcycle className="h-3 w-3 text-purple-400" />;
+  if (lower.includes('bici')) return <FaBicycle className="h-3 w-3 text-emerald-400" />;
   return <Car className="h-3 w-3 text-blue-400" />;
 };
 
