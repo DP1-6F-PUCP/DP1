@@ -3,7 +3,6 @@ import { Loader2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { DashboardPage } from '../pages/DashboardPage';
-import { DataFilesPage } from '../pages/DataFilesPage';
 import { SeguimientoPage } from '../pages/SeguimientoPage';
 import { ToastProvider } from '../components/ToastProvider';
 import { LiveAnnouncer } from '../components/LiveAnnouncer';
@@ -24,8 +23,6 @@ import { useThemeStore } from '../store/themeStore';
 import { OperacionTopbar } from '../components/OperacionTopbar';
 import { SimulationFinishedModal } from '../components/SimulationFinishedModal';
 import { useReporteFinal } from '../hooks/useReporteFinal';
-import { fileStore } from '../utils/fileStore';
-import { archivosApi } from '../services/archivosApi';
 
 const ESTADOS_ACTIVOS = new Set(['INICIADA', 'EN_CURSO', 'PAUSADA']);
 
@@ -47,7 +44,6 @@ const RootLayout: React.FC = () => {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [showDataFiles, setShowDataFiles] = useState(false);
 
   // Mapa persistente montado una sola vez aqui
   const [mapSlot, setMapSlot] = useState<HTMLDivElement | null>(null);
@@ -79,14 +75,13 @@ const RootLayout: React.FC = () => {
             <SidebarLeft
               currentScenario={selectedScenarioType}
               onSelectScenario={(scenario) => {
-                setShowDataFiles(false);
                 setSelectedScenarioType(scenario);
               }}
               isCollapsed={isSidebarCollapsed}
               onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               onOpenConfig={() => setIsConfigOpen(true)}
-              onOpenDataFiles={() => setShowDataFiles(true)}
-              isDataFilesActive={showDataFiles}
+              onOpenDataFiles={() => {}}
+              isDataFilesActive={false}
               hasActiveExecution={false}
             />
           )}
@@ -99,15 +94,11 @@ const RootLayout: React.FC = () => {
 
             {/* Contenido de la Ruta con Gate de Escenario */}
             <main className="flex-1 flex overflow-hidden relative">
-              {showDataFiles ? (
-                <DataFilesPage warehouses={warehouses} />
-              ) : (
-                <SeleccionarEscenarioGate>
-                  <MapSlotContext.Provider value={{ slot: mapSlot, setSlot: setMapSlot }}>
-                    <Outlet />
-                  </MapSlotContext.Provider>
-                </SeleccionarEscenarioGate>
-              )}
+              <SeleccionarEscenarioGate>
+                <MapSlotContext.Provider value={{ slot: mapSlot, setSlot: setMapSlot }}>
+                  <Outlet />
+                </MapSlotContext.Provider>
+              </SeleccionarEscenarioGate>
             </main>
           </div>
 
@@ -135,10 +126,7 @@ const RootLayout: React.FC = () => {
             isError={reporteFinal.isError}
             onRetry={() => { void reporteFinal.refetch(); }}
             onAccept={() => {
-              fileStore.clearAll();
-              void archivosApi.limpiarArchivos().catch(() => {});
               setEjecucion(null);
-              setShowDataFiles(false);
               navigate('/', { replace: true });
             }}
           />

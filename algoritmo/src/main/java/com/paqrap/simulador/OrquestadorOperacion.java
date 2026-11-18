@@ -251,7 +251,14 @@ public class OrquestadorOperacion {
 
         this.programador = Executors.newSingleThreadScheduledExecutor();
         long periodoMs = Math.round(sa * 60_000.0);
-        programador.scheduleAtFixedRate(this::ejecutarLoteProtegido, 0, periodoMs, TimeUnit.MILLISECONDS);
+        // Pre-calcula los 3 lotes iniciales de colchón sin esperar 2*sa segundos reales entre ellos:
+        // así el visualizador cumple su buffer anti-saltos en < 1 s al iniciar cualquier escenario.
+        programador.execute(() -> {
+            for (int i = 0; i < 3 && !detenido; i++) {
+                ejecutarLoteProtegido();
+            }
+        });
+        programador.scheduleAtFixedRate(this::ejecutarLoteProtegido, periodoMs, periodoMs, TimeUnit.MILLISECONDS);
         return ejecucionActual;
     }
 

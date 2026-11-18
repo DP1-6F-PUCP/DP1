@@ -38,14 +38,6 @@ public interface ServicioPlanificacion {
     void limpiarArchivosCargados();
 
     /**
-     * Valida que los archivos obligatorios hayan sido cargados antes de iniciar un escenario planificado.
-     *
-     * @param tipo tipo de escenario a iniciar
-     */
-    default void validarArchivosRequeridos(TipoEscenario tipo) {
-    }
-
-    /**
      * @return las rutas actualmente vigentes de la ejecución en curso
      */
     List<RutaDTO> consultarRutasVigentes();
