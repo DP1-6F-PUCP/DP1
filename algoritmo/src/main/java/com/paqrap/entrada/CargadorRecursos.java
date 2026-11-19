@@ -37,16 +37,16 @@ public class CargadorRecursos {
      * avanza más allá (p. ej. el escenario día a día corriendo en tiempo real) recicla
      * cíclicamente el patrón de un año disponible -- ver {@link #anioBloqueoDisponible(int)}.
      */
-    private static final int ANIO_BLOQUEOS_DESDE = 2026;
-    private static final int ANIO_BLOQUEOS_HASTA = 2028;
+    protected static final int ANIO_BLOQUEOS_DESDE = 2026;
+    protected static final int ANIO_BLOQUEOS_HASTA = 2028;
 
     /**
      * El curso solo entrega un bimestre de mantenimiento (09-10 de 2026). Se trata como plantilla
      * de día-del-mes + unidad, reaplicada a cualquier otro bimestre/año -- ver
      * {@link #cargarMantenimiento(int, int, int, List)}.
      */
-    private static final String ARCHIVO_MANTENIMIENTO_PLANTILLA = "mant.preventivo.09.10.txt";
-    private static final int MES1_PLANTILLA_MANTENIMIENTO = 9;
+    protected static final String ARCHIVO_MANTENIMIENTO_PLANTILLA = "mant.preventivo.09.10.txt";
+    protected static final int MES1_PLANTILLA_MANTENIMIENTO = 9;
     private static final Logger log = LoggerFactory.getLogger(CargadorRecursos.class);
 
     private final Path carpetaDatos;
@@ -168,7 +168,7 @@ public class CargadorRecursos {
      * sobre el rango {@value #ANIO_BLOQUEOS_DESDE}-{@value #ANIO_BLOQUEOS_HASTA} (p. ej. 2029 reusa
      * el patrón de 2026, 2030 el de 2027).
      */
-    private int anioBloqueoDisponible(int anio) {
+    protected int anioBloqueoDisponible(int anio) {
         if (anio >= ANIO_BLOQUEOS_DESDE && anio <= ANIO_BLOQUEOS_HASTA) {
             return anio;
         }
@@ -211,7 +211,7 @@ public class CargadorRecursos {
         return pendientes;
     }
 
-    private Mantenimiento resolverMantenimiento(CargaArchivo.MantenimientoPendiente pendiente,
+    protected Mantenimiento resolverMantenimiento(CargaArchivo.MantenimientoPendiente pendiente,
             List<UnidadTransporte> flota, int anioDestino, int mes1Destino, int mes2Destino) {
         UnidadTransporte unidad = flota.stream()
                 .filter(u -> u.getIdUnidad().equalsIgnoreCase(pendiente.idUnidad()))
