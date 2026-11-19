@@ -1,8 +1,22 @@
 services:
-  # No hay servicio de base de datos: todo el dominio (ContextoProblema, OrquestadorOperacion,
-  # etc.) vive en memoria por ejecucion de escenario -- backend/pom.xml no tiene ni el starter de
-  # JPA ni el driver de Postgres, asi que un "db" aqui seria infraestructura muerta (y, peor,
-  # bloquearia el arranque de "backend" esperando un healthcheck de algo que nadie usa).
+  db:
+    image: postgres:16-alpine
+    container_name: db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sysmile_db}
+      POSTGRES_USER: ${DB_USER:-sysmile_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sysmile_password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sysmile_user} -d ${DB_NAME:-sysmile_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     image: ghcr.io/dp1-6f-pucp/dp1-backend:latest
     build:
@@ -12,6 +26,15 @@ services:
     container_name: backend
     ports:
       - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-sysmile_db}
+      DB_USER: ${DB_USER:-sysmile_user}
+      DB_PASSWORD: ${DB_PASSWORD:-sysmile_password}
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -51,5 +74,18 @@ services:
     environment:
       - DOZZLE_BASE=${DOZZLE_BASE:-/}
 
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   dozzle_data:
+  postgres_data:

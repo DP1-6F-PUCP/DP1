@@ -1,5 +1,8 @@
 package com.paqrap.backend.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.paqrap.backend.persistence.CatalogoPersistenceService;
+import com.paqrap.backend.persistence.PostgresCargadorRecursos;
 import com.paqrap.dominio.Almacen;
 import com.paqrap.dominio.AlmacenCentral;
 import com.paqrap.dominio.AlmacenIntermedio;
@@ -10,11 +13,14 @@ import com.paqrap.dominio.TipoAlgoritmo;
 import com.paqrap.dominio.TipoVehiculo;
 import com.paqrap.dominio.UnidadTransporte;
 import com.paqrap.entrada.CargadorRecursos;
+import com.paqrap.exposicion.RepositorioOperacion;
 import com.paqrap.exposicion.ServicioPlanificacion;
 import com.paqrap.exposicion.ServicioPlanificacionImpl;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -32,12 +38,16 @@ import java.util.Map;
 @Configuration
 public class PaqRapConfig {
 
-    @Bean
     public Ciudad ciudad() {
         return new Ciudad(70, 50, new Nodo(0, 0), 1, true);
     }
 
     @Bean
+    public Ciudad ciudadBean(ObjectProvider<CatalogoPersistenceService> catalogoProvider) {
+        CatalogoPersistenceService catalogo = catalogoProvider.getIfAvailable();
+        return catalogo != null ? catalogo.cargarCiudad() : ciudad();
+    }
+
     public ConfiguracionOperacion configuracionOperacion() {
         // (duracionTurnoHoras, horaInicioTurno, tiempoServicioClienteHoras, duracionRefrigerioHoras,
         //  margenRefrigerioHoras, tiempoCargaAlmacenHoras, tiempoTrasvaseHoras, maxParadasPorRuta)
@@ -50,26 +60,33 @@ public class PaqRapConfig {
     }
 
     @Bean
+    public ConfiguracionOperacion configuracionOperacionBean(ObjectProvider<CatalogoPersistenceService> catalogoProvider) {
+        CatalogoPersistenceService catalogo = catalogoProvider.getIfAvailable();
+        return catalogo != null ? catalogo.cargarConfiguracionOperacion() : configuracionOperacion();
+    }
+
     public TipoVehiculo tipoAuto() {
         return new TipoVehiculo("AUTO", "Auto", 24, 40.0, 8.0, 10, 48);
     }
 
-    @Bean
     public TipoVehiculo tipoMoto() {
         return new TipoVehiculo("MOTO", "Moto", 8, 25.0, 6.0, 15, 24);
     }
 
-    @Bean
     public TipoVehiculo tipoBici() {
         return new TipoVehiculo("BICI", "Bicicleta", 4, 12.0, 3.0, 12, 8);
     }
 
-    @Bean
     public List<TipoVehiculo> tiposVehiculo(TipoVehiculo tipoAuto, TipoVehiculo tipoMoto, TipoVehiculo tipoBici) {
         return List.of(tipoAuto, tipoMoto, tipoBici);
     }
 
     @Bean
+    public List<TipoVehiculo> tiposVehiculoBean(ObjectProvider<CatalogoPersistenceService> catalogoProvider) {
+        CatalogoPersistenceService catalogo = catalogoProvider.getIfAvailable();
+        return catalogo != null ? catalogo.cargarTiposVehiculo() : tiposVehiculo(tipoAuto(), tipoMoto(), tipoBici());
+    }
+
     public List<Almacen> almacenes() {
         return List.of(
                 new AlmacenCentral(new Nodo(27, 14)),
@@ -77,8 +94,13 @@ public class PaqRapConfig {
                 new AlmacenIntermedio(new Nodo(57, 27), "Este", 1000, 1000));
     }
 
-    /** Flota inicial: 10 autos + 15 motos + 12 bicicletas, todas desde el almacén central. */
     @Bean
+    public List<Almacen> almacenesBean(ObjectProvider<CatalogoPersistenceService> catalogoProvider) {
+        CatalogoPersistenceService catalogo = catalogoProvider.getIfAvailable();
+        return catalogo != null ? catalogo.cargarAlmacenes() : almacenes();
+    }
+
+    /** Flota inicial: 10 autos + 15 motos + 12 bicicletas, todas desde el almacén central. */
     public List<UnidadTransporte> flota(TipoVehiculo tipoAuto, TipoVehiculo tipoMoto, TipoVehiculo tipoBici) {
         Nodo central = new Nodo(27, 14);
         LocalDateTime inicioTurno = LocalDateTime.now().withHour(7).withMinute(0).withSecond(0).withNano(0);
@@ -95,16 +117,21 @@ public class PaqRapConfig {
         return flota;
     }
 
-    /**
-     * Carga bajo demanda los archivos oficiales del curso (pedidos, bloqueos, mantenimiento)
-     * empaquetados en la imagen -- ver {@code backend/Dockerfile} (copia {@code algoritmo/data}) y
-     * {@link com.paqrap.exposicion.ServicioPlanificacionImpl}. {@code paqrap.datos.carpeta} permite
-     * apuntar a otra ruta en desarrollo local sin tocar el código.
-     */
     @Bean
-    public CargadorRecursos cargadorRecursos(@Value("${paqrap.datos.carpeta:data}") String carpetaDatos) {
-        // Docker incluye data/; en desarrollo los archivos están en algoritmo/data.
-        // Una ruta configurada explícitamente conserva prioridad.
+    public List<UnidadTransporte> flotaBean(List<TipoVehiculo> tiposVehiculo,
+            ObjectProvider<CatalogoPersistenceService> catalogoProvider) {
+        CatalogoPersistenceService catalogo = catalogoProvider.getIfAvailable();
+        if (catalogo != null) {
+            return catalogo.cargarFlota(tiposVehiculo);
+        }
+        return flota(tipoAuto(), tipoMoto(), tipoBici());
+    }
+
+    /**
+     * Carga bajo demanda los archivos oficiales del curso (pedidos, bloqueos, mantenimiento).
+     * En el contexto Spring utiliza {@link PostgresCargadorRecursos} (sin caché global en RAM).
+     */
+    public CargadorRecursos cargadorRecursos(String carpetaDatos) {
         if ("data".equals(carpetaDatos) && !java.nio.file.Files.isDirectory(java.nio.file.Path.of(carpetaDatos))) {
             for (String candidata : List.of("algoritmo/data", "../algoritmo/data")) {
                 if (java.nio.file.Files.isDirectory(java.nio.file.Path.of(candidata))) {
@@ -119,6 +146,16 @@ public class PaqRapConfig {
     }
 
     @Bean
+    public CargadorRecursos cargadorRecursosBean(@Value("${paqrap.datos.carpeta:data}") String carpetaDatos,
+            ObjectProvider<JdbcTemplate> jdbcProvider, ObjectProvider<ObjectMapper> mapperProvider) {
+        JdbcTemplate jdbc = jdbcProvider.getIfAvailable();
+        ObjectMapper mapper = mapperProvider.getIfAvailable();
+        if (jdbc != null && mapper != null) {
+            return new PostgresCargadorRecursos(carpetaDatos, "config", jdbc, mapper);
+        }
+        return cargadorRecursos(carpetaDatos);
+    }
+
     public ServicioPlanificacion servicioPlanificacion(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
             List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
             CargadorRecursos cargadorRecursos) {
@@ -128,6 +165,16 @@ public class PaqRapConfig {
         // apenas termina), así el visualizador tiene colchón de reproducción desde el primer segundo.
         servicio.setLotesPrecalculados(2);
         return servicio;
+    }
+
+    @Bean
+    public ServicioPlanificacion servicioPlanificacionBean(Ciudad ciudad,
+            ConfiguracionOperacion configuracionOperacion, List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes,
+            List<UnidadTransporte> flota, CargadorRecursos cargadorRecursos,
+            ObjectProvider<RepositorioOperacion> repositorioProvider) {
+        RepositorioOperacion repo = repositorioProvider.getIfAvailable(() -> RepositorioOperacion.EN_MEMORIA);
+        return new ServicioPlanificacionImpl(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota,
+                TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargadorRecursos, repo);
     }
 
     /**

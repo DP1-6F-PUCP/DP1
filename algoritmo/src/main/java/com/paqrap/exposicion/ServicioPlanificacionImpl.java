@@ -70,17 +70,27 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      * oficiales del curso), pero ya no es necesario en operación normal.
      */
     private final CargadorRecursos cargadorRecursos;
+    private final RepositorioOperacion repositorioOperacion;
 
     private final List<Pedido> pedidosRecibidos = new CopyOnWriteArrayList<>();
     private final List<Bloqueo> bloqueosRecibidos = new CopyOnWriteArrayList<>();
     private final List<Mantenimiento> mantenimientosRecibidos = new CopyOnWriteArrayList<>();
     private final Map<String, OrquestadorOperacion> ejecuciones = new ConcurrentHashMap<>();
     private volatile String idEjecucionActiva;
+    private volatile boolean configuracionPendientePersistir;
 
     public ServicioPlanificacionImpl(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
             List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
             TipoAlgoritmo algoritmoPorDefecto, Map<String, Object> configAlgoritmo, String carpetaLogs,
             CargadorRecursos cargadorRecursos) {
+        this(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota, algoritmoPorDefecto, configAlgoritmo,
+                carpetaLogs, cargadorRecursos, RepositorioOperacion.EN_MEMORIA);
+    }
+
+    public ServicioPlanificacionImpl(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
+            List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
+            TipoAlgoritmo algoritmoPorDefecto, Map<String, Object> configAlgoritmo, String carpetaLogs,
+            CargadorRecursos cargadorRecursos, RepositorioOperacion repositorioOperacion) {
         this.ciudad = ciudad;
         this.configuracionOperacion = configuracionOperacion;
         this.tiposVehiculo = tiposVehiculo;
@@ -90,6 +100,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         this.configAlgoritmo = configAlgoritmo;
         this.carpetaLogs = carpetaLogs;
         this.cargadorRecursos = cargadorRecursos;
+        this.repositorioOperacion = repositorioOperacion != null ? repositorioOperacion : RepositorioOperacion.EN_MEMORIA;
     }
 
     @Override
@@ -127,24 +138,19 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
         List<Mantenimiento> nuevosMantenimientos = new ArrayList<>();
         for (var pendiente : carga.getMantenimientosPendientes()) {
-            flota.stream()
-                    .filter(u -> u.getIdUnidad().equalsIgnoreCase(pendiente.idUnidad()))
-                    .findFirst()
-                    .ifPresent(unidad -> {
-                        boolean primerMesPlantilla = pendiente.fecha().getMonthValue() % 2 == 1;
-                        for (int anio = 2026; anio <= 2028; anio++) {
-                            for (int mes1 = 1; mes1 <= 11; mes1 += 2) {
-                                int mesDestino = primerMesPlantilla ? mes1 : mes1 + 1;
-                                int diaDestino = Math.min(pendiente.fecha().getDayOfMonth(),
-                                        YearMonth.of(anio, mesDestino).lengthOfMonth());
-                                LocalDateTime inicio = java.time.LocalDate.of(anio, mesDestino, diaDestino).atStartOfDay();
-                                LocalDateTime fin = inicio.plusHours((long) unidad.getTipoVehiculo().getDuracionMantenimientoHoras());
-                                Mantenimiento m = new Mantenimiento(unidad, inicio, fin);
-                                mantenimientosRecibidos.add(m);
-                                nuevosMantenimientos.add(m);
-                            }
-                        }
-                    });
+            resolverMantenimientosBimensuales(pendiente, nuevosMantenimientos);
+        }
+        mantenimientosRecibidos.addAll(nuevosMantenimientos);
+
+        // Persistir archivos manuales en BD si hay repositorio configurado
+        if (!nuevosPedidos.isEmpty()) {
+            repositorioOperacion.guardarPedidosManuales(nuevosPedidos);
+        }
+        if (!carga.getBloqueos().isEmpty()) {
+            repositorioOperacion.guardarBloqueosManuales(carga.getBloqueos());
+        }
+        if (!carga.getMantenimientosPendientes().isEmpty()) {
+            repositorioOperacion.guardarMantenimientosManuales(carga.getMantenimientosPendientes());
         }
 
         // Si ya hay una ejecución activa (p. ej. DIA_A_DIA), incorporar los datos en caliente
@@ -159,7 +165,8 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         pedidosRecibidos.clear();
         bloqueosRecibidos.clear();
         mantenimientosRecibidos.clear();
-        log.info("Archivos de pedidos, bloqueos y mantenimientos limpiados de memoria.");
+        repositorioOperacion.limpiarDatosManuales();
+        log.info("Archivos de pedidos, bloqueos y mantenimientos limpiados.");
     }
 
     /**
@@ -272,7 +279,19 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
             planificacionesEstables.put(id, cierre);
         }
         if (orquestador.getEjecucionActual().getFinReal() != null) {
-            reportesFinales.computeIfAbsent(id, clave -> crearReporte(orquestador, cierre));
+            reportesFinales.computeIfAbsent(id, clave -> {
+                ReporteSimulacionDTO reporte = crearReporte(orquestador, cierre);
+                repositorioOperacion.registrarActualizacionEjecucion(orquestador.getEjecucionActual(),
+                        orquestador.getMotivoFinalizacion(), cierre.estado().marcaTiempoActual());
+                repositorioOperacion.guardarReporteFinal(id, reporte);
+                return reporte;
+            });
+        }
+        if (configuracionPendientePersistir) {
+            configuracionPendientePersistir = false;
+            this.configuracionOperacion = contexto.configuracionOperacion();
+            repositorioOperacion.guardarConfiguracionMaestra(ciudad, configuracionOperacion, tiposVehiculo, almacenes,
+                    flota);
         }
     }
 
@@ -293,6 +312,8 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     public ReporteSimulacionDTO consultarReporteFinal(String idEjecucion) {
         var conservado = reportesFinales.get(idEjecucion);
         if (conservado != null) return conservado;
+        var desdeRepo = repositorioOperacion.consultarReporteFinal(idEjecucion);
+        if (desdeRepo.isPresent()) return desdeRepo.get();
         var orquestador = orquestadorDe(idEjecucion);
         synchronized (orquestador) {
             var reporte = reportesFinales.get(idEjecucion);
@@ -416,10 +437,24 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         reiniciarFlotaYAlmacenes(fechaInicioSimulada);
         aplicarAjustesIniciales(ajustesIniciales, fechaInicioSimulada);
 
-        List<Pedido> pedidosPendientes = pedidosRecibidos.stream()
+        List<Pedido> pedidosFuente = !pedidosRecibidos.isEmpty()
+                ? pedidosRecibidos
+                : repositorioOperacion.obtenerPedidosManuales();
+        List<Pedido> pedidosPendientes = pedidosFuente.stream()
                 .map(p -> new Pedido(p.getIdPedido(), p.getIdCliente(), p.getDestino(),
                         p.getCantidadSolicitada(), p.getHorasLimite(), p.getFechaIngreso()))
                 .toList();
+
+        List<Bloqueo> bloqueosFuente = !bloqueosRecibidos.isEmpty()
+                ? bloqueosRecibidos
+                : repositorioOperacion.obtenerBloqueosManuales();
+
+        List<Mantenimiento> mantenimientosFuente = new ArrayList<>(mantenimientosRecibidos);
+        if (mantenimientosFuente.isEmpty()) {
+            for (var pendiente : repositorioOperacion.obtenerMantenimientosManuales()) {
+                resolverMantenimientosBimensuales(pendiente, mantenimientosFuente);
+            }
+        }
 
         // Nótese que aquí se pasa el universo COMPLETO de bloqueos recibidos, sin recortar: el
         // recorte al horizonte relevante lo hace OrquestadorOperacion en cada lote (ver
@@ -427,7 +462,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         // que avanza el reloj simulado y llegan pedidos nuevos -- recortar aquí, una sola vez,
         // dejaría fuera bloqueos que sí aplican a pedidos que todavía no existen en este instante.
         ContextoProblema contextoInicial = new ContextoProblema(fechaInicioSimulada, pedidosPendientes,
-                List.copyOf(bloqueosRecibidos), List.copyOf(mantenimientosRecibidos), almacenes, flota, ciudad,
+                List.copyOf(bloqueosFuente), List.copyOf(mantenimientosFuente), almacenes, flota, ciudad,
                 configuracionOperacion);
 
         var planificador = PlanificadorFactory.crear(algoritmoPorDefecto, configAlgoritmo, tiempoMaximoComputoSegundos);
@@ -448,6 +483,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         orquestador.setAlCerrarLote(() -> publicarEstado(orquestador));
 
         EjecucionEscenario ejecucion = orquestador.iniciarCicloPeriodico(tipo);
+        repositorioOperacion.registrarInicioEjecucion(ejecucion);
         // Llegar aquí implica que ninguna ejecución previa sigue activa (ver el chequeo de arriba):
         // se descartan para no retener indefinidamente su ContextoProblema (meses de pedidos,
         // bloqueos, historial de rutas) -- antes se acumulaban una por cada corrida del proceso.
@@ -527,6 +563,10 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                 log.error("Ajuste inicial {} sobre {} descartado por error al aplicarlo: {}", ajuste.tipoSolicitud(),
                         ajuste.entidadObjetivo(), ex.getMessage());
             }
+        }
+        if (!ajustes.isEmpty()) {
+            repositorioOperacion.guardarConfiguracionMaestra(ciudad, configuracionOperacion, tiposVehiculo, almacenes,
+                    flota);
         }
     }
 
@@ -712,26 +752,61 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
             throw new IllegalArgumentException("No hay una ejecución activa con id " + ejecucion.getIdEjecucion());
         }
         orquestador.encolarSolicitud(new SolicitudOperacion(tiempoSimulado, tipoSolicitud, entidadObjetivo, valorNuevo));
+        if (tipoSolicitud != TipoSolicitud.AVERIA) {
+            configuracionPendientePersistir = true;
+        }
+    }
+
+    private void resolverMantenimientosBimensuales(CargaArchivo.MantenimientoPendiente pendiente,
+            List<Mantenimiento> destino) {
+        flota.stream()
+                .filter(u -> u.getIdUnidad().equalsIgnoreCase(pendiente.idUnidad()))
+                .findFirst()
+                .ifPresent(unidad -> {
+                    boolean primerMesPlantilla = pendiente.fecha().getMonthValue() % 2 == 1;
+                    for (int anio = 2026; anio <= 2028; anio++) {
+                        for (int mes1 = 1; mes1 <= 11; mes1 += 2) {
+                            int mesDestino = primerMesPlantilla ? mes1 : mes1 + 1;
+                            int diaDestino = Math.min(pendiente.fecha().getDayOfMonth(),
+                                    YearMonth.of(anio, mesDestino).lengthOfMonth());
+                            LocalDateTime inicio = java.time.LocalDate.of(anio, mesDestino, diaDestino).atStartOfDay();
+                            LocalDateTime fin = inicio.plusHours((long) unidad.getTipoVehiculo().getDuracionMantenimientoHoras());
+                            destino.add(new Mantenimiento(unidad, inicio, fin));
+                        }
+                    }
+                });
     }
 
     @Override
     public void pausarEjecucion(String idEjecucion) {
-        orquestadorDe(idEjecucion).pausar();
+        OrquestadorOperacion orq = orquestadorDe(idEjecucion);
+        orq.pausar();
+        repositorioOperacion.registrarActualizacionEjecucion(orq.getEjecucionActual(), null, null);
     }
 
     @Override
     public void reanudarEjecucion(String idEjecucion) {
-        orquestadorDe(idEjecucion).reanudar();
+        OrquestadorOperacion orq = orquestadorDe(idEjecucion);
+        orq.reanudar();
+        repositorioOperacion.registrarActualizacionEjecucion(orq.getEjecucionActual(), null, null);
     }
 
     @Override
     public void detenerEjecucion(String idEjecucion) {
-        orquestadorDe(idEjecucion).detener();
+        OrquestadorOperacion orq = orquestadorDe(idEjecucion);
+        orq.detener();
+        repositorioOperacion.registrarActualizacionEjecucion(orq.getEjecucionActual(), orq.getMotivoFinalizacion(),
+                orq.getContextoProblema().marcaTiempoActual());
     }
 
     @Override
     public EjecucionEscenario consultarEjecucion(String idEjecucion) {
-        return orquestadorDe(idEjecucion).getEjecucionActual();
+        OrquestadorOperacion orquestador = ejecuciones.get(idEjecucion);
+        if (orquestador != null) {
+            return orquestador.getEjecucionActual();
+        }
+        return repositorioOperacion.consultarEjecucionHistorica(idEjecucion)
+                .orElseThrow(() -> new IllegalArgumentException("No hay una ejecución activa con id " + idEjecucion));
     }
 
     @Override
@@ -797,7 +872,10 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         if (orquestador != null) {
             return orquestador.getContextoProblema().pedidos();
         }
-        return new ArrayList<>(pedidosRecibidos);
+        if (!pedidosRecibidos.isEmpty()) {
+            return new ArrayList<>(pedidosRecibidos);
+        }
+        return new ArrayList<>(repositorioOperacion.obtenerPedidosManuales());
     }
 
     private TipoArchivo inferirTipoArchivo(String nombreArchivo) {
