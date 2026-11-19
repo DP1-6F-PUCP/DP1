@@ -173,8 +173,14 @@ public class PaqRapConfig {
             List<UnidadTransporte> flota, CargadorRecursos cargadorRecursos,
             ObjectProvider<RepositorioOperacion> repositorioProvider) {
         RepositorioOperacion repo = repositorioProvider.getIfAvailable(() -> RepositorioOperacion.EN_MEMORIA);
-        return new ServicioPlanificacionImpl(ciudad, configuracionOperacion, tiposVehiculo, almacenes, flota,
-                TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargadorRecursos, repo);
+        ServicioPlanificacionImpl servicio = new ServicioPlanificacionImpl(ciudad, configuracionOperacion,
+                tiposVehiculo, almacenes, flota, TipoAlgoritmo.IPSO, configAlgoritmoIpso(), "logs", cargadorRecursos,
+                repo);
+        // Arranque rápido (igual que servicioPlanificacion(...)): 2 lotes calculados de inmediato, así
+        // el visualizador tiene colchón de reproducción desde el primer segundo. Se había perdido al
+        // pasar a este bean con repositorio.
+        servicio.setLotesPrecalculados(2);
+        return servicio;
     }
 
     /**

@@ -598,7 +598,20 @@ export class SimulationEngine {
     }
     const futuro = this.futuros.get(vehicleId) ?? [];
     const fin = camino[camino.length - 1];
-    const idx = futuro.findIndex((p) => p.x === fin.x && p.y === fin.y);
+    let idx = futuro.findIndex((p) => p.x === fin.x && p.y === fin.y);
+    if (idx < 0 && futuro.length > 1) {
+      // Sin el punto exacto (p. ej. el camino planificado se recalculó desde otro nodo), antes no se
+      // agregaba nada y la línea moría donde termina la trayectoria. Se empalma por el nodo del
+      // camino más cercano (en línea Manhattan) para que siempre llegue al destino.
+      let mejor = Infinity;
+      futuro.forEach((p, i) => {
+        const d = Math.abs(p.x - fin.x) + Math.abs(p.y - fin.y);
+        if (d < mejor) { mejor = d; idx = i; }
+      });
+      const empalme = futuro[idx];
+      if (empalme.x !== fin.x && empalme.y !== fin.y) camino.push({ x: empalme.x, y: fin.y });
+      camino.push({ x: empalme.x, y: empalme.y });
+    }
     camino.push(...(idx >= 0 ? futuro.slice(idx + 1) : []));
     return camino;
   }

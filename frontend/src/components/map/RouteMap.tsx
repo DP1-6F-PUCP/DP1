@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { useMapStore } from '../../store/mapStore';
 import { Vehicle, Warehouse, BlockedStreet, Order, Route } from '../../types';
-import { LeafletManhattanMap } from './LeafletManhattanMap';
+import { ApiMapa, LeafletManhattanMap } from './LeafletManhattanMap';
+import { ControlesMapa } from './ControlesMapa';
 import { useEstadoOperacion } from '../../hooks/useEstadoOperacion';
 import { useScenarioStore } from '../../store/scenarioStore';
 import { IndicadoresGlobalesMapa } from './IndicadoresGlobalesMapa';
+import { LeyendaMapa } from './LeyendaMapa';
+import { MenuAveriaVehiculo } from './MenuAveriaVehiculo';
 
 export interface RouteMapProps {
   warehouses?: Warehouse[];
@@ -46,6 +49,14 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   const { configuracion } = useEstadoOperacion();
   const hasActiveExecution = useScenarioStore((s) =>
     Boolean(s.ejecucion && ['INICIADA', 'EN_CURSO', 'PAUSADA'].includes(s.ejecucion.estado)));
+
+  // Controles del mapa (zoom, ver toda la ciudad, capas): van en esta capa, sobre los paneles.
+  const [apiMapa, setApiMapa] = useState<ApiMapa | null>(null);
+
+  // Clic derecho sobre un vehículo: menú para inducir una avería.
+  const [menuAveria, setMenuAveria] = useState<{ vehicleId: string; punto: { x: number; y: number } } | null>(null);
+  const cerrarMenuAveria = useCallback(() => setMenuAveria(null), []);
+  const vehiculoMenu = menuAveria ? vehicles.find((v) => v.id === menuAveria.vehicleId) : undefined;
 
   const handleVehicleClick = (vehicle: Vehicle | null) => {
     if (vehicle) {
@@ -89,6 +100,8 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         onSelectVehicle={handleVehicleClick}
         onSelectWarehouse={handleWarehouseClick}
         onSelectOrder={handleOrderClick}
+        onApiMapa={setApiMapa}
+        onVehicleContextMenu={hasActiveExecution ? (vehicleId, punto) => setMenuAveria({ vehicleId, punto }) : undefined}
         showBlockedStreets={activeLayers.blockedStreets}
         showProjectedRoutes={activeLayers.projectedRoutes}
         showOrders={activeLayers.orderPins}
@@ -97,7 +110,19 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         isDarkTheme={isDarkTheme}
         className="w-full h-full"
       />
-      {hasActiveExecution && <IndicadoresGlobalesMapa vehicles={vehicles} warehouses={warehouses} />}
+      {apiMapa && (
+        <ControlesMapa onAcercar={apiMapa.acercar} onAlejar={apiMapa.alejar} onEncuadrar={apiMapa.encuadrar} />
+      )}
+      {hasActiveExecution && <LeyendaMapa />}
+      {hasActiveExecution && menuAveria && vehiculoMenu && (
+        <MenuAveriaVehiculo vehiculo={vehiculoMenu} punto={menuAveria.punto} onCerrar={cerrarMenuAveria} />
+      )}
+      {hasActiveExecution && (
+        <IndicadoresGlobalesMapa
+          onIrAPedido={(pedido) => apiMapa?.centrar(pedido.destination.x, pedido.destination.y)}
+          onIrAPunto={(x, y) => apiMapa?.centrar(x, y)}
+        />
+      )}
     </div>
   );
 };

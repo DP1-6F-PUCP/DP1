@@ -43,21 +43,31 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Vehículo entregando (o en trasvase): parpadea para distinguirlo de uno detenido. Solo el
-   vehículo; los distintivos (avería, refrigerio) quedan fijos. */
+/* Vehículo entregando (o en trasvase): late (crece y se desvanece) para distinguirlo de uno
+   detenido. Solo el vehículo; los distintivos (avería, refrigerio) quedan fijos. Con solo opacidad
+   casi no se notaba en íconos chicos: el cambio de tamaño se percibe mucho más. */
 @keyframes parpadeo-entrega {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.25; transform: scale(1.35); }
 }
 
-.vehiculo-entregando .vehicle-glyph {
-  animation: parpadeo-entrega 1s ease-in-out infinite;
+.vehiculo-entregando .glifo-pulso {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: parpadeo-entrega 0.9s ease-in-out infinite;
+}
+
+/* Con "reducir movimiento" (p. ej. Windows con los efectos de animación desactivados) antes se
+   apagaba el parpadeo y el vehículo solo quedaba más tenue: no se distinguía. Como es una señal de
+   estado, se mantiene en una versión sobria: alterna visible/tenue, sin crecer. */
+@keyframes parpadeo-entrega-sobrio {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.2; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vehiculo-entregando .vehicle-glyph {
-    animation: none;
-    opacity: 0.55;
+  .vehiculo-entregando .glifo-pulso {
+    animation: parpadeo-entrega-sobrio 1.2s steps(1, end) infinite;
   }
 }
 

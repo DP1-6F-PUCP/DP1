@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
-/** Distancia (px) al borde derecho y al borde superior o inferior (según `anclaje`) del contenedor. */
+/** Distancia (px) al borde lateral (`lado`) y al borde superior o inferior (`anclaje`) del contenedor.
+ * `derecha` conserva su nombre por compatibilidad con posiciones ya guardadas: es la distancia al
+ * borde del lado de anclaje (derecho o izquierdo). */
 export interface PosicionFlotante {
   derecha: number;
   vertical: number;
@@ -27,10 +29,11 @@ const guardar = (clave: string, valor: unknown) => {
 
 /**
  * Panel flotante sobre el mapa que se puede arrastrar (desde su encabezado) y colapsar. Queda
- * anclado a la esquina derecha superior o inferior, nunca se sale del contenedor (también al
+ * anclado a una esquina (derecha o izquierda, superior o inferior), nunca se sale del contenedor (también al
  * cambiar el tamaño de la ventana), y posición y estado colapsado se recuerdan en el navegador.
  */
-export function usePanelFlotante(clave: string, inicial: PosicionFlotante, anclaje: 'arriba' | 'abajo') {
+export function usePanelFlotante(clave: string, inicial: PosicionFlotante, anclaje: 'arriba' | 'abajo',
+    lado: 'derecha' | 'izquierda' = 'derecha') {
   const [colapsado, setColapsado] = useState(() => leer(`${clave}.colapsado`, false));
   const [posicion, setPosicion] = useState<PosicionFlotante>(() => {
     const guardada = leer<Partial<PosicionFlotante>>(`${clave}.posicion`, inicial);
@@ -70,7 +73,7 @@ export function usePanelFlotante(clave: string, inicial: PosicionFlotante, ancla
       if (!a) return;
       const dy = e.clientY - a.y;
       setPosicion(acotar({
-        derecha: a.inicio.derecha - (e.clientX - a.x),
+        derecha: lado === 'derecha' ? a.inicio.derecha - (e.clientX - a.x) : a.inicio.derecha + (e.clientX - a.x),
         vertical: anclaje === 'arriba' ? a.inicio.vertical + dy : a.inicio.vertical - dy,
       }));
     },
@@ -92,9 +95,10 @@ export function usePanelFlotante(clave: string, inicial: PosicionFlotante, ancla
     });
   };
 
-  const style: React.CSSProperties = anclaje === 'arriba'
-    ? { right: posicion.derecha, top: posicion.vertical }
-    : { right: posicion.derecha, bottom: posicion.vertical };
+  const style: React.CSSProperties = {
+    ...(lado === 'derecha' ? { right: posicion.derecha } : { left: posicion.derecha }),
+    ...(anclaje === 'arriba' ? { top: posicion.vertical } : { bottom: posicion.vertical }),
+  };
 
   return {
     ref,

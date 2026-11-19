@@ -22,7 +22,7 @@ import {
 import { Order, OrderStatus, OrderUrgency } from '../types/order';
 import { BreakdownInfo, BreakdownType, Vehicle, VehicleType, VehicleStatus } from '../types/vehicle';
 import { Route, Warehouse, BlockedStreet, Point } from '../types/route';
-import { generateManhattanPath, isSegmentBlocked, normalizeManhattanPath } from './manhattan';
+import { generateManhattanPath, normalizeManhattanPath } from './manhattan';
 import { parseBackendSimulatedTime } from './backendTime';
 import { BREAKDOWN_LEVEL_CONFIGS } from './vehicleBreakdown';
 import { keepRecentOrders, MAX_LOADED_ORDERS } from './shipmentList';
@@ -497,13 +497,16 @@ export function adaptRuta(
   // dto.geometria es el camino real que CalculadorDistancia uso para evaluar la ruta en el
   // backend (respeta bloqueos vigentes via A*) -- ya no se recalcula una aproximacion local salvo
   // que venga vacia (ruta sin paradas, o backend viejo sin este campo todavia en cache).
+  // Bug real corregido (reporte: "hay caminos que no se grafican completamente"): antes, si la
+  // geometría del backend tocaba un bloqueo visible -- incluidos los que aún no empiezan --, se
+  // descartaba y se generaba otra desde el ORIGEN de la ruta (el almacén). Ese camino no pasaba
+  // por la posición actual del vehículo, el motor no podía empalmarlo (getRutaVisible) y la línea
+  // se cortaba a pocas cuadras. La geometría del backend es la que el simulador recorre (ya
+  // considera cuándo rige cada bloqueo): se usa siempre que exista.
   let waypoints: Point[] = dto.geometria.length > 0
     ? normalizeManhattanPath(dto.geometria.map(parseNodo))
     : [];
-  const geometriaCruzaBloqueo = waypoints.some((point, index) =>
-    index > 0 && isSegmentBlocked(waypoints[index - 1], point, bloqueos)
-  );
-  if (waypoints.length === 0 || geometriaCruzaBloqueo) {
+  if (waypoints.length === 0) {
     waypoints = [origin];
     let cursor = origin;
     for (const punto of puntos) {

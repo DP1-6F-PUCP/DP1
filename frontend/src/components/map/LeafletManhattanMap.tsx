@@ -1,21 +1,65 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Coffee, MapPin, Warehouse as WarehouseGlyph } from 'lucide-react';
+import { Coffee, MapPin } from 'lucide-react';
+import { AlmacenSolido, EstrellaCentral } from './AlmacenSolido';
 import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Warehouse, Vehicle, BlockedStreet, Order, Route } from '../../types';
 import { GRID_WIDTH_KM, GRID_HEIGHT_KM, normalizeManhattanPath } from '../../utils/manhattan';
 import {
-  getVehicleSemaforoStatus,
   BREAKDOWN_LEVEL_CONFIGS,
   getBreakdownLevelConfig,
   VEHICLE_TYPE_META,
 } from '../../utils/vehicleStatus';
-import { useSemaforoStore } from '../../store/semaforoStore';
 import { getWarehouseStockStatus } from '../../utils/warehouseStock';
 import { vehicleIdsCarryingOrder } from '../../utils/orderRoutes';
 import { fixedDashOffset, routeLineKey } from '../../utils/routeLine';
 import { simulationEngine } from '../../engine/simulationEngine';
+
+/** Acciones del mapa que usan los controles propios (ControlesMapa). */
+export interface ApiMapa {
+  acercar: () => void;
+  alejar: () => void;
+  encuadrar: () => void;
+  /** Centra el mapa en un punto de la grilla (acercando si está muy lejos). */
+  centrar: (x: number, y: number) => void;
+}
+
+/**
+ * Hace que el cuadro (tooltip) de un marcador siempre quepa dentro del mapa: por defecto se abre
+ * encima, pero si el punto está cerca del borde superior se abre debajo, y si está pegado a un
+ * costado se corre hacia adentro. Antes siempre se abría encima y en la fila superior quedaba
+ * recortado (el mapa oculta lo que sale de su borde).
+ */
+const tooltipQueCabe = (
+  marker: L.Marker,
+  getMapa: () => L.Map | null,
+  despeje: { arriba: number; abajo: number },
+) => {
+  const MARGEN = 6;
+  marker.on('tooltipopen', (e) => {
+    const tooltip = (e as L.TooltipEvent).tooltip;
+    const mapa = getMapa();
+    const el = tooltip.getElement();
+    if (!mapa || !el) return;
+    const p = mapa.latLngToContainerPoint(marker.getLatLng());
+    const anchoMapa = mapa.getSize().x;
+    const abajo = p.y - despeje.arriba - el.offsetHeight < MARGEN;
+    const mitad = el.offsetWidth / 2;
+    const corrimiento = p.x - mitad < MARGEN ? MARGEN + mitad - p.x
+      : p.x + mitad > anchoMapa - MARGEN ? anchoMapa - MARGEN - mitad - p.x : 0;
+    tooltip.options.direction = abajo ? 'bottom' : 'top';
+    tooltip.options.offset = L.point(corrimiento, abajo ? despeje.abajo : -despeje.arriba);
+    tooltip.update();
+  });
+};
+
+/**
+ * Nombre del tipo sin la sigla ("Auto", "Moto", "Bici"): el código del vehículo (TA03, TM14, TB01) ya
+ * la lleva, así que "TA03 · Auto · TA" la repetía.
+ */
+const nombreTipo = (tipo: Vehicle['type']): string =>
+  (VEHICLE_TYPE_META[tipo]?.shortLabel ?? tipo).split(' · ')[0];
 
 const getVehicleLoadStatus = (vehicle: Vehicle) => {
   const fillRatio = vehicle.capacity > 0 ? vehicle.currentLoad / vehicle.capacity : 0;
@@ -64,29 +108,40 @@ const iconoRefrigerio = renderToStaticMarkup(
 const EXTENSION_VEHICULO = 28;
 /** Tamaño (px) natural del ícono de almacén (solo la imagen, sin recuadro). */
 const TAMANO_ALMACEN = 24;
-/** Ningún ícono (vehículo o almacén) puede ocupar más de 2×2 cuadras de la grilla. */
-const CUADRAS_MAX_ICONO = 2;
+/**
+ * Regla del profesor: ningún ícono puede tapar un nodo (ni pasar de 2×2 cuadras). Un ícono de 2
+ * cuadras centrado en su nodo llega justo a los 8 nodos vecinos, así que se deja margen:
+ *  - centrados en su nodo (vehículo, almacén): a lo más 1.6 cuadras de lado;
+ *  - pin de destino (punta en el nodo, crece hacia arriba): a lo más 0.9 cuadras de alto, para no
+ *    llegar al nodo de arriba;
+ *  - bolita de "N detenidos" (al lado del almacén): dentro de la cuadra vecina, sin tocar nodos.
+ */
+const LADO_MAX_CUADRAS = 1.6;
+const ALTO_MAX_PIN_CUADRAS = 0.9;
+
+/** Distintivo del almacén central, ya en HTML para el divIcon. */
+const estrellaCentral = renderToStaticMarkup(<EstrellaCentral size={11} />);
 
 /**
  * Escala de los íconos según el zoom: en CRS.Simple una cuadra (1 unidad) mide 2^zoom px. Al
- * alejar, el ícono se achica para no pasar de 2×2 cuadras; al acercar, nunca crece más que su
+ * alejar, el ícono se achica para respetar los topes de arriba; al acercar, nunca crece más que su
  * tamaño natural. Se publica como variables CSS en el contenedor, así no hay que regenerar los
  * íconos en cada zoom.
  */
 const actualizarEscalaIconos = (map: L.Map) => {
   const pxCuadra = map.getZoomScale(map.getZoom(), 0);
-  const maxPx = CUADRAS_MAX_ICONO * pxCuadra;
+  const ladoMax = LADO_MAX_CUADRAS * pxCuadra;
+  const altoPinMax = ALTO_MAX_PIN_CUADRAS * pxCuadra;
   const contenedor = map.getContainer();
-  contenedor.style.setProperty('--escala-vehiculo', String(Math.min(1, maxPx / EXTENSION_VEHICULO)));
-  contenedor.style.setProperty('--escala-almacen', String(Math.min(1, maxPx / TAMANO_ALMACEN)));
-  // Pin de destino: 28 px; seleccionado, con halo y aro, ocupa 44×48 (se toma el lado mayor).
-  contenedor.style.setProperty('--escala-pin', String(Math.min(1, maxPx / 28)));
-  contenedor.style.setProperty('--escala-pin-sel', String(Math.min(1, maxPx / 48)));
-  // Bolita de "N vehículos detenidos": 24 px + distintivo de averías (~30 px). Se escala desde su
-  // punto de anclaje, así también se achica la separación respecto del almacén.
-  contenedor.style.setProperty('--escala-grupo', String(Math.min(1, maxPx / 30)));
+  contenedor.style.setProperty('--escala-vehiculo', String(Math.min(1, ladoMax / EXTENSION_VEHICULO)));
+  contenedor.style.setProperty('--escala-almacen', String(Math.min(1, ladoMax / TAMANO_ALMACEN)));
+  // Pin: 28 px de alto sobre su punta; seleccionado, el halo sube 40 px sobre la punta.
+  contenedor.style.setProperty('--escala-pin', String(Math.min(1, altoPinMax / 28)));
+  contenedor.style.setProperty('--escala-pin-sel', String(Math.min(1, altoPinMax / 40)));
+  // Bolita de "N vehículos detenidos": ocupa de 4 a 33 px hacia arriba y de 12 a 36 px a la derecha
+  // de su punto (anclaje); con 36 px ≤ 0.85 cuadra queda dentro de la cuadra vecina, sin tocar nodos.
+  contenedor.style.setProperty('--escala-grupo', String(Math.min(1, (0.85 * pxCuadra) / 36)));
 };
-
 /**
  * Auto visto desde arriba con el frente hacia arriba (parabrisas grande arriba, luneta abajo).
  * Rotado con el rumbo apunta siempre hacia donde avanza; un auto "de frente" (CarFront) quedaba de
@@ -138,6 +193,10 @@ export interface LeafletManhattanMapProps {
   onSelectWarehouse?: (warehouse: Warehouse | null) => void;
   onSelectBlock?: (block: BlockedStreet | null) => void;
   onSelectOrder?: (order: Order | null) => void;
+  /** Clic derecho sobre un vehículo (para inducir una avería); `punto` en px del contenedor del mapa. */
+  onVehicleContextMenu?: (vehicleId: string, punto: { x: number; y: number }) => void;
+  /** Acciones para los controles del mapa (se dibujan fuera, en la capa de los paneles flotantes). */
+  onApiMapa?: (api: ApiMapa) => void;
   showBlockedStreets?: boolean;
   showProjectedRoutes?: boolean;
   showCoverageZones?: boolean;
@@ -168,6 +227,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   onSelectWarehouse,
   onSelectBlock,
   onSelectOrder,
+  onVehicleContextMenu,
+  onApiMapa,
   showBlockedStreets = true,
   showProjectedRoutes = true,
   showOrders = false,
@@ -178,7 +239,6 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   cityHeight = GRID_HEIGHT_KM,
   className = '',
 }) => {
-  const umbralesSemaforo = useSemaforoStore((s) => s.umbrales);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
@@ -208,6 +268,19 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   const selectedOrderIdRef = useRef(selectedOrderId);
   const onSelectOrderRef = useRef(onSelectOrder);
   const vehiclesRef = useRef<Vehicle[]>(vehicles);
+  // Marcadores de almacén persistentes (se actualizan, no se recrean) y lo que lee su click.
+  const warehouseMarkersRef = useRef(new Map<string, L.Marker>());
+  const warehousesRef = useRef(warehouses);
+  warehousesRef.current = warehouses;
+  const selectedWarehouseIdRef = useRef(selectedWarehouseId);
+  selectedWarehouseIdRef.current = selectedWarehouseId;
+  const onSelectWarehouseRef = useRef(onSelectWarehouse);
+  onSelectWarehouseRef.current = onSelectWarehouse;
+  /** Vuelve a mostrar toda la ciudad (botón "Ver toda la ciudad"). */
+  const encuadrarRef = useRef<() => void>(() => {});
+  // El handler del marcador se registra una sola vez al crearlo: se lee el callback vigente de aquí.
+  const menuContextualRef = useRef(onVehicleContextMenu);
+  menuContextualRef.current = onVehicleContextMenu;
   const onSelectVehicleRef = useRef(onSelectVehicle);
   const isDarkThemeRef = useRef(isDarkTheme);
   useEffect(() => {
@@ -233,7 +306,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     const map = L.map(mapContainerRef.current, {
       crs: L.CRS.Simple,
       attributionControl: false,
-      zoomControl: true,
+      zoomControl: false, // controles propios con el estilo de la app (ver ControlesMapa)
       scrollWheelZoom: true,
       doubleClickZoom: true,
       touchZoom: true,
@@ -270,12 +343,48 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
     // Ajuste a la grilla completa, sin animacion (ver opciones del mapa). Un pequeño margen evita
     // que los marcadores del borde (x=70, y=50) queden cortados a la mitad.
+    // Mientras nadie movió la vista, cada cambio de tamaño vuelve a encuadrar la ciudad. Una vez que
+    // el usuario acercó, arrastró o centró algo (p. ej. el pedido de los indicadores, que además abre
+    // la barra lateral y achica el mapa), el cambio de tamaño conserva el centro: antes el
+    // ResizeObserver reencuadraba toda la ciudad y deshacía el centrado.
+    let vistaManual = false;
     const ajustar = () => {
       const m = mapInstanceRef.current;
       if (!m) return;
+      if (vistaManual) {
+        m.invalidateSize({ animate: false, pan: false });
+        if (destinoCentrado) m.setView(destinoCentrado, m.getZoom(), { animate: false });
+        return;
+      }
       m.invalidateSize({ animate: false });
       m.fitBounds(bounds, { padding: [12, 12], animate: false });
     };
+    // Último punto pedido con "centrar": se mantiene en el medio si el mapa cambia de tamaño justo
+    // después (la barra lateral se abre con animación); lo suelta en cuanto el usuario mueve la vista.
+    let destinoCentrado: L.LatLngExpression | null = null;
+    const tomarControl = () => { vistaManual = true; destinoCentrado = null; };
+    map.on('dragstart dblclick', tomarControl);
+    mapContainerRef.current.addEventListener('keydown', tomarControl);
+    mapContainerRef.current.addEventListener('wheel', tomarControl, { passive: true });
+    encuadrarRef.current = () => {
+      vistaManual = false;
+      destinoCentrado = null;
+      mapInstanceRef.current?.fitBounds(bounds, { padding: [12, 12], animate: true });
+    };
+    // Paso de zoom completo en los botones: la rueda usa 0.1 (zoomDelta) y con eso cada clic en
+    // +/− acercaba apenas un 7 % y no se notaba.
+    onApiMapa?.({
+      acercar: () => { tomarControl(); mapInstanceRef.current?.zoomIn(1); },
+      alejar: () => { tomarControl(); mapInstanceRef.current?.zoomOut(1); },
+      encuadrar: () => encuadrarRef.current(),
+      centrar: (x, y) => {
+        const mm = mapInstanceRef.current;
+        if (!mm) return;
+        vistaManual = true;
+        destinoCentrado = [y, x];
+        mm.setView([y, x], Math.max(mm.getZoom(), 4.5), { animate: true }); // ~22 px por cuadra
+      },
+    });
     ajustar();
     actualizarEscalaIconos(map);
     // 'zoom' se dispara también durante la animación y al reajustar por cambio de tamaño.
@@ -510,6 +619,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         marker.unbindTooltip();
       } else {
         marker = L.marker([order.destination.y, order.destination.x], { icon, zIndexOffset });
+        // Pin: la punta está en el punto y el ícono crece hacia arriba.
+        tooltipQueCabe(marker, () => mapInstanceRef.current, { arriba: 28, abajo: 8 });
         marker.on('click', (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
           const actual = ordersRef.current.find((item) => item.id === order.id);
@@ -519,7 +630,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       }
 
       marker.bindTooltip(
-        `<strong>${order.code}</strong><br />${order.clientId || 'Cliente no informado'}<br />${statusLabels[order.status]}<br />(${order.destination.x}, ${order.destination.y})`,
+        // Con rótulos: sin ellos el código del cliente (c4995) parecía parte del código del pedido.
+        `<strong>${order.code}</strong><br />`
+          + `<strong>Cliente:</strong> ${order.clientId || 'no informado'}<br />`
+          + `<strong>Estado:</strong> ${statusLabels[order.status]}<br />`
+          + `<strong>Destino:</strong> (${order.destination.x}, ${order.destination.y})`,
         {
           direction: 'top',
           offset: [0, isSelected ? -36 : -28],
@@ -642,9 +757,21 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   }, [showProjectedRoutes, vehicles, routes, orders, selectedVehicleId, selectedOrderId, cityWidth, cityHeight]);
 
   // 5. Render Warehouses (tooltip on hover, left inspector popup on click)
+  //
+  // Bug real corregido (reporte: "al pasar el mouse sobre un almacén el cuadrito parpadea"): antes
+  // se borraban y recreaban TODOS los marcadores en cada actualización (varias por segundo mientras
+  // se mueven los vehículos), lo que cerraba y reabría el tooltip. Ahora cada marcador se crea una
+  // vez y solo se actualiza lo que cambió (ícono, contenido del tooltip, posición).
   useEffect(() => {
     const group = warehousesLayerGroupRef.current;
-    group.clearLayers();
+    const marcadores = warehouseMarkersRef.current;
+    const vigentes = new Set(warehouses.map((w) => w.id));
+    for (const [id, marcador] of marcadores) {
+      if (!vigentes.has(id)) {
+        group.removeLayer(marcador);
+        marcadores.delete(id);
+      }
+    }
 
     warehouses.forEach((w) => {
       const isSelected = selectedWarehouseId === w.id;
@@ -658,9 +785,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       // Solo la imagen, sin recuadro ni contorno (igual que los vehículos). El glifo lleva el color
       // del semáforo de stock (gris si está vacío) y la selección se marca con un resplandor.
       const glyphColor = stock.hex;
-      const glyph = renderToStaticMarkup(
-        <WarehouseGlyph size={TAMANO_ALMACEN} strokeWidth={2.4} color={glyphColor} aria-hidden />
-      );
+      const glyph = renderToStaticMarkup(<AlmacenSolido color={glyphColor} size={TAMANO_ALMACEN} />);
       const resplandor = isSelected
         ? `drop-shadow(0 0 2px ${isDarkTheme ? '#38bdf8' : '#1F3864'}) drop-shadow(0 0 4px ${isDarkTheme ? '#38bdf8' : '#1F3864'})`
         : 'none';
@@ -681,25 +806,13 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
             transform-origin: center;
           ">
             ${glyph}
-            ${isInfinite ? `<span style="
-              position: absolute;
-              top: 0;
-              right: 0;
-              width: 9px;
-              height: 9px;
-              border-radius: 50%;
-              background: #3b82f6;
-              color: #ffffff;
-              font: 700 6px/9px system-ui, sans-serif;
-              text-align: center;
-            ">P</span>` : ''}
+            ${isInfinite ? `<span style="position: absolute; top: -1px; right: -1px; z-index: 1; display: flex; line-height: 0;">${estrellaCentral}</span>` : ''}
           </div>
         `,
         iconSize: [TAMANO_ALMACEN, TAMANO_ALMACEN],
         iconAnchor: [TAMANO_ALMACEN / 2, TAMANO_ALMACEN / 2],
       });
 
-      const marker = L.marker([w.coords.y, w.coords.x], { icon: warehouseIcon, pane: 'warehouseMarkers' });
       const tooltipContent = isInfinite
         ? '<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px;"><strong>Oficina principal</strong><br/><strong>Stock:</strong> ilimitado</div>'
         : `
@@ -710,24 +823,32 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
             <div><strong>En tránsito:</strong> ${w.inTransit} paq</div>
           </div>
         `;
+      const existente = marcadores.get(w.id);
+      if (existente && group.hasLayer(existente)) {
+        // Solo lo que cambió: el tooltip abierto se actualiza en su lugar, sin cerrarse.
+        const pos = existente.getLatLng();
+        if (pos.lat !== w.coords.y || pos.lng !== w.coords.x) existente.setLatLng([w.coords.y, w.coords.x]);
+        if ((existente.getIcon().options as L.DivIconOptions).html !== warehouseIcon.options.html) existente.setIcon(warehouseIcon);
+        if (existente.getTooltip()?.getContent() !== tooltipContent) existente.setTooltipContent(tooltipContent);
+        return;
+      }
+
+      const marker = L.marker([w.coords.y, w.coords.x], { icon: warehouseIcon, pane: 'warehouseMarkers' });
+      tooltipQueCabe(marker, () => mapInstanceRef.current, { arriba: 14, abajo: 14 });
       marker.bindTooltip(tooltipContent, {
         direction: 'top',
         offset: [0, -14],
         opacity: 0.95,
       });
-
+      // Se registra una sola vez: lee la selección y el callback vigentes desde refs.
       marker.on('click', (e: L.LeafletMouseEvent) => {
         L.DomEvent.stopPropagation(e);
-        if (selectedWarehouseId === w.id) {
-          onSelectWarehouse?.(null);
-        } else {
-          onSelectWarehouse?.(w);
-        }
+        const actual = warehousesRef.current.find((x) => x.id === w.id) ?? w;
+        onSelectWarehouseRef.current?.(selectedWarehouseIdRef.current === w.id ? null : actual);
       });
-
       marker.addTo(group);
-    });
-  }, [warehouses, selectedWarehouseId, isDarkTheme, onSelectWarehouse, cityWidth, cityHeight]);
+      marcadores.set(w.id, marker);
+    });  }, [warehouses, selectedWarehouseId, isDarkTheme, onSelectWarehouse, cityWidth, cityHeight]);
 
   // 6. Render Vehicles (No balloon popups - triggers left inspector popup on click)
   //
@@ -751,9 +872,11 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
     vehicles.forEach((v) => {
       const isSelected = selectedVehicleId === v.id;
-      const semaforo = getVehicleSemaforoStatus(v, orders, simMinutes, umbralesSemaforo);
       const loadStatus = getVehicleLoadStatus(v);
-      const isDelayedOrBroken = semaforo.state === 'delayed' || v.status === 'broken';
+      // El color del vehículo es su carga. El plazo se ve en el pin de cada pedido: el rombo rojo de
+      // "retrasado" repetía esa información (y se confundía con el rojo de poca carga), así que el
+      // distintivo de esta esquina queda solo para las averías.
+      const isBroken = v.status === 'broken';
       const activeRoute = routes.find(
         (route) => route.vehicleId === v.id && route.status === 'in_progress'
       );
@@ -805,49 +928,24 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
                  perfil (avanzan "hacia la derecha") y se reflejan al ir hacia el oeste. -->
             <g class="vehicle-glyph" data-adelante="${v.type === 'car' ? 'arriba' : 'derecha'}">
               <g transform="translate(${-TAMANO_GLIFO / 2} ${-TAMANO_GLIFO / 2})">
-                ${vehicleIconMarkup}
+                <!-- Grupo propio para el pulso de "entregando": la rotación usa el atributo transform
+                     de .vehicle-glyph y un transform CSS ahí la pisaría. -->
+                <g class="glifo-pulso">${vehicleIconMarkup}</g>
               </g>
             </g>
 
-            <!-- Geometric accent / corner badge for delayed or broken vehicles -->
+            <!-- Distintivo de avería (A1/A2/A3 con el color de su tipo), esquina superior derecha -->
             ${
-              isDelayedOrBroken
-                ? v.status === 'broken'
-                  ? `<circle
-                    cx="8.2"
-                    cy="-8.2"
-                    r="5.8"
-                    fill="#ffffff"
-                    stroke="${breakdownColor}"
-                    stroke-width="1.5"
-                  />
-                  <text
-                    x="8.2"
-                    y="-7.7"
-                    text-anchor="middle"
-                    dominant-baseline="middle"
-                    font-family="system-ui, -apple-system, sans-serif"
-                    font-size="5.6"
-                    font-weight="800"
-                    fill="${breakdownColor}"
-                  >${breakdownBadge}</text>`
-                  : `<rect
-                    x="6.2"
-                    y="-10.2"
-                    width="3.8"
-                    height="3.8"
-                    rx="0.5"
-                    fill="#C62828"
-                    stroke="#ffffff"
-                    stroke-width="0.9"
-                    transform="rotate(45 8.1 -8.3)"
-                  />`
+              isBroken
+                ? `<circle cx="8.2" cy="-8.2" r="5.8" fill="#ffffff" stroke="${breakdownColor}" stroke-width="1.5" />
+                   <text x="8.2" y="-7.7" text-anchor="middle" dominant-baseline="middle"
+                     font-family="system-ui, -apple-system, sans-serif" font-size="5.6" font-weight="800"
+                     fill="${breakdownColor}">${breakdownBadge}</text>`
                 : ''
             }
-
             <!-- Refrigerio: taza de café sobre un círculo ámbar, en la esquina superior izquierda -->
             ${
-              !isDelayedOrBroken && isEnRefrigerio
+              !isBroken && isEnRefrigerio
                 ? `<circle cx="-8.5" cy="-8.5" r="5.5" fill="#FBBF24" stroke="#ffffff" stroke-width="0.9" />
                    ${iconoRefrigerio}`
                 : ''
@@ -861,26 +959,22 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
       // Con decenas de unidades detenidas en un mismo almacén, el abanico de separación queda más
       // chico que el propio marcador: una incidencia o la selección quedaban tapadas por el resto.
-      const zIndexOffset = isSelected ? 2000 : isDelayedOrBroken ? 1000 : 0;
+      const zIndexOffset = isSelected ? 2000 : isBroken ? 1000 : 0;
 
       const fillRatio = v.capacity > 0 ? v.currentLoad / v.capacity : 0;
       const pct = Math.round(fillRatio * 100);
       const estadoTexto = isReturning ? 'Regresando al almacén' : ETIQUETA_ESTADO[v.status] ?? v.status;
-      const typeMeta = VEHICLE_TYPE_META[v.type];
-      const breakdownCfg = v.status === 'broken' ? getBreakdownLevelConfig(breakdownType) : null;
       // Solo el tipo y cuánto tiempo no estará disponible: el detalle completo (tiempo en el sitio,
       // turno de retorno) está en su card del panel. Con todo junto la tooltip tapaba el mapa.
+      // Solo el tipo ("Avería tipo 3"): la duración y el detalle están en la card del panel.
       const averiaTexto = v.status === 'broken'
-        ? (breakdownCfg
-          ? `${breakdownCfg.label}<br/><span style="font-size:10px;font-weight:500;opacity:0.9">${breakdownCfg.unavailableText.split(' · ')[0]}</span>`
-          : 'Avería: tipo no informado')
+        ? (breakdownType ? `Avería tipo ${breakdownType}` : 'Avería: tipo no informado')
         : '';
       // Las tooltips de Leaflet no parten líneas (white-space: nowrap): se limita el ancho y se
       // permite el salto de línea para que un texto largo no estire la tooltip sobre el mapa.
       const tooltipContent = `
         <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; line-height: 1.4; padding: 2px 4px; min-width: 145px; max-width: 200px; white-space: normal;">
-          <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${v.code} · ${typeMeta.shortLabel}</div>
-          <div><strong>Tipo:</strong> ${typeMeta.label}</div>
+          <div style="font-weight: 700; font-size: 12px; margin-bottom: 2px;">${v.code} · ${nombreTipo(v.type)}</div>
           <div><strong>Ocupación:</strong> ${v.currentLoad} / ${v.capacity} paq (${pct}%)</div>
           <div><strong>Estado:</strong> ${estadoTexto}</div>
           ${averiaTexto ? `<div style="margin-top:2px;color:${breakdownColor};"><strong>${averiaTexto}</strong></div>` : ''}
@@ -891,10 +985,17 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
       if (!marker) {
         marker = L.marker([v.position.y, v.position.x], { icon: vehicleIcon, zIndexOffset });
+        tooltipQueCabe(marker, () => mapInstanceRef.current, { arriba: 14, abajo: 14 });
         marker.bindTooltip(tooltipContent, {
           direction: 'top',
           offset: [0, -14],
           opacity: 0.95,
+        });
+        // Clic derecho: menú para inducir una avería (pedido del profesor), en vez del menú del navegador.
+        marker.on('contextmenu', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          e.originalEvent.preventDefault();
+          menuContextualRef.current?.(v.id, { x: e.containerPoint.x, y: e.containerPoint.y });
         });
         marker.on('click', (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
@@ -916,7 +1017,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         marker.setTooltipContent(tooltipContent);
       }
     });
-  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, umbralesSemaforo, cityWidth, cityHeight]);
+  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, cityWidth, cityHeight]);
 
   // Suscripcion al motor de simulacion (engine/simulationEngine.ts): un callback por frame que
   // mueve los marcadores existentes segun la posicion ya interpolada que calcula el motor, y
@@ -987,14 +1088,14 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
           for (const vehicle of members) {
             const button = document.createElement('button');
             button.type = 'button';
-            const vTypeLabel = VEHICLE_TYPE_META[vehicle.type]?.shortLabel ?? vehicle.type;
+            const vTypeLabel = nombreTipo(vehicle.type);
             const bCfg = vehicle.status === 'broken' ? getBreakdownLevelConfig(vehicle.breakdownType) : null;
             const state = bCfg
               ? `${bCfg.code} · ${bCfg.label}`
               : vehicle.status === 'broken'
                 ? 'Averiado'
                 : ETIQUETA_ESTADO[vehicle.status];
-            button.textContent = `${vehicle.code} [${vTypeLabel}] · ${state} · ${vehicle.currentLoad}/${vehicle.capacity} paq`;
+            button.textContent = `${vehicle.code} · ${vTypeLabel} · ${state} · ${vehicle.currentLoad}/${vehicle.capacity} paq`;
             button.style.cssText = `display:block;width:100%;text-align:left;padding:8px;border:0;border-bottom:1px solid #64748b55;background:transparent;color:${bCfg ? bCfg.hex : 'inherit'};font-weight:${vehicle.status === 'broken' ? '700' : '400'};cursor:pointer;font-family:inherit;font-size:11.5px`;
             button.addEventListener('click', () => {
               const current = vehiclesRef.current.find((v) => v.id === vehicle.id);
