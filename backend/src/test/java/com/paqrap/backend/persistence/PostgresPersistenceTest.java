@@ -192,7 +192,7 @@ class PostgresPersistenceTest {
 
         EstadoOperacionDTO estado = new EstadoOperacionDTO(simInicio.plusDays(5), List.of(), List.of(),
                 List.of(), List.of(), List.of(),
-                new MetricasOperacionDTO(0f, 100f, 0, 0, 0, 0, 0), id);
+                new MetricasOperacionDTO(0f, 100f, 0, 0, 0, 0, 0)).conEjecucion(id);
         ReporteSimulacionDTO reporte = new ReporteSimulacionDTO(id, "CINCO_DIAS", "PERIODO_COMPLETADO",
                 Instant.now().minusSeconds(10), Instant.now(), 10000L,
                 simInicio, simInicio.plusDays(5), 432000000L, estado, List.of(), estado, List.of());
