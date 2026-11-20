@@ -70,6 +70,11 @@ export interface Vehicle {
   totalDelivered: number;
   homeWarehouseId: string;
   driverId?: string;
+  /** Salidas del almacén en ms simulados (VehiculoDTO.salidaAlmacen / salidaAlmacenAnterior). */
+  warehouseDepartures?: number[];
+  /** Avería activa: inicio y fin estimado en ms simulados. */
+  breakdownStartMs?: number;
+  breakdownEndMs?: number;
 }
 
 export type VehicleSemaforoState = 'on_time' | 'at_risk' | 'delayed' | 'inactive';

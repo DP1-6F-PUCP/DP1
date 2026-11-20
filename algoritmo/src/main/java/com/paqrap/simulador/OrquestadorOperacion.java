@@ -179,6 +179,12 @@ public class OrquestadorOperacion {
         this.todosLosBloqueos = new ArrayList<>(contextoInicial.bloqueos());
         this.todosLosMantenimientos = new ArrayList<>(contextoInicial.mantenimientos());
         this.cargadorRecursos = cargadorRecursos;
+        // Averías de arranque (ajustesIniciales): ya vienen aplicadas en la flota.
+        for (UnidadTransporte unidad : contextoInicial.vehiculos()) {
+            if (unidad.getEstado() == EstadoUnidad.AVERIADO) {
+                registrarAveriaEnHistorial(unidad);
+            }
+        }
 
         List<Pedido> pedidosValidos = new ArrayList<>();
         for (Pedido p : contextoInicial.pedidos()) {
@@ -520,12 +526,24 @@ public class OrquestadorOperacion {
                         // Entrega a medias (servicio iniciado y no terminado): nunca se abandona.
                         || r.getSecuenciaParadas().stream().anyMatch(p -> p.getHoraInicioServicio() != null
                                 && p.getEstado() != EstadoParada.CUMPLIDA);
+        // Rutas que ya salieron cargadas: por defecto SÍ se pueden reorganizar. Regla del profesor:
+        // "no existe replanificación; en cada corte los vehículos en ruta son almacenes móviles y se
+        // resuelve el problema completo". El producto es uno solo (P): lo que lleva a bordo una unidad
+        // liberada sirve a cualquier pedido sin volver a cargar (ClusterizadorPedidos usa aBordo como
+        // stock), así que un pedido que "cambia de vehículo" no es un paquete que salta de camión.
+        // Probado fijar esas rutas (paqrap.fijarCargadas=true) en el banco de 5 días, 16 fechas
+        // (2026-11-19): colapso medio 1,96 → 1,43 días, peor en las 16 fechas. Se deja como opción.
+        boolean fijarCargadas = Boolean.parseBoolean(System.getProperty("paqrap.fijarCargadas", "false"));
+        java.util.function.Predicate<Ruta> yaCargada = r -> fijarCargadas
+                && !r.tieneCargaPendiente() && !r.tieneTrasvasePendiente()
+                && r.getUnidadTransporte().getCargaABordo() > 0;
         Set<Ruta> liberadasPorUrgencia = modoLiberar
                 ? rutasALiberarPorUrgencia(urgentesSinRuta, rutasEnEjecucion.stream().filter(protegida.negate()).toList(),
                         instanteEvaluacion)
                 : Set.of();
         List<Ruta> rutasEnCurso = rutasEnEjecucion.stream()
                 .filter(r -> protegida.test(r)
+                        || (yaCargada.test(r) && sigueSiendoFactible(r, instanteEvaluacion))
                         || (("todas".equals(modoAbandono)
                                         ? nodosBloqueosNuevos.isEmpty()
                                         : modoLiberar
@@ -810,6 +828,34 @@ public class OrquestadorOperacion {
 
     public ReporteDesempeno getReporte() {
         return reporte;
+    }
+
+    /** Una avería ocurrida en la ejecución (provocada en caliente o al iniciar). */
+    public record RegistroAveria(String idUnidad, String tipoVehiculo, TipoAveria tipo, LocalDateTime inicio,
+            LocalDateTime finEstimado, LocalDateTime trasladoAlmacen, int x, int y) {
+    }
+
+    /** Historial de averías de la ejecución; solo crece (una por avería aplicada). */
+    private final List<RegistroAveria> historialAverias = new CopyOnWriteArrayList<>();
+
+    public List<RegistroAveria> getHistorialAverias() {
+        return List.copyOf(historialAverias);
+    }
+
+    private void registrarAveriaEnHistorial(UnidadTransporte unidad) {
+        Averia a = unidad.getAveriaActual();
+        if (a == null) return;
+        historialAverias.add(new RegistroAveria(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), a.tipo(),
+                a.fechaInicio(), a.fechaFinEstimada(), a.fechaTrasladoAlmacen(), unidad.getPosicion().x(),
+                unidad.getPosicion().y()));
+    }
+
+    /**
+     * Copia del calendario de mantenimientos conocido. Llamar desde el hilo del orquestador (p. ej.
+     * en el aviso de cierre de lote): {@code todosLosMantenimientos} crece en ese hilo.
+     */
+    public List<Mantenimiento> getMantenimientos() {
+        return List.copyOf(todosLosMantenimientos);
     }
 
     public EjecucionEscenario getEjecucionActual() {
@@ -1341,6 +1387,7 @@ public class OrquestadorOperacion {
                     unidad.setAveriaActual(new Averia(tipo, ahora, fin, permanenciaEnSitioHoras, fechaTraslado));
                     unidad.setEstado(EstadoUnidad.AVERIADO);
                     unidad.setActividadActual(com.paqrap.dominio.ActividadVehiculo.INACTIVO);
+                    registrarAveriaEnHistorial(unidad);
                     reporte.incrementarAverias();
                     eventosIncidenciaLote.add(motorSimulacion.registrarAveriaVehiculo(0.0, contextoProblema,
                             unidad.getIdUnidad(), unidad.getPosicion(), tipo.name()));

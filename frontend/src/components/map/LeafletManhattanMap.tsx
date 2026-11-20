@@ -15,6 +15,7 @@ import { getWarehouseStockStatus } from '../../utils/warehouseStock';
 import { vehicleIdsCarryingOrder } from '../../utils/orderRoutes';
 import { fixedDashOffset, routeLineKey } from '../../utils/routeLine';
 import { simulationEngine } from '../../engine/simulationEngine';
+import { useAveriasProgramadasStore } from '../../store/averiasProgramadasStore';
 
 /** Acciones del mapa que usan los controles propios (ControlesMapa). */
 export interface ApiMapa {
@@ -61,21 +62,20 @@ const tooltipQueCabe = (
 const nombreTipo = (tipo: Vehicle['type']): string =>
   (VEHICLE_TYPE_META[tipo]?.shortLabel ?? tipo).split(' · ')[0];
 
-const getVehicleLoadStatus = (vehicle: Vehicle) => {
-  const fillRatio = vehicle.capacity > 0 ? vehicle.currentLoad / vehicle.capacity : 0;
-
-  if (fillRatio >= 0.66) {
-    return { hex: '#16A34A', label: 'capacidad alta' };
-  }
-  if (fillRatio >= 0.33) {
-    return { hex: '#EAB308', label: 'capacidad media' };
-  }
-  return { hex: '#DC2626', label: 'pocos productos' };
-};
+/**
+ * Color del vehículo cuando no hay nada que señalar: neutro. Antes el color era su carga (verde /
+ * ámbar / rojo), pero la carga no pide ninguna acción del operador y el rojo de "poca carga" se
+ * leía como alarma; además, con 37 vehículos de colores, una avería o un vehículo que va al almacén
+ * no resaltaban. El semáforo queda donde sí avisa algo (pines de pedidos, stock de almacenes); la
+ * carga se ve en la tooltip, en el panel de flota y como filtro de la leyenda.
+ */
+// Modo oscuro: gris azulado claro y no blanco puro, que sobre el fondo oscuro "se corre" a tamaño
+// chico y borra la silueta.
+const COLOR_VEHICULO = { oscuro: '#CBD5E1', claro: '#1F3864' } as const;
 
 const ETIQUETA_ESTADO: Record<string, string> = {
   idle: 'Inactivo',
-  en_route: 'En ruta',
+  en_route: 'Viajando',
   delivering: 'Entregando',
   on_break: 'Refrigerio',
   broken: 'Averiado',
@@ -147,7 +147,18 @@ const actualizarEscalaIconos = (map: L.Map) => {
  * Rotado con el rumbo apunta siempre hacia donde avanza; un auto "de frente" (CarFront) quedaba de
  * cabeza al bajar por la pantalla.
  */
-const autoVistaSuperior = (color: string) => `
+/** Luminancia aproximada (0-1) de un color #rrggbb: decide si los vidrios del auto van oscuros o claros. */
+const esColorClaro = (hex: string) => {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 > 0.6;
+};
+
+const autoVistaSuperior = (color: string) => {
+  // Vidrios en contraste con la carrocería: claros sobre un auto oscuro (modo claro, avería) y
+  // oscuros sobre uno claro (modo oscuro). Antes siempre eran celeste claro y, con la carrocería
+  // clara del modo oscuro, el auto se veía como un rectángulo liso.
+  const vidrio = esColorClaro(color) ? '#334155' : '#e0f2fe';
+  return `
   <svg xmlns="http://www.w3.org/2000/svg" width="${TAMANO_GLIFO}" height="${TAMANO_GLIFO}" viewBox="0 0 24 24" aria-hidden="true">
     <rect x="4.3" y="5.2" width="2.2" height="4.2" rx="1" fill="#1f2937"/>
     <rect x="17.5" y="5.2" width="2.2" height="4.2" rx="1" fill="#1f2937"/>
@@ -155,9 +166,17 @@ const autoVistaSuperior = (color: string) => `
     <rect x="17.5" y="14.8" width="2.2" height="4.2" rx="1" fill="#1f2937"/>
     <path d="M8.2 2.2h7.6a2.6 2.6 0 0 1 2.6 2.6v14.4a2.6 2.6 0 0 1-2.6 2.6H8.2a2.6 2.6 0 0 1-2.6-2.6V4.8a2.6 2.6 0 0 1 2.6-2.6z"
       fill="${color}"/>
-    <path d="M7.9 8.4Q12 6.7 16.1 8.4L15.3 10.9Q12 10 8.7 10.9Z" fill="#e0f2fe"/>
-    <path d="M8.9 17.3Q12 18.1 15.1 17.3L15.5 18.9Q12 19.7 8.5 18.9Z" fill="#e0f2fe" opacity="0.85"/>
+    <path d="M7.9 8.4Q12 6.7 16.1 8.4L15.3 10.9Q12 10 8.7 10.9Z" fill="${vidrio}"/>
+    <path d="M8.9 17.3Q12 18.1 15.1 17.3L15.5 18.9Q12 19.7 8.5 18.9Z" fill="${vidrio}" opacity="0.85"/>
   </svg>`;
+};
+
+/**
+ * Tamaño relativo del glifo por tipo, como en la realidad (y en proporción a lo que llevan: 24 / 8 / 4
+ * paquetes). Sin gastar color, ayuda a no confundir moto y bici, que de perfil se parecen. Todos
+ * quedan dentro del tope de LADO_MAX_CUADRAS: el más grande (auto) es el de siempre.
+ */
+const ESCALA_TIPO: Record<Vehicle['type'], number> = { car: 1, motorcycle: 0.85, bicycle: 0.7 };
 
 const getVehicleIconMarkup = (vehicle: Vehicle, color: string) => {
   const iconProps = {
@@ -283,6 +302,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
   menuContextualRef.current = onVehicleContextMenu;
   const onSelectVehicleRef = useRef(onSelectVehicle);
   const isDarkThemeRef = useRef(isDarkTheme);
+  const averiasProgramadas = useAveriasProgramadasStore((s) => s.pendientes);
   useEffect(() => {
     vehiclesRef.current = vehicles;
     onSelectVehicleRef.current = onSelectVehicle;
@@ -348,6 +368,29 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     // la barra lateral y achica el mapa), el cambio de tamaño conserva el centro: antes el
     // ResizeObserver reencuadraba toda la ciudad y deshacía el centrado.
     let vistaManual = false;
+    // Margen del encuadre según los paneles flotantes visibles (data-panel-mapa: controles a la
+    // izquierda; relojes e indicadores a la derecha): antes era 12 px parejo y el borde este quedaba
+    // bajo los relojes/indicadores y el oeste bajo los controles. Cada panel que tapa el mapa empuja
+    // el lado al que está más cerca; tope del 35 % del ancho para que la ciudad no quede diminuta.
+    const margenesEncuadre = (): L.FitBoundsOptions => {
+      const MARGEN = 12;
+      let izquierda = MARGEN;
+      let derecha = MARGEN;
+      const contenedor = mapContainerRef.current;
+      if (contenedor) {
+        const r = contenedor.getBoundingClientRect();
+        document.querySelectorAll<HTMLElement>('[data-panel-mapa]').forEach((panel) => {
+          const p = panel.getBoundingClientRect();
+          if (p.width === 0 || p.right <= r.left || p.left >= r.right || p.bottom <= r.top || p.top >= r.bottom) return;
+          if ((p.left + p.right) / 2 > r.left + r.width / 2) derecha = Math.max(derecha, r.right - p.left + 8);
+          else izquierda = Math.max(izquierda, p.right - r.left + 8);
+        });
+        const tope = r.width * 0.35;
+        izquierda = Math.min(izquierda, tope);
+        derecha = Math.min(derecha, tope);
+      }
+      return { paddingTopLeft: L.point(izquierda, MARGEN), paddingBottomRight: L.point(derecha, MARGEN) };
+    };
     const ajustar = () => {
       const m = mapInstanceRef.current;
       if (!m) return;
@@ -357,7 +400,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         return;
       }
       m.invalidateSize({ animate: false });
-      m.fitBounds(bounds, { padding: [12, 12], animate: false });
+      m.fitBounds(bounds, { ...margenesEncuadre(), animate: false });
     };
     // Último punto pedido con "centrar": se mantiene en el medio si el mapa cambia de tamaño justo
     // después (la barra lateral se abre con animación); lo suelta en cuanto el usuario mueve la vista.
@@ -369,7 +412,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
     encuadrarRef.current = () => {
       vistaManual = false;
       destinoCentrado = null;
-      mapInstanceRef.current?.fitBounds(bounds, { padding: [12, 12], animate: true });
+      mapInstanceRef.current?.fitBounds(bounds, { ...margenesEncuadre(), animate: true });
     };
     // Paso de zoom completo en los botones: la rueda usa 0.1 (zoomDelta) y con eso cada clic en
     // +/− acercaba apenas un 7 % y no se notaba.
@@ -872,10 +915,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
     vehicles.forEach((v) => {
       const isSelected = selectedVehicleId === v.id;
-      const loadStatus = getVehicleLoadStatus(v);
-      // El color del vehículo es su carga. El plazo se ve en el pin de cada pedido: el rombo rojo de
-      // "retrasado" repetía esa información (y se confundía con el rojo de poca carga), así que el
-      // distintivo de esta esquina queda solo para las averías.
+      // Color neutro salvo excepción (avería, va al almacén): ver COLOR_VEHICULO. El plazo se ve en el
+      // pin de cada pedido; el distintivo de esta esquina queda solo para las averías.
       const isBroken = v.status === 'broken';
       const activeRoute = routes.find(
         (route) => route.vehicleId === v.id && route.status === 'in_progress'
@@ -902,7 +943,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         ? breakdownColor
         : isReturning
           ? '#6B7280'
-          : loadStatus.hex;
+          : isDarkTheme ? COLOR_VEHICULO.oscuro : COLOR_VEHICULO.claro;
       const vehicleIconMarkup = getVehicleIconMarkup(v, bubbleFill);
       // Solo la imagen (pedido del profesor: sin burbuja, halo ni contorno). La selección se marca
       // con un resplandor, que es lo único que distingue al vehículo elegido en el mapa.
@@ -921,13 +962,13 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
             style="overflow: visible; cursor: pointer; display: block; filter: ${contornoGlifo};
               transform: scale(var(--escala-vehiculo, 1)); transform-origin: 22px 22px;"
           >
-            <title>${v.code}: ${v.currentLoad}/${v.capacity} paquetes, ${loadStatus.label}</title>
+            <title>${v.code}: ${v.currentLoad}/${v.capacity} paquetes</title>
 
             <!-- El propio vehículo es el marcador. El bucle de frames rota este grupo con el
                  rumbo: el auto se ve desde arriba (avanza "hacia arriba"); moto y bici se ven de
                  perfil (avanzan "hacia la derecha") y se reflejan al ir hacia el oeste. -->
             <g class="vehicle-glyph" data-adelante="${v.type === 'car' ? 'arriba' : 'derecha'}">
-              <g transform="translate(${-TAMANO_GLIFO / 2} ${-TAMANO_GLIFO / 2})">
+              <g transform="scale(${ESCALA_TIPO[v.type] ?? 1}) translate(${-TAMANO_GLIFO / 2} ${-TAMANO_GLIFO / 2})">
                 <!-- Grupo propio para el pulso de "entregando": la rotación usa el atributo transform
                      de .vehicle-glyph y un transform CSS ahí la pisaría. -->
                 <g class="glifo-pulso">${vehicleIconMarkup}</g>
@@ -967,6 +1008,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
       // Solo el tipo y cuánto tiempo no estará disponible: el detalle completo (tiempo en el sitio,
       // turno de retorno) está en su card del panel. Con todo junto la tooltip tapaba el mapa.
       // Solo el tipo ("Avería tipo 3"): la duración y el detalle están en la card del panel.
+      // Avería pedida por el operador que el backend aplicará al cerrar el siguiente lote.
+      const programada = v.status !== 'broken' ? averiasProgramadas[v.id] : undefined;
       const averiaTexto = v.status === 'broken'
         ? (breakdownType ? `Avería tipo ${breakdownType}` : 'Avería: tipo no informado')
         : '';
@@ -978,6 +1021,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
           <div><strong>Ocupación:</strong> ${v.currentLoad} / ${v.capacity} paq (${pct}%)</div>
           <div><strong>Estado:</strong> ${estadoTexto}</div>
           ${averiaTexto ? `<div style="margin-top:2px;color:${breakdownColor};"><strong>${averiaTexto}</strong></div>` : ''}
+          ${programada ? `<div style="margin-top:2px;color:${BREAKDOWN_COLORS[programada.tipo]};"><strong>⏳ Avería tipo ${programada.tipo} programada</strong> · próximo lote</div>` : ''}
         </div>
       `;
 
@@ -1017,7 +1061,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         marker.setTooltipContent(tooltipContent);
       }
     });
-  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, cityWidth, cityHeight]);
+  }, [vehicles, routes, selectedVehicleId, isDarkTheme, orders, simMinutes, onSelectVehicle, cityWidth, cityHeight, averiasProgramadas]);
 
   // Suscripcion al motor de simulacion (engine/simulationEngine.ts): un callback por frame que
   // mueve los marcadores existentes segun la posicion ya interpolada que calcula el motor, y

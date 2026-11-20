@@ -1,5 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { rutaPedidos } from '../utils/pedidosUrl';
+import { Faltan } from './Faltan';
 import {
+  ArrowRight,
+  ChevronRight,
   Clock,
   AlertTriangle,
   ChevronLeft,
@@ -7,85 +12,48 @@ import {
   ChevronUp,
   Car,
   Warehouse as WarehouseIcon,
-  Activity,
-  Search,
-  Truck,
   Package,
   MapPin,
   MinusCircle,
   X,
-  SlidersHorizontal,
   Coffee,
-  ArrowUp,
-  ArrowDown,
   Timer,
   Navigation,
   Box,
+  PackageCheck,
 } from 'lucide-react';
+import { pedidosEnServicio } from '../utils/estadoPedidos';
 import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useEscenario } from '../features/escenario/hooks/useEscenario';
 import { useMapStore } from '../store/mapStore';
 import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
 import { BreakdownType } from '../types';
 import { BreakdownModal } from './BreakdownModal';
-import { ConfigModal } from './ConfigModal';
-import { useToast } from './ToastProvider';
+import { useAveriasProgramadasStore } from '../store/averiasProgramadasStore';
+import { averiable } from '../features/flota/flotaUtils';
 import {
    getVehicleSemaforoStatus,
-  BREAKDOWN_LEVEL_CONFIGS,
   getBreakdownLevelConfig,
   VEHICLE_TYPE_META,
 } from '../utils/vehicleStatus';
 import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
-import { useSemaforoStore } from '../store/semaforoStore';
+import { useUmbrales } from '../store/umbralesStore';
+import { nivelCargaPct } from '../utils/filtrosMapa';
 import { getWarehouseStockStatus } from '../utils/warehouseStock';
 import {
   classifyWarehouseShipments,
   deliveryMs,
-  isDeliveredRecently,
-  isDueSoon,
   upcomingDepartureMs,
   WAREHOUSE_WINDOW_HOURS,
 } from '../utils/warehouseShipments';
-import {
-  isInShipmentListWindow,
-  newestOrdersFirst,
-  ordersToRender,
-  parseWindowHours,
-  SHIPMENT_MAX_RENDERED,
-  SHIPMENT_PAGE_SIZE,
-} from '../utils/shipmentList';
 import { useScenarioStore } from '../store/scenarioStore';
-import { MetricasStrip } from '../features/metricas/components/MetricasStrip';
 import { Vehicle } from '../types/vehicle';
-import { formatBackendSimulatedTime, parseBackendSimulatedTime } from '../utils/backendTime';
-
-type FleetSortKey =
-  | 'occupancy_asc'
-  | 'occupancy_desc'
-  | 'departure_asc'
-  | 'departure_desc'
-  | 'arrival_asc'
-  | 'arrival_desc'
-  | 'dist_remaining_asc'
-  | 'dist_remaining_desc'
-  | 'dist_traveled_asc'
-  | 'dist_traveled_desc';
-
-type DistanceSearchMode = 'none' | 'to_dest' | 'to_origin';
-
-/**
- * Rangos del filtro de flota por distancia por recorrer al destino (rúbrica E11), semiabiertos
- * [min, max[ en km. La grilla es de 1 km por celda, así que basta con la distancia Manhattan.
- */
-const FLEET_DISTANCE_RANGES = [
-  { key: '0-10', label: '0–10', min: 0, max: 10 },
-  { key: '10-20', label: '10–20', min: 10, max: 20 },
-  { key: '20-40', label: '20–40', min: 20, max: 40 },
-  { key: '40-200', label: '40–200', min: 40, max: 200 },
-] as const;
-
-type FleetDistanceFilter = 'all' | (typeof FLEET_DISTANCE_RANGES)[number]['key'];
+import {
+  formatBackendSimulatedTime,
+  formatFechaHoraCorta,
+  formatMinutoSimulado,
+  parseBackendSimulatedTime,
+} from '../utils/backendTime';
 
 function manhattanDist(ax: number, ay: number, bx: number, by: number): number {
   return Math.abs(ax - bx) + Math.abs(ay - by);
@@ -155,18 +123,20 @@ const StaticSection: React.FC<{
   </section>
 );
 
-const SemaforoBarra: React.FC<{ load: number; capacity: number }> = ({ load, capacity }) => {
+/**
+ * Carga a bordo: barra neutra (la carga NO es un semáforo: ni poca ni mucha carga es mala por sí
+ * sola). Mismo color que la barra de la tabla de Flota; el nivel (baja/media/alta, cortes de
+ * Configuración) va como texto, igual que el filtro de carga del mapa.
+ */
+const BarraCargaVehiculo: React.FC<{ load: number; capacity: number }> = ({ load, capacity }) => {
   const pct = capacity > 0 ? Math.min(100, Math.round((load / capacity) * 100)) : 0;
-  const barColor = pct >= 66 ? 'bg-emerald-500' : pct >= 33 ? 'bg-amber-500' : 'bg-rose-500';
-  const dotColor = pct >= 66 ? 'bg-emerald-400' : pct >= 33 ? 'bg-amber-400' : 'bg-rose-400';
-  const textColor = pct >= 66 ? 'text-emerald-300' : pct >= 33 ? 'text-amber-300' : 'text-rose-300';
+  const nivel = nivelCargaPct(pct);
   return (
-    <div className="flex items-center gap-1.5 w-full">
-      <span className={`h-2 w-2 rounded-full shrink-0 ${dotColor}`} />
+    <div className="flex items-center gap-1.5 w-full" title={`Carga ${nivel}`}>
       <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full transition-all bg-cyan-400" style={{ width: `${pct}%` }} />
       </div>
-      <span className={`text-[10px] font-mono-code font-bold shrink-0 ${textColor}`}>
+      <span className="text-[10px] font-mono-code font-bold shrink-0 text-slate-300">
         {load === 0 ? `Vacío (0/${capacity})` : `${load}/${capacity} (${pct}%)`}
       </span>
     </div>
@@ -175,112 +145,6 @@ const SemaforoBarra: React.FC<{ load: number; capacity: number }> = ({ load, cap
 
 const isVehicleReturning = (vehicle: Vehicle) =>
   vehicle.returningVisible ?? (vehicle.status === 'en_route' && vehicle.returnPath.length > 1);
-
-/** Criterios de orden de la flota; cada uno tiene su variante _asc y _desc en FleetSortKey. */
-const FLEET_SORT_OPTIONS = [
-  { base: 'occupancy', label: 'Ocupación' },
-  { base: 'departure', label: 'Salida' },
-  { base: 'arrival', label: 'Llegada' },
-  { base: 'dist_remaining', label: 'Distancia por recorrer' },
-  { base: 'dist_traveled', label: 'Distancia recorrida' },
-] as const;
-
-const FLEET_STATUS_OPTIONS = [
-  { key: 'all', label: 'Todos', dot: undefined },
-  { key: 'idle', label: 'Inactivos', dot: '#94A3B8' },
-  { key: 'en_route', label: 'En ruta', dot: '#38BDF8' },
-  { key: 'delivering', label: 'Entregando', dot: '#34D399' },
-  { key: 'on_break', label: 'Refrigerio', dot: '#FBBF24' },
-  { key: 'broken', label: 'Averiados', dot: '#F43F5E' },
-  { key: 'maintenance', label: 'Mantenimiento', dot: '#A78BFA' },
-] as const;
-
-/** Fila de filtro: etiqueta fija a la izquierda y controles a la derecha. */
-const FilterRow: React.FC<{ label: string; hint?: React.ReactNode; children: React.ReactNode }> = ({
-  label,
-  hint,
-  children,
-}) => (
-  <div className="grid grid-cols-[4.5rem_1fr] items-start gap-2">
-    <div className="pt-1.5 leading-tight">
-      <span className="text-[10px] font-semibold text-slate-400">{label}</span>
-      {hint && <span className="block text-[9px] text-slate-500">{hint}</span>}
-    </div>
-    <div className="min-w-0">{children}</div>
-  </div>
-);
-
-/**
- * Control segmentado: una sola opción activa. Con `columns` las opciones se reparten en una
- * grilla de varias filas (para etiquetas largas que no entran en una sola línea del panel).
- */
-function Segmented<T extends string | number>({
-  options,
-  value,
-  onChange,
-  columns,
-}: {
-  options: readonly { value: T; label: React.ReactNode; title?: string }[];
-  value: T;
-  onChange: (value: T) => void;
-  columns?: number;
-}) {
-  return (
-    <div
-      className={`${columns ? 'grid gap-0.5' : 'flex'} rounded-lg border border-slate-700/70 bg-slate-950/60 p-0.5`}
-      style={columns ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}
-    >
-      {options.map((option) => (
-        <button
-          key={String(option.value)}
-          type="button"
-          title={option.title}
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-          className={`flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[10.5px] font-medium transition-colors cursor-pointer ${
-            value === option.value
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const SortButton: React.FC<{
-  current: FleetSortKey;
-  onChange: (k: FleetSortKey) => void;
-}> = ({ current, onChange }) => {
-  const base = current.replace(/_(asc|desc)$/, '');
-  const isDesc = current.endsWith('_desc');
-  return (
-    <div className="flex items-center gap-1.5">
-      <select
-        value={base}
-        onChange={(event) => onChange(`${event.target.value}_${isDesc ? 'desc' : 'asc'}` as FleetSortKey)}
-        aria-label="Ordenar vehículos por"
-        className="min-w-0 flex-1 cursor-pointer rounded-lg border border-slate-700/70 bg-slate-950/60 px-2 py-1.5 text-[11px] text-slate-200 focus:border-blue-500 focus:outline-none"
-      >
-        {FLEET_SORT_OPTIONS.map((option) => (
-          <option key={option.base} value={option.base}>{option.label}</option>
-        ))}
-      </select>
-      <button
-        type="button"
-        onClick={() => onChange(`${base}_${isDesc ? 'asc' : 'desc'}` as FleetSortKey)}
-        title={isDesc ? 'De mayor a menor (clic para invertir)' : 'De menor a mayor (clic para invertir)'}
-        aria-label={isDesc ? 'Orden descendente' : 'Orden ascendente'}
-        className="flex h-[30px] shrink-0 items-center gap-1 rounded-lg border border-slate-700/70 bg-slate-950/60 px-2 text-[10.5px] font-medium text-slate-300 hover:border-blue-500 hover:text-white cursor-pointer"
-      >
-        {isDesc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
-        {isDesc ? 'Mayor' : 'Menor'}
-      </button>
-    </div>
-  );
-};
 
 interface SidebarRightProps {
   isCollapsed: boolean;
@@ -301,46 +165,67 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
   const setSelectedWarehouseId = useMapStore((s) => s.setSelectedWarehouseId);
   const selectedOrderId = useMapStore((s) => s.selectedOrderId);
   const setSelectedOrderId = useMapStore((s) => s.setSelectedOrderId);
-  const umbralesSemaforo = useSemaforoStore((s) => s.umbrales);
+  const pedidoOrigenId = useMapStore((s) => s.pedidoOrigenId);
+  const irAVehiculoDePedido = useMapStore((s) => s.irAVehiculoDePedido);
+  // Pedidos en servicio (su vehículo ya llegó): no pueden vencer; mismo criterio que Pedidos.
+  const enServicio = useMemo(() => pedidosEnServicio(orders, vehicles), [orders, vehicles]);
+  // Semáforo de vehículos por plazo: misma escala que los pedidos (Configuración → Semáforos):
+  // ámbar = en riesgo, rojo = vencido.
+  const umbrales = useUmbrales();
+  const umbralesSemaforo = useMemo(
+    () => ({ riesgoMinutos: umbrales.riesgoMinutos, retrasoMinutos: 0 }),
+    [umbrales.riesgoMinutos],
+  );
   const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
   const { reportBreakdown, isReportingBreakdown } = useVehicles();
-  const { addToast } = useToast();
+  // Averías pedidas que el backend aplicará al cerrar el siguiente lote (ver averiasProgramadasStore).
+  const averiasProgramadas = useAveriasProgramadasStore((s) => s.pendientes);
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'operation' | 'fleet' | 'shipments'>('operation');
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-  const [fleetSearchTerm, setFleetSearchTerm] = useState('');
-  const [fleetFilterType, setFleetFilterType] = useState<'all' | 'car' | 'motorcycle' | 'bicycle'>('all');
-  const [fleetFilterStatus, setFleetFilterStatus] = useState<
-    'all' | 'idle' | 'en_route' | 'delivering' | 'on_break' | 'broken' | 'maintenance'
-  >('all');
-  const [fleetFilterBreakdownType, setFleetFilterBreakdownType] = useState<'all' | BreakdownType>('all');
-  const [fleetSortKey, setFleetSortKey] = useState<FleetSortKey>('occupancy_desc');
-  const [fleetFilterDistance, setFleetFilterDistance] = useState<FleetDistanceFilter>('all');
-  const [isFleetFiltersOpen, setIsFleetFiltersOpen] = useState(true);
-  const [distSearchMode, setDistSearchMode] = useState<DistanceSearchMode>('none');
-  const [distSearchMinutes, setDistSearchMinutes] = useState('');
   const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
   const [warehouseInspectorTab, setWarehouseInspectorTab] = useState<'transit' | 'upcoming' | 'delivered'>('transit');
   const [expandedWarehouseId, setExpandedWarehouseId] = useState<string | null>(null);
-  const [shipmentSearchTerm, setShipmentSearchTerm] = useState('');
-  const [shipmentStatusFilter, setShipmentStatusFilter] = useState<
-    'all' | 'on_time' | 'at_risk' | 'delivered'
-  >('all');
-  const [shipmentWindowFilter, setShipmentWindowFilter] = useState<'all' | 'delivered' | 'due'>('all');
-  const [shipmentWindowHoursText, setShipmentWindowHoursText] = useState(String(WAREHOUSE_WINDOW_HOURS));
-  const shipmentWindowHours = parseWindowHours(shipmentWindowHoursText, WAREHOUSE_WINDOW_HOURS);
-  const [shipmentRenderCount, setShipmentRenderCount] = useState(SHIPMENT_PAGE_SIZE);
-
+  // Pedido de abrir el panel en una pestaña hecho desde otra página (ver mapStore.abrirPanel).
+  const solicitudPanel = useMapStore((s) => s.solicitudPanel);
+  const limpiarSolicitudPanel = useMapStore((s) => s.limpiarSolicitudPanel);
   useEffect(() => {
-    setShipmentRenderCount(SHIPMENT_PAGE_SIZE);
-  }, [shipmentSearchTerm, shipmentStatusFilter, shipmentWindowFilter, shipmentWindowHours]);
+    if (!solicitudPanel) return;
+    setActiveTab(solicitudPanel);
+    if (isCollapsed) onToggleCollapse();
+    limpiarSolicitudPanel();
+  }, [solicitudPanel, isCollapsed, onToggleCollapse, limpiarSolicitudPanel]);
 
-  const previousSelectedVehicleId = useRef<string | null>(selectedVehicleId);
-  const previousSelectedOrderId = useRef<string | null>(selectedOrderId);
+  const previousSelectedVehicleId = useRef<string | null>(null); // null: una selección hecha desde otra página (p. ej. Pedidos) abre su ficha al volver
+  const previousSelectedOrderId = useRef<string | null>(null); // null: una selección hecha desde otra página (p. ej. Pedidos) abre su ficha al volver
   const vehicleCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const orderCardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const warehouseCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
+
+  // Trae a la vista la card de lo seleccionado. Un solo requestAnimationFrame no alcanzaba: al
+  // volver de otra página (p. ej. Pedidos) el panel se monta colapsado, el efecto lo expande y
+  // cambia de pestaña, y la lista aún no existe en ese frame. Se reintenta frame a frame (hasta
+  // ~1 s) hasta que la card esté montada; luego se corrige una vez más al terminar la animación de
+  // ancho del panel (300 ms), que cambia los saltos de línea y con ello la altura de las cards.
+  const desplazamientoPendiente = useRef(0);
+  const llevarALaVista = useCallback((obtener: () => HTMLElement | undefined) => {
+    const turno = ++desplazamientoPendiente.current; // una selección nueva cancela la anterior
+    let intentos = 0;
+    const intentar = () => {
+      if (turno !== desplazamientoPendiente.current) return;
+      const elemento = obtener();
+      if (elemento) {
+        elemento.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        window.setTimeout(() => {
+          if (turno === desplazamientoPendiente.current) obtener()?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 350);
+        return;
+      }
+      if (++intentos < 60) requestAnimationFrame(intentar);
+    };
+    requestAnimationFrame(intentar);
+  }, []);
 
   useEffect(() => {
     const vehicleSelectionChanged = previousSelectedVehicleId.current !== selectedVehicleId;
@@ -352,13 +237,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     setExpandedVehicleId(selectedVehicleId);
     if (isCollapsed) onToggleCollapse();
 
-    requestAnimationFrame(() => {
-      vehicleCardRefs.current.get(selectedVehicleId)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    });
-  }, [selectedVehicleId, isCollapsed, onToggleCollapse]);
+    llevarALaVista(() => vehicleCardRefs.current.get(selectedVehicleId));
+  }, [selectedVehicleId, isCollapsed, onToggleCollapse, llevarALaVista]);
 
   useEffect(() => {
     const orderSelectionChanged = previousSelectedOrderId.current !== selectedOrderId;
@@ -367,18 +247,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     if (!selectedOrderId || !orderSelectionChanged) return;
 
     setActiveTab('shipments');
-    setShipmentSearchTerm('');
-    setShipmentStatusFilter('all');
-    setShipmentWindowFilter('all');
     if (isCollapsed) onToggleCollapse();
 
-    requestAnimationFrame(() => {
-      orderCardRefs.current.get(selectedOrderId)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    });
-  }, [selectedOrderId, isCollapsed, onToggleCollapse]);
+    llevarALaVista(() => orderCardRefs.current.get(selectedOrderId));
+  }, [selectedOrderId, isCollapsed, onToggleCollapse, llevarALaVista]);
 
   const currentSimulationMinute = estadoRaw?.marcaTiempoActual && ejecucion?.fechaInicioSimulada
     ? Math.max(
@@ -392,7 +264,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
   // Seleccionar un almacén en el mapa despliega su propia card en "Almacenes y capacidad" (no se
   // abre una card aparte): cambia a la pestaña Operación, abre el panel y la trae a la vista.
-  const previousSelectedWarehouseId = useRef<string | null>(selectedWarehouseId);
+  const previousSelectedWarehouseId = useRef<string | null>(null); // null: una selección hecha desde otra página (p. ej. Pedidos) abre su ficha al volver
   useEffect(() => {
     const warehouseSelectionChanged = previousSelectedWarehouseId.current !== selectedWarehouseId;
     previousSelectedWarehouseId.current = selectedWarehouseId;
@@ -402,13 +274,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     setExpandedWarehouseId(selectedWarehouseId);
     if (isCollapsed) onToggleCollapse();
 
-    requestAnimationFrame(() => {
-      warehouseCardRefs.current.get(selectedWarehouseId)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    });
-  }, [selectedWarehouseId, isCollapsed, onToggleCollapse]);
+    llevarALaVista(() => warehouseCardRefs.current.get(selectedWarehouseId));
+  }, [selectedWarehouseId, isCollapsed, onToggleCollapse, llevarALaVista]);
 
   const getWarehouseShipments = (warehouseId: string) =>
     classifyWarehouseShipments(orders, warehouseId, marcaVisibleMs);
@@ -439,14 +306,6 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     return destination ? manhattanDist(vehicle.position.x, vehicle.position.y, destination.x, destination.y) : 0;
   };
 
-  // Rango de distancia por recorrer del vehículo, o null si no tiene destino (inactivo / sin
-  // ruta): esos no caen en ningún rango, para no inflar [0–10[ como si estuvieran a 0 km.
-  const getVehicleDistanceRange = (vehicle: Vehicle): FleetDistanceFilter | null => {
-    if (!getVehicleDestination(vehicle)) return null;
-    const km = getVehicleDistanceToDestination(vehicle);
-    return FLEET_DISTANCE_RANGES.find((range) => km >= range.min && km < range.max)?.key ?? null;
-  };
-
   const getVehicleDistanceToOrigin = (vehicle: Vehicle) => {
     const assignedOrder = getVehicleOrders(vehicle)[0];
     const origin = warehouses.find((warehouse) => warehouse.id === vehicle.homeWarehouseId)?.coords
@@ -455,37 +314,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     return origin ? manhattanDist(vehicle.position.x, vehicle.position.y, origin.x, origin.y) : 0;
   };
 
-  const getVehicleDistanceTraveled = (vehicle: Vehicle) => {
-    const path = vehicle.historyPath.length > 1
-      ? vehicle.historyPath
-      : vehicle.trajectory.map((point) => ({ x: point.x, y: point.y }));
-    return path.reduce(
-      (total, point, index, path) =>
-        index === 0 ? total : total + manhattanDist(path[index - 1].x, path[index - 1].y, point.x, point.y),
-      0
-    );
-  };
-
   const handleConfirmBreakdown = (vehicleId: string, type: BreakdownType, reason: string) => {
-    reportBreakdown(
-      { vehicleId, type, reason },
-      {
-        onSuccess: () => {
-          addToast({
-            type: 'warning',
-            title: `Avería Tipo ${type} programada`,
-            description: `El vehículo ${vehicleId} se averiará en el próximo lote de planificación.`,
-          });
-        },
-        onError: (error) => {
-          addToast({
-            type: 'error',
-            title: `Error al averiar ${vehicleId}`,
-            description: error instanceof Error ? error.message : 'No se pudo programar la avería.',
-          });
-        },
-      }
-    );
+    // Aviso de "programada" / error: lo da useVehicles (useMutation), igual que el menú del mapa.
+    reportBreakdown({ vehicleId, type, reason });
   };
 
   // Métricas globales de la flota
@@ -495,8 +326,8 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     totalFleetCapacity > 0 ? Math.round((totalFleetLoad / totalFleetCapacity) * 100) : 0;
   const fleetAvailPercent = Math.max(0, 100 - fleetFillPercent);
 
-  const isFleetCritical = fleetFillPercent >= 85;
-  const isFleetWarning = fleetFillPercent >= 65 && fleetFillPercent < 85;
+  const isFleetCritical = fleetFillPercent >= umbrales.flotaSaturada;
+  const isFleetWarning = fleetFillPercent >= umbrales.flotaAlta && !isFleetCritical;
   const fleetSemaforoText = isFleetCritical
     ? 'text-rose-400'
     : isFleetWarning
@@ -513,136 +344,13 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
     ? 'bg-amber-500'
     : 'bg-emerald-500';
 
-  // Filtrado de vehículos: primero todo menos el rango de distancia (sobre esto se cuentan los
-  // chips de distancia), luego el rango y el orden.
-  const vehiclesBeforeDistanceFilter = vehicles.filter((v) => {
-    const matchesType = fleetFilterType === 'all' || v.type === fleetFilterType;
-    const matchesStatus = fleetFilterStatus === 'all' || v.status === fleetFilterStatus;
-    const matchesBreakdownType =
-      fleetFilterStatus !== 'broken' ||
-      fleetFilterBreakdownType === 'all' ||
-      v.breakdownType === fleetFilterBreakdownType;
-    const matchesSearch =
-      v.code.toLowerCase().includes(fleetSearchTerm.toLowerCase()) ||
-      v.id.toLowerCase().includes(fleetSearchTerm.toLowerCase());
-    const distance = distSearchMode === 'to_origin'
-      ? getVehicleDistanceToOrigin(v)
-      : getVehicleDistanceToDestination(v);
-    const maxMinutes = Number(distSearchMinutes);
-    const matchesDistance =
-      distSearchMode === 'none' ||
-      !distSearchMinutes.trim() ||
-      (Number.isFinite(maxMinutes) && kmToMinutes(distance, v.speed) <= maxMinutes);
-    return matchesType && matchesStatus && matchesBreakdownType && matchesSearch && matchesDistance;
-  });
-  const vehicleDistanceRanges = new Map(
-    vehiclesBeforeDistanceFilter.map((v) => [v.id, getVehicleDistanceRange(v)] as const)
-  );
-  const filteredVehicles = vehiclesBeforeDistanceFilter.filter(
-    (v) => fleetFilterDistance === 'all' || vehicleDistanceRanges.get(v.id) === fleetFilterDistance
-  ).sort((a, b) => {
-    const value = (vehicle: Vehicle) => {
-      const assignedOrders = getVehicleOrders(vehicle);
-      switch (fleetSortKey) {
-        case 'occupancy_asc':
-        case 'occupancy_desc':
-          return vehicle.capacity > 0 ? vehicle.currentLoad / vehicle.capacity : 0;
-        case 'departure_asc':
-        case 'departure_desc':
-          return assignedOrders.length ? Math.min(...assignedOrders.map((order) => order.createdMinute)) : Infinity;
-        case 'arrival_asc':
-        case 'arrival_desc':
-          return assignedOrders.length ? Math.max(...assignedOrders.map((order) => order.deadlineMinute)) : Infinity;
-        case 'dist_remaining_asc':
-        case 'dist_remaining_desc':
-          return kmToMinutes(getVehicleDistanceToDestination(vehicle), vehicle.speed);
-        case 'dist_traveled_asc':
-        case 'dist_traveled_desc':
-          return getVehicleDistanceTraveled(vehicle);
-      }
-    };
-    const difference = value(a) - value(b);
-    return fleetSortKey.endsWith('_desc') ? -difference : difference;
-  });
+  // La lista completa (búsqueda, filtros, orden) vive en la página Flota (/flota); aquí queda la
+  // ficha del vehículo seleccionado en el mapa.
+  const vehiculoFicha = selectedVehicleId ? vehicles.filter((v) => v.id === selectedVehicleId) : [];
 
-  // Filtros activos de la flota, como etiquetas que se pueden quitar una a una (visibles aun con
-  // el panel de filtros plegado).
-  const distSearchMinutesValue = Number(distSearchMinutes);
-  const activeFleetFilterPills = [
-    fleetFilterType !== 'all' && {
-      key: 'type',
-      label: VEHICLE_TYPE_META[fleetFilterType].shortLabel,
-      onClear: () => setFleetFilterType('all'),
-    },
-    fleetFilterStatus !== 'all' && {
-      key: 'status',
-      label: FLEET_STATUS_OPTIONS.find((status) => status.key === fleetFilterStatus)?.label ?? fleetFilterStatus,
-      onClear: () => {
-        setFleetFilterStatus('all');
-        setFleetFilterBreakdownType('all');
-      },
-    },
-    fleetFilterBreakdownType !== 'all' && {
-      key: 'breakdown',
-      label: `Avería T${fleetFilterBreakdownType}`,
-      onClear: () => setFleetFilterBreakdownType('all'),
-    },
-    fleetFilterDistance !== 'all' && {
-      key: 'distance',
-      label: `${FLEET_DISTANCE_RANGES.find((range) => range.key === fleetFilterDistance)?.label} km`,
-      onClear: () => setFleetFilterDistance('all'),
-    },
-    distSearchMode !== 'none' && distSearchMinutes.trim() !== '' && Number.isFinite(distSearchMinutesValue) && {
-      key: 'time',
-      label: `≤ ${distSearchMinutesValue} min ${distSearchMode === 'to_dest' ? 'al destino' : 'al origen'}`,
-      onClear: () => {
-        setDistSearchMode('none');
-        setDistSearchMinutes('');
-      },
-    },
-  ].filter((pill): pill is { key: string; label: string; onClear: () => void } => Boolean(pill));
-  const activeFleetFilterCount = activeFleetFilterPills.length;
-  const clearFleetFilters = () => activeFleetFilterPills.forEach((pill) => pill.onClear());
-
-  // El contador suma también los pedidos antiguos que ya no se retienen (ver MAX_LOADED_ORDERS).
-  // La lista solo muestra lo reciente y lo no entregado, salvo al buscar, que recorre todo `orders`.
-  const filteredOrders = useMemo(() => {
-    const search = shipmentSearchTerm.trim().toLowerCase();
-    return newestOrdersFirst(orders.filter((order) => {
-      if (!search && !isInShipmentListWindow(order, marcaVisibleMs)) return false;
-      const statusMatches = shipmentStatusFilter === 'all' || order.status === shipmentStatusFilter;
-      // Ventanas de horas de la lista de envíos (rúbrica E32/E33: 4 h por defecto): se combinan
-      // con estado y búsqueda.
-      const windowMatches =
-        shipmentWindowFilter === 'all' ||
-        (marcaVisibleMs !== null &&
-          (shipmentWindowFilter === 'delivered'
-            ? isDeliveredRecently(order, marcaVisibleMs, shipmentWindowHours)
-            : isDueSoon(order, marcaVisibleMs, shipmentWindowHours)));
-      const searchMatches =
-        !search ||
-        [order.code, order.id, order.clientId, 'pedido de cliente'].some((value) =>
-          value?.toLowerCase().includes(search)
-        );
-      return statusMatches && windowMatches && searchMatches;
-    }));
-  }, [orders, marcaVisibleMs, shipmentSearchTerm, shipmentStatusFilter, shipmentWindowFilter, shipmentWindowHours]);
-
-  const renderedOrders = useMemo(
-    () => ordersToRender(
-      filteredOrders,
-      shipmentRenderCount,
-      selectedOrderId ? orders.find((order) => order.id === selectedOrderId) : undefined,
-    ),
-    [filteredOrders, shipmentRenderCount, selectedOrderId, orders],
-  );
-  const remainingOrders = Math.max(0, filteredOrders.length - shipmentRenderCount);
+  const pedidoSeleccionado = selectedOrderId ? orders.find((order) => order.id === selectedOrderId) : undefined;
   const totalOrders = orders.length + ordersOmitted;
 
-  const formatShipmentTime = (minute: number) => {
-    if (scenarioStartMs == null) return '--:--';
-    return formatBackendSimulatedTime(scenarioStartMs + minute * 60_000, false);
-  };
 
   const shipmentStatus = {
     on_time: { label: 'A tiempo', className: 'border-emerald-500/50 bg-emerald-950/60 text-emerald-300' },
@@ -654,116 +362,40 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
 
   return (
     <>
+      {/* Panel de detalle del mapa, a la derecha. Colapsado queda como una franja delgada con su
+          botón para abrirlo (también se abre solo al seleccionar algo). La navegación es la barra
+          de secciones de la izquierda: esta franja no repite secciones. */}
+      {isCollapsed && (
+        <aside className="tema-panel flex w-9 shrink-0 flex-col items-center gap-3 border-l border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] py-3">
+          <button
+            type="button"
+            id="btn-toggle-ops-sidebar"
+            onClick={onToggleCollapse}
+            title="Abrir el panel de detalle"
+            aria-label="Abrir el panel de detalle"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 hover:text-white [writing-mode:vertical-rl]"
+            tabIndex={-1}
+            aria-hidden
+          >
+            Detalle
+          </button>
+        </aside>
+      )}
+      {!isCollapsed && (
       <aside
         id="sidebar-ops-nav"
-        className={`relative flex flex-col border-r border-[var(--color-sidebar-border)] transition-all duration-300 select-none z-20 shrink-0 ${
-          isCollapsed ? 'w-16' : 'w-80 lg:w-96'
+        className={`tema-panel relative flex flex-col border-l border-[var(--color-sidebar-border)] transition-all duration-300 select-none z-20 shrink-0 ${
+          'w-80 lg:w-96'
         } bg-[var(--color-sidebar-background)] text-slate-100 shadow-xl h-full overflow-hidden`}
       >
-        {/* Header con logo y botón collapse */}
-        <div className="flex h-14 items-center justify-between px-3.5 border-b border-[var(--color-sidebar-border)]/70 shrink-0">
-          {!isCollapsed ? (
-            <>
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E5B9A] text-white font-bold text-xs shadow-sm tracking-wide">
-                  SM
-                </div>
-                <div className="text-sm font-bold tracking-wider font-mono-code">
-                  <span className="text-white">SYS</span>
-                  <span className="text-[var(--color-sidebar-icon-muted)] font-medium">MILE</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                id="btn-toggle-ops-sidebar"
-                onClick={onToggleCollapse}
-                title="Colapsar menú"
-                className="text-[var(--color-sidebar-icon-muted)] hover:text-white p-1 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            </>
-          ) : (
-            <div className="w-full flex items-center justify-center">
-              <button
-                type="button"
-                id="btn-toggle-ops-sidebar"
-                onClick={onToggleCollapse}
-                title="Expandir menú"
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2E5B9A] text-white font-bold text-xs shadow-sm cursor-pointer hover:opacity-90"
-              >
-                SM
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* VISTA COLAPSADA */}
-        {isCollapsed ? (
-          <div className="flex-1 flex flex-col items-center py-5 gap-4 overflow-y-auto">
-            {/* Tab Operación */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('operation');
-                onToggleCollapse();
-              }}
-              className={`p-2.5 rounded-xl text-white shadow transition-all cursor-pointer ${
-                activeTab === 'operation'
-                  ? 'bg-blue-600 border border-blue-400'
-                  : 'bg-[var(--color-sidebar-surface)] hover:bg-[var(--color-sidebar-border)]'
-              }`}
-              title="Almacén"
-            >
-              <WarehouseIcon className="h-4 w-4" />
-            </button>
-
-            {/* Tab Flota */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('fleet');
-                onToggleCollapse();
-              }}
-              className={`p-2.5 rounded-xl text-white shadow transition-all cursor-pointer ${
-                activeTab === 'fleet'
-                  ? 'bg-blue-600 border border-blue-400'
-                  : 'bg-[var(--color-sidebar-surface)] hover:bg-[var(--color-sidebar-border)]'
-              }`}
-              title="Seguimiento de Flota"
-            >
-              <Car className="h-4 w-4" />
-            </button>
-
-            {/* Tab Envíos */}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('shipments');
-                onToggleCollapse();
-              }}
-              className={`p-2.5 rounded-xl text-white shadow transition-all cursor-pointer ${
-                activeTab === 'shipments'
-                  ? 'bg-blue-600 border border-blue-400'
-                  : 'bg-[var(--color-sidebar-surface)] hover:bg-[var(--color-sidebar-border)]'
-              }`}
-              title="Seguimiento de Envíos"
-            >
-              <Truck className="h-4 w-4" />
-            </button>
-
-            <div className="mt-auto flex flex-col gap-3 pb-2">
-              <button
-                type="button"
-                onClick={() => setIsConfigModalOpen(true)}
-                className="w-full flex items-center justify-center p-2.5 rounded-xl text-slate-300 hover:text-white bg-[var(--color-sidebar-surface)] hover:bg-[var(--color-sidebar-border)] transition-colors cursor-pointer"
-                title="Configuración"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ) : (
+        {(
           /* VISTA EXPANDIDA */
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Selector de Pestañas: Operación | Flota | Envíos */}
@@ -804,8 +436,18 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                     : 'bg-slate-800/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-700/50'
                 }`}
               >
-                <Truck className="h-3.5 w-3.5" />
+                <Package className="h-3.5 w-3.5" />
                 <span>Envíos</span>
+              </button>
+              <button
+                type="button"
+                id="btn-toggle-ops-sidebar"
+                onClick={onToggleCollapse}
+                title="Colapsar el panel de detalle"
+                aria-label="Colapsar el panel de detalle"
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800/60 hover:text-white"
+              >
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
 
@@ -814,115 +456,37 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               {/* PESTAÑA: ENVÍOS */}
               {activeTab === 'shipments' ? (
                 <div className="space-y-3 fade-in">
+                  {/* La lista completa vive en la página Pedidos (/pedidos); aquí queda la ficha del
+                      pedido seleccionado en el mapa. */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-bold text-white">Gestión de Envíos</h3>
-                      <p className="text-[11px] text-slate-400">
-                        {shipmentSearchTerm.trim()
-                          ? 'Buscando en todos los pedidos cargados'
-                          : 'Sin entregar y entregados'}
-                      </p>
+                      <h3 className="text-sm font-bold text-white">Pedido seleccionado</h3>
+                      <p className="text-[11px] text-slate-400">{totalOrders} pedidos en total</p>
                     </div>
-                    <span
-                      title={`${filteredOrders.length} en esta lista de ${totalOrders} pedidos en total`}
-                      className="rounded-lg bg-blue-500/15 px-2 py-1 text-[11px] font-mono-code text-blue-300"
+                    <button
+                      type="button"
+                      onClick={() => navigate(rutaPedidos())}
+                      className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/50 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/10"
                     >
-                      {filteredOrders.length}/{totalOrders}
-                    </span>
+                      Ver todos los pedidos <ArrowRight className="h-3 w-3" aria-hidden />
+                    </button>
                   </div>
-
-                  <div className="relative">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={shipmentSearchTerm}
-                      onChange={(event) => setShipmentSearchTerm(event.target.value)}
-                      placeholder="Código, cliente o producto..."
-                      className="w-full rounded-xl border border-slate-700/80 bg-slate-900 py-2 pl-9 pr-8 text-xs text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                    />
-                    {shipmentSearchTerm && (
-                      <button type="button" onClick={() => setShipmentSearchTerm('')} className="absolute right-2.5 top-2.5 text-slate-400 hover:text-white" title="Limpiar búsqueda">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <FilterRow label="Estado">
-                    <div className="flex flex-wrap gap-1">
-                      {([
-                        ['all', 'Todos', null],
-                        ['on_time', 'A tiempo', '#34D399'],
-                        ['at_risk', 'En riesgo', '#FBBF24'],
-                        ['delivered', 'Entregado', '#60A5FA'],
-                      ] as const).map(([key, label, dot]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          aria-pressed={shipmentStatusFilter === key}
-                          onClick={() => setShipmentStatusFilter(key)}
-                          className={`flex items-center gap-1 rounded-md border px-1.5 py-1 text-[10.5px] font-medium transition-colors cursor-pointer ${
-                            shipmentStatusFilter === key
-                              ? 'border-blue-500 bg-blue-600 text-white'
-                              : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:text-slate-200'
-                          }`}
-                        >
-                          {dot && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />}
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </FilterRow>
-
-                  <FilterRow label="Periodo">
-                    <Segmented
-                      value={shipmentWindowFilter}
-                      onChange={setShipmentWindowFilter}
-                      options={[
-                        { value: 'all', label: 'Todos' },
-                        { value: 'delivered', label: 'Entregados', title: 'Entregados en las últimas horas' },
-                        { value: 'due', label: 'Por entregar', title: 'Por entregar en las próximas horas' },
-                      ]}
-                    />
-                  </FilterRow>
-
-                  {shipmentWindowFilter !== 'all' && (
-                    <FilterRow
-                      label="Horas"
-                      hint={shipmentWindowFilter === 'delivered' ? 'últimas' : 'próximas'}
-                    >
-                      <div className="flex items-center">
-                        <div className="flex items-center rounded-lg border border-slate-700/70 bg-slate-950/60 focus-within:border-blue-500">
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            inputMode="numeric"
-                            value={shipmentWindowHoursText}
-                            onChange={(event) => setShipmentWindowHoursText(event.target.value)}
-                            onBlur={() => setShipmentWindowHoursText(String(shipmentWindowHours))}
-                            aria-label="Horas del periodo"
-                            title="Escribe el número de horas"
-                            className="w-12 bg-transparent py-1 pl-2 text-right font-mono-code text-[11px] text-slate-100 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                          />
-                          <span className="pl-1 pr-2 text-[10.5px] text-slate-500">horas</span>
-                        </div>
-                      </div>
-                    </FilterRow>
-                  )}
-
-                  {renderedOrders.length === 0 ? (
+                  {!pedidoSeleccionado ? (
                     <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-slate-400">
                       <Package className="mx-auto mb-2 h-7 w-7 text-slate-600" />
-                      <p className="font-medium text-slate-300">Sin coincidencias</p>
-                      <p className="mt-1 text-[11px]">Prueba con otro código o filtro.</p>
+                      <p className="font-medium text-slate-300">Ningún pedido seleccionado</p>
+                      <p className="mt-1 text-[11px]">Haz click en un destino del mapa o elige uno en Pedidos.</p>
                     </div>
                   ) : (
                     <div className="space-y-2.5">
-                      {renderedOrders.map((order) => {
+                      {[pedidoSeleccionado].map((order) => {
                         const status = shipmentStatus[order.status];
                         const warehouse = warehouses.find((item) => item.id === order.warehouseOriginId) ?? warehouses.find((item) => item.id === 'central') ?? warehouses[0];
-                        const vehicle = order.assignedVehicleId
-                          ? vehicles.find((item) => item.id === order.assignedVehicleId || item.code === order.assignedVehicleId)
+                        const entregado = order.status === 'delivered';
+                        // Entregado: el vehículo que lo entregó (si se vio el evento) o el de su ruta.
+                        const vehicleId = entregado ? order.deliveredByVehicleId ?? order.assignedVehicleId : order.assignedVehicleId;
+                        const vehicle = vehicleId
+                          ? vehicles.find((item) => item.id === vehicleId || item.code === vehicleId)
                           : undefined;
                         const distance = warehouse
                           ? Math.abs(order.destination.x - warehouse.coords.x) + Math.abs(order.destination.y - warehouse.coords.y)
@@ -935,19 +499,27 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                               if (element) orderCardRefs.current.set(order.id, element);
                               else orderCardRefs.current.delete(order.id);
                             }}
-                            onClick={() => setSelectedOrderId(selectedOrderId === order.id ? null : order.id)}
-                            className={`rounded-2xl p-3 shadow-md cursor-pointer transition-colors ${
-                              selectedOrderId === order.id
-                                ? 'border-blue-400 bg-blue-950/60 ring-1 ring-blue-400/60'
-                                : 'border-slate-800 bg-[#0d1b2e]/90 hover:border-blue-500/40'
-                            }`}
+                            // Sin onClick: un click en la ficha (p. ej. al seleccionar texto) ya no la
+                            // deselecciona; para cerrarla está la "×".
+                            className="rounded-2xl border border-blue-400 bg-blue-950/60 p-3 shadow-md ring-1 ring-blue-400/60"
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <span className="font-mono-code text-sm font-bold text-white">{order.code}</span>
                                 <p className="mt-0.5 text-[10px] text-slate-400">Cliente: {order.clientId || 'No informado'}</p>
                               </div>
-                              <span className={`shrink-0 rounded-lg border px-2 py-1 text-[10px] font-semibold ${status.className}`}>{status.label}</span>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <span className={`rounded-lg border px-2 py-1 text-[10px] font-semibold ${status.className}`}>{status.label}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedOrderId(null)}
+                                  title="Cerrar y quitar la selección"
+                                  aria-label="Cerrar la ficha del pedido"
+                                  className="rounded-md p-1 text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
                             <div className="mt-2 rounded-xl border border-slate-800 bg-slate-950/50 p-2 text-[11px]">
                               <p className="font-medium text-slate-200">Pedido de cliente</p>
@@ -956,31 +528,48 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                             <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
                               <div><span className="text-slate-500">Ruta</span><p className="font-medium text-slate-200">{warehouse?.name ?? 'Almacén Central'} → ({Math.round(order.destination.x)}, {Math.round(order.destination.y)}) · {distance} km</p></div>
                               <div><span className="text-slate-500">Destino cartesiano</span><p className="font-mono-code font-medium text-cyan-300">X={order.destination.x}, Y={order.destination.y}</p></div>
-                              <div><span className="text-slate-500">Salida / ETA</span><p className="font-mono-code font-medium text-slate-200">{formatShipmentTime(order.createdMinute)} / {formatShipmentTime(order.deadlineMinute)}</p></div>
-                              <div><span className="text-slate-500">Tiempo máximo</span><p className="font-medium text-slate-200">{order.slaHours ?? 0} h</p></div>
-                              <div className="col-span-2">
-                                <span className="text-slate-500">Entrega</span>
+                              {/* Mismos rótulos y formato ("d/m HH:mm", 24 h) que la tabla de Pedidos. */}
+                              <div><span className="text-slate-500">Ingreso</span><p className="font-mono-code font-medium text-slate-200">{formatMinutoSimulado(scenarioStartMs, order.createdMinute)}</p></div>
+                              <div><span className="text-slate-500">Límite</span><p className="font-mono-code font-medium text-slate-200" title={`Plazo de ${order.slaHours ?? 0} h`}>{formatMinutoSimulado(scenarioStartMs, order.deadlineMinute)} <span className="font-sans text-slate-500">({order.slaHours ?? 0} h)</span></p></div>
+                              <div>
+                                <span className="text-slate-500">Entrega {delivery === undefined ? '' : order.deliveredSimMs === undefined ? '(estimada)' : '(real)'}</span>
                                 <p className="font-mono-code font-medium text-slate-200">
                                   {delivery === undefined
                                     ? 'Sin estimar'
-                                    : `${order.deliveredSimMs === undefined ? '~' : ''}${formatSimClock(delivery)}`}
+                                    : `${order.deliveredSimMs === undefined ? '~' : ''}${formatFechaHoraCorta(delivery)}`}
+                                </p>
+                              </div>
+                              {/* Mismo formato y colores que la columna "Faltan" de Pedidos. */}
+                              <div>
+                                <span className="text-slate-500">Faltan</span>
+                                <p className="font-mono-code font-medium">
+                                  {!entregado && enServicio.has(order.id)
+                                    ? <span className="inline-flex items-center gap-0.5 font-sans font-semibold text-emerald-300" title="Su vehículo ya llegó: el plazo se cumple con la llegada">
+                                      <PackageCheck className="h-3 w-3" aria-hidden />En servicio</span>
+                                    : <Faltan variante="panel" status={order.status}
+                                      ms={order.deadlineSimMs !== undefined && marcaVisibleMs != null ? order.deadlineSimMs - marcaVisibleMs : undefined} />}
                                 </p>
                               </div>
                             </div>
                             <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2">
-                              <span className="text-[10px] text-slate-400">UT asignada</span>
+                              <span className="text-[10px] text-slate-400">{entregado ? 'Entregado por' : 'UT asignada'}</span>
                               {vehicle ? (
                                 <button
                                   type="button"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    setSelectedVehicleId(vehicle.id);
+                                    // Recuerda el pedido: la tarjeta del vehículo lo resalta.
+                                    irAVehiculoDePedido(vehicle.id, order.id);
                                     setActiveTab('fleet');
                                   }}
                                   className="inline-flex items-center gap-1 rounded-lg border border-blue-500/40 bg-blue-500/10 px-2 py-1 text-[10px] font-semibold text-blue-300 hover:bg-blue-500/20"
                                 >
                                   <Car className="h-3 w-3" /> {vehicle.code}
                                 </button>
+                              ) : vehicleId ? (
+                                <span className="font-mono-code text-[10px] text-slate-300">{vehicleId}</span>
+                              ) : entregado ? (
+                                <span className="cursor-help text-[10px] text-slate-500" title="Vehículo no disponible tras finalizar la ruta">—</span>
                               ) : (
                                 <span className="text-[10px] italic text-slate-500">Sin asignar</span>
                               )}
@@ -988,225 +577,37 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                           </article>
                         );
                       })}
-                      {remainingOrders > 0 && shipmentRenderCount < SHIPMENT_MAX_RENDERED && (
-                        <button
-                          type="button"
-                          onClick={() => setShipmentRenderCount((count) => Math.min(count + SHIPMENT_PAGE_SIZE, SHIPMENT_MAX_RENDERED))}
-                          className="w-full rounded-xl border border-slate-700/80 bg-slate-900 py-2 text-[11px] font-medium text-slate-200 hover:border-blue-500 hover:text-white cursor-pointer"
-                        >
-                          Ver {Math.min(remainingOrders, SHIPMENT_PAGE_SIZE)} más ({remainingOrders} restantes)
-                        </button>
-                      )}
-                      {remainingOrders > 0 && shipmentRenderCount >= SHIPMENT_MAX_RENDERED && (
-                        <p className="py-1 text-center text-[11px] text-slate-400">
-                          Se muestran como máximo {SHIPMENT_MAX_RENDERED}. Usa la búsqueda o los filtros para encontrar los otros {remainingOrders}.
-                        </p>
-                      )}
                     </div>
                   )}
                 </div>
               ) : activeTab === 'fleet' ? (
                 <div className="space-y-3 fade-in">
 
-                  {/* Búsqueda por código + botón que pliega el panel de filtros */}
-                  <div className="flex items-center gap-1.5">
-                    <div className="relative min-w-0 flex-1">
-                      <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500" />
-                      <input
-                        type="text"
-                        value={fleetSearchTerm}
-                        onChange={(e) => setFleetSearchTerm(e.target.value)}
-                        placeholder="Buscar por código (TA01, TM03…)"
-                        className="w-full rounded-lg border border-slate-700/70 bg-slate-950/60 py-1.5 pl-8 pr-7 text-[11px] text-slate-100 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
-                      />
-                      {fleetSearchTerm && (
-                        <button
-                          type="button"
-                          onClick={() => setFleetSearchTerm('')}
-                          className="absolute right-2 top-2 text-slate-400 hover:text-white"
-                          title="Limpiar búsqueda"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                  {/* La lista completa vive en la página Flota (/flota); aquí queda la ficha del
+                      vehículo seleccionado en el mapa (con su detalle y "Crear avería"). */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Vehículo seleccionado</h3>
+                      <p className="text-[11px] text-slate-400">{vehicles.length} vehículos en la flota</p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setIsFleetFiltersOpen(!isFleetFiltersOpen)}
-                      aria-expanded={isFleetFiltersOpen}
-                      className={`flex h-[30px] shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-medium cursor-pointer transition-colors ${
-                        isFleetFiltersOpen || activeFleetFilterCount > 0
-                          ? 'border-blue-500/60 bg-blue-600/15 text-blue-200'
-                          : 'border-slate-700/70 bg-slate-950/60 text-slate-300 hover:text-white'
-                      }`}
+                      onClick={() => navigate('/flota')}
+                      className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/50 px-2 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/10"
                     >
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                      Filtros
-                      {activeFleetFilterCount > 0 && (
-                        <span className="rounded-full bg-blue-600 px-1.5 text-[9.5px] font-bold leading-4 text-white">
-                          {activeFleetFilterCount}
-                        </span>
-                      )}
+                      Ver toda la flota <ArrowRight className="h-3 w-3" aria-hidden />
                     </button>
                   </div>
 
-                  {isFleetFiltersOpen && (
-                    <div className="space-y-2.5 rounded-xl border border-slate-800 bg-slate-900/50 p-2.5 fade-in">
-                      <FilterRow label="Tipo">
-                        <Segmented
-                          value={fleetFilterType}
-                          onChange={setFleetFilterType}
-                          options={[
-                            { value: 'all', label: 'Todos' },
-                            { value: 'car', label: <><Car className="h-3 w-3" />Autos</>, title: 'Autos / camionetas (TA)' },
-                            { value: 'motorcycle', label: <><FaMotorcycle className="h-3 w-3" />Motos</>, title: 'Motocicletas (TM)' },
-                            { value: 'bicycle', label: <><FaBicycle className="h-3 w-3" />Bicis</>, title: 'Bicicletas (TB)' },
-                          ]}
-                        />
-                      </FilterRow>
-
-                      <FilterRow label="Estado">
-                        <div className="flex flex-wrap gap-1">
-                          {FLEET_STATUS_OPTIONS.map((status) => (
-                            <button
-                              key={status.key}
-                              type="button"
-                              aria-pressed={fleetFilterStatus === status.key}
-                              onClick={() => {
-                                setFleetFilterStatus(status.key);
-                                if (status.key !== 'broken') setFleetFilterBreakdownType('all');
-                              }}
-                              className={`flex items-center gap-1 rounded-md border px-1.5 py-1 text-[10.5px] font-medium transition-colors cursor-pointer ${
-                                fleetFilterStatus === status.key
-                                  ? 'border-blue-500 bg-blue-600 text-white'
-                                  : 'border-slate-700/70 bg-slate-950/60 text-slate-400 hover:text-slate-200'
-                              }`}
-                            >
-                              {status.dot && <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: status.dot }} />}
-                              {status.label}
-                            </button>
-                          ))}
-                        </div>
-                      </FilterRow>
-
-                      {/* Subfiltro por tipo de avería: solo al filtrar Averiados */}
-                      {fleetFilterStatus === 'broken' && (
-                        <FilterRow label="Avería">
-                          <Segmented
-                            value={fleetFilterBreakdownType}
-                            onChange={setFleetFilterBreakdownType}
-                            columns={2}
-                            options={[
-                              { value: 'all' as const, label: 'Todas' },
-                              ...([1, 2, 3] as const).map((lvl) => ({
-                                value: lvl,
-                                title: BREAKDOWN_LEVEL_CONFIGS[lvl].label,
-                                label: (
-                                  <>
-                                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: BREAKDOWN_LEVEL_CONFIGS[lvl].hex }} />
-                                    T{lvl} · {BREAKDOWN_LEVEL_CONFIGS[lvl].severityLabel}
-                                  </>
-                                ),
-                              })),
-                            ]}
-                          />
-                        </FilterRow>
-                      )}
-
-                      {/* Filtro permanente por distancia por recorrer al destino (rúbrica E11). Se
-                          combina con tipo, estado, búsqueda y orden. */}
-                      <FilterRow label="Distancia" hint="km al destino">
-                        <Segmented
-                          value={fleetFilterDistance}
-                          onChange={setFleetFilterDistance}
-                          options={[
-                            { value: 'all' as FleetDistanceFilter, label: 'Todas', title: 'Sin filtro de distancia' },
-                            ...FLEET_DISTANCE_RANGES.map((range) => ({
-                              value: range.key as FleetDistanceFilter,
-                              label: range.label,
-                              title: `Desde ${range.min} km hasta menos de ${range.max} km`,
-                            })),
-                          ]}
-                        />
-                        <p className="mt-1 text-[9.5px] text-slate-500">
-                          {[...vehicleDistanceRanges.values()].filter((range) => range === null).length} sin ruta (no entran en ningún rango)
-                        </p>
-                      </FilterRow>
-
-                      {/* Búsqueda por tiempo estimado: distinta del filtro por distancia */}
-                      <FilterRow label="Tiempo" hint="máx. estimado">
-                        <div className="flex items-center gap-1.5">
-                          <select
-                            value={distSearchMode}
-                            onChange={(event) => setDistSearchMode(event.target.value as DistanceSearchMode)}
-                            aria-label="Buscar por tiempo estimado hasta"
-                            className="min-w-0 flex-1 cursor-pointer rounded-lg border border-slate-700/70 bg-slate-950/60 px-2 py-1.5 text-[11px] text-slate-200 focus:border-blue-500 focus:outline-none"
-                          >
-                            <option value="none">Sin búsqueda</option>
-                            <option value="to_dest">Al destino</option>
-                            <option value="to_origin">Al origen</option>
-                          </select>
-                          <div className="relative w-[5.5rem] shrink-0">
-                            <input
-                              type="number"
-                              min="0"
-                              value={distSearchMinutes}
-                              onChange={(event) => setDistSearchMinutes(event.target.value)}
-                              disabled={distSearchMode === 'none'}
-                              placeholder="—"
-                              aria-label="Minutos máximos"
-                              className="w-full rounded-lg border border-slate-700/70 bg-slate-950/60 py-1.5 pl-2 pr-8 text-[11px] text-slate-100 placeholder-slate-600 focus:border-blue-500 focus:outline-none disabled:opacity-40"
-                            />
-                            <span className="pointer-events-none absolute right-2 top-1.5 text-[10px] text-slate-500">min</span>
-                          </div>
-                        </div>
-                      </FilterRow>
-
-                      <div className="border-t border-slate-800 pt-2.5">
-                        <FilterRow label="Ordenar">
-                          <SortButton current={fleetSortKey} onChange={setFleetSortKey} />
-                        </FilterRow>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Resultado + filtros activos (siempre visibles, aun con el panel plegado) */}
-                  <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] text-slate-400">
-                    <span className="font-mono-code">
-                      <span className="font-bold text-slate-200">{filteredVehicles.length}</span> de {vehicles.length} vehículos
-                    </span>
-                    {activeFleetFilterPills.map((pill) => (
-                      <button
-                        key={pill.key}
-                        type="button"
-                        onClick={pill.onClear}
-                        title={`Quitar filtro: ${pill.label}`}
-                        className="flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-950/40 px-2 py-0.5 font-medium text-blue-200 hover:border-blue-400 cursor-pointer"
-                      >
-                        {pill.label}
-                        <X className="h-2.5 w-2.5" />
-                      </button>
-                    ))}
-                    {activeFleetFilterPills.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={clearFleetFilters}
-                        className="ml-auto text-blue-400 hover:text-blue-300 cursor-pointer"
-                      >
-                        Limpiar todo
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Lista de Vehículos */}
-                  <div className="space-y-2.5 pt-1">
-                    {filteredVehicles.length === 0 ? (
-                      <div className="p-6 rounded-2xl border border-dashed border-slate-800 text-center text-slate-400 space-y-1">
-                        <p className="font-medium text-slate-300">No se encontraron vehículos</p>
-                        <p className="text-[11px]">Intente con otro filtro o término.</p>
+                  <div className="space-y-2.5">
+                    {vehiculoFicha.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-slate-400">
+                        <Car className="mx-auto mb-2 h-7 w-7 text-slate-600" />
+                        <p className="font-medium text-slate-300">Ningún vehículo seleccionado</p>
+                        <p className="mt-1 text-[11px]">Haz click en un vehículo del mapa o elige uno en Flota.</p>
                       </div>
                     ) : (
-                      filteredVehicles.map((v) => {
+                      vehiculoFicha.map((v) => {
                         const isSelected = selectedVehicleId === v.id;
                         const isBroken = v.status === 'broken';
                         const breakdownCfg = isBroken ? getBreakdownLevelConfig(v.breakdownType) : null;
@@ -1223,12 +624,37 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                         const vehicleOrders = getVehicleOrders(v);
                         const distanceToDestination = getVehicleDistanceToDestination(v);
                         const distanceToOrigin = getVehicleDistanceToOrigin(v);
-                        const departureMinute = vehicleOrders.length
-                          ? Math.min(...vehicleOrders.map((order) => order.createdMinute))
+                        // Pedidos de la ruta en curso, al instante visible: a bordo (sin entregar, en
+                        // orden de entrega) y ya entregados. Lo asignado fuera de la ruta en curso es
+                        // de su próxima ruta: aún no va a bordo.
+                        const ordenRuta = (id: string) => {
+                          const i = v.assignedOrderIds.indexOf(id);
+                          return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+                        };
+                        const enRutaActual = (id: string) => v.assignedOrderIds.includes(id);
+                        const aBordo = vehicleOrders
+                          .filter((order) => order.status !== 'delivered' && enRutaActual(order.id))
+                          .sort((a, b) => ordenRuta(a.id) - ordenRuta(b.id) || (a.deadlineSimMs ?? 0) - (b.deadlineSimMs ?? 0));
+                        const entregadosRuta = vehicleOrders
+                          .filter((order) => order.status === 'delivered' && enRutaActual(order.id))
+                          .sort((a, b) => (b.deliveredSimMs ?? 0) - (a.deliveredSimMs ?? 0));
+                        const proximaRuta = vehicleOrders
+                          .filter((order) => order.status !== 'delivered' && !enRutaActual(order.id))
+                          .sort((a, b) => (a.deadlineSimMs ?? 0) - (b.deadlineSimMs ?? 0));
+                        // Entregando: el pedido que está sirviendo (llegó a su destino) manda sobre
+                        // "Próximo", que ya no puede vencer (antes mostraba su "faltan" igual).
+                        const sirviendo = v.status === 'delivering' ? aBordo.find((order) => enServicio.has(order.id)) : undefined;
+                        const proximo = sirviendo ?? aBordo[0];
+                        const faltanProximo = proximo?.deadlineSimMs !== undefined && marcaVisibleMs !== null
+                          ? proximo.deadlineSimMs - marcaVisibleMs
                           : undefined;
-                        const arrivalMinute = vehicleOrders.length
-                          ? Math.max(...vehicleOrders.map((order) => order.deadlineMinute))
-                          : undefined;
+                        const totalRuta = aBordo.length + entregadosRuta.length;
+                        // Averiado con carga pero sin pedidos en ruta: la carga espera el trasvase.
+                        const porTrasvasar = isBroken && aBordo.length === 0 && v.currentLoad > 0;
+                        const corto = (code: string) => (code.length > 8 ? `#${code.slice(-4)}` : code);
+                        // Pedido desde el que se llegó (Pedidos o la ficha): resaltado donde esté.
+                        const esOrigen = (id: string) => isSelected && pedidoOrigenId === id;
+                        const RESALTE_ORIGEN = 'ring-2 ring-cyan-400 border-cyan-400';
 
                         return (
                           <div
@@ -1285,7 +711,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                   </span>
                                 ) : v.status === 'en_route' ? (
                                   <span className="border border-sky-500/50 bg-sky-950/60 text-sky-300 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-medium">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" /> En ruta
+                                    <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" /> Viajando
                                   </span>
                                 ) : v.status === 'delivering' ? (
                                   <span className="border border-emerald-500/50 bg-emerald-950/60 text-emerald-300 text-[11px] px-2 py-0.5 rounded-lg flex items-center gap-1 font-medium">
@@ -1319,6 +745,17 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                               </div>
                             </div>
 
+                            {/* Avería pedida que aún no se aplica (se aplica al cerrar el siguiente lote). */}
+                            {!isBroken && averiasProgramadas[v.id] && (
+                              <div
+                                className="mb-2 flex items-center gap-1.5 rounded-lg border border-dashed border-rose-500/60 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold text-rose-300"
+                                title="Solicitud enviada: el backend la aplica al cerrar el siguiente lote"
+                              >
+                                <Clock className="h-3 w-3 shrink-0" aria-hidden />
+                                Avería tipo {averiasProgramadas[v.id].tipo} programada · próximo lote
+                              </div>
+                            )}
+
                             {/* Resumen visible inmediato cuando el vehículo está averiado */}
                             {isBroken && (
                               <div
@@ -1347,7 +784,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                               </div>
                             )}
 
-                            {/* Métricas: Velocidad, Carga, Entregas */}
+                            {/* Métricas: Velocidad, Carga, Entregas de la ruta en curso */}
                             <div className="grid grid-cols-3 gap-2 my-2 text-center">
                               <div className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800/80">
                                 <span className="text-[9px] text-slate-400 block">Velocidad</span>
@@ -1361,10 +798,13 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                   {v.currentLoad}/{v.capacity}
                                 </span>
                               </div>
-                              <div className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800/80">
-                                <span className="text-[9px] text-slate-400 block">Entregas</span>
+                              {/* Antes "Entregas" mostraba v.totalDelivered, que el backend no expone (siempre 0).
+                                  Ahora: entregados / total de la ruta en curso, al reloj del mapa. */}
+                              <div className="p-1.5 rounded-lg bg-slate-950/50 border border-slate-800/80"
+                                title={totalRuta ? `Ruta en curso: ${entregadosRuta.length} entregados de ${totalRuta}` : 'Sin ruta en curso'}>
+                                <span className="text-[9px] text-slate-400 block">Entregas ruta</span>
                                 <span className="font-mono-code font-bold text-xs text-emerald-400">
-                                  {v.totalDelivered}
+                                  {totalRuta ? <>{entregadosRuta.length}<span className="text-[9px] font-normal text-slate-400">/{totalRuta}</span></> : '—'}
                                 </span>
                               </div>
                             </div>
@@ -1377,36 +817,78 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                 <span className="text-[10px] font-mono-code font-bold text-slate-300 shrink-0">Regreso al almacén</span>
                               </div>
                             ) : (
-                              <SemaforoBarra load={v.currentLoad} capacity={v.capacity} />
+                              <BarraCargaVehiculo load={v.currentLoad} capacity={v.capacity} />
                             )}
                             <div className="mt-1 flex flex-wrap justify-between gap-x-2 text-[9px] text-slate-500">
                               <span>Destino: {kmToMinutes(distanceToDestination, v.speed)} min</span>
                               <span>Origen: {kmToMinutes(distanceToOrigin, v.speed)} min</span>
-                              <span>Salida: {departureMinute === undefined ? '--:--' : formatShipmentTime(departureMinute)}</span>
-                              <span>Llegada: {arrivalMinute === undefined ? '--:--' : formatShipmentTime(arrivalMinute)}</span>
+                            </div>
+                            {/* Próxima entrega y su límite (antes "Salida/Llegada": el ingreso más antiguo y
+                                el límite más lejano de sus pedidos, en 12 h sin fecha, se leían como horarios). */}
+                            <div className="mt-1 flex items-center justify-between gap-2 text-[10px]">
+                              {proximo && sirviendo ? (
+                                <>
+                                  <span className={`truncate text-emerald-300 ${esOrigen(proximo.id) ? 'rounded px-0.5 ring-1 ring-cyan-400' : ''}`} title={`Entregando ${proximo.code} en (${Math.round(proximo.destination.x)}, ${Math.round(proximo.destination.y)})`}>
+                                    <PackageCheck className="mr-0.5 inline h-3 w-3 align-[-2px]" />Entregando <span className="font-mono-code font-semibold">{corto(proximo.code)}</span>
+                                  </span>
+                                  <span className="shrink-0 text-emerald-300/80" title="Llegó a su destino: el plazo se cumple con la llegada, ya no puede vencer">En servicio</span>
+                                </>
+                              ) : proximo ? (
+                                <>
+                                  <span className={`truncate text-slate-400 ${esOrigen(proximo.id) ? 'rounded px-0.5 ring-1 ring-cyan-400' : ''}`} title={`Próxima entrega: ${proximo.code} en (${Math.round(proximo.destination.x)}, ${Math.round(proximo.destination.y)})`}>
+                                    <MapPin className="mr-0.5 inline h-3 w-3 align-[-2px]" />Próximo <span className="font-mono-code text-slate-200">{corto(proximo.code)}</span>
+                                  </span>
+                                  <span className="shrink-0 font-mono-code text-slate-400" title="Límite del próximo pedido · lo que falta al reloj del mapa">
+                                    Límite <span className="text-slate-200">{formatFechaHoraCorta(proximo.deadlineSimMs)}</span>
+                                    {faltanProximo !== undefined && <span className="ml-1">(<Faltan variante="panel" ms={faltanProximo} status={proximo.status} />)</span>}
+                                  </span>
+                                </>
+                              ) : proximaRuta.length > 0 ? (
+                                <span className="truncate text-slate-400" title="Asignados a su próxima ruta (aún no van a bordo)">
+                                  <Clock className="mr-0.5 inline h-3 w-3 align-[-2px]" />Próx. ruta{' '}
+                                  <span className="font-mono-code text-slate-200">{proximaRuta.slice(0, 3).map((o) => corto(o.code)).join(' · ')}{proximaRuta.length > 3 ? ` +${proximaRuta.length - 3}` : ''}</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-500">{entregadosRuta.length ? 'Ruta entregada' : 'Sin entregas pendientes'}</span>
+                              )}
                             </div>
 
                             {/* Detalle si está seleccionado */}
                             {expandedVehicleId === v.id && (
-                              <div className="mt-2 space-y-2 border-t border-[var(--color-sidebar-border)] pt-2 fade-in">
+                              // El detalle no pliega la tarjeta: solo la cabecera alterna la selección
+                              // (antes cualquier click aquí, p. ej. al leer o seleccionar texto, la cerraba).
+                              <div className="mt-2 space-y-2 border-t border-[var(--color-sidebar-border)] pt-2 fade-in cursor-default"
+                                onClick={(event) => event.stopPropagation()}>
                                 <div className="flex items-center justify-between">
                                   <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-100">
                                     <Package className="h-3.5 w-3.5 text-[var(--color-secondary)]" />
-                                    Envíos a Bordo ({vehicleOrders.length})
+                                    {porTrasvasar ? 'Carga a bordo' : `A bordo (${aBordo.length})`}
                                   </span>
-                                  <span className="text-[10px] text-[var(--color-sidebar-text-muted)]">Pedidos asignados</span>
+                                  <span className="flex items-center gap-1 text-[10px] text-[var(--color-sidebar-text-muted)]">
+                                    <PackageCheck className="h-3 w-3 text-emerald-400" />Entregados {entregadosRuta.length}
+                                    {proximaRuta.length > 0 && <span title="Asignados a su próxima ruta (aún no van a bordo)"> · +{proximaRuta.length} próx. ruta</span>}
+                                  </span>
                                 </div>
 
-                                {vehicleOrders.length === 0 ? (
+                                {porTrasvasar ? (
+                                  // Averiado: el backend saca sus pedidos de la ruta (se replanifican en
+                                  // otros vehículos) pero la carga sigue a bordo hasta el trasvase.
+                                  <p className="flex items-start gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-2 text-[10px] text-amber-300"
+                                    title="Sus pedidos ya se replanificaron en otros vehículos; los paquetes pasan a ellos en el trasvase">
+                                    <Package className="mt-px h-3 w-3 shrink-0" aria-hidden />
+                                    <span><span className="font-bold">{v.currentLoad} paquetes por trasvasar</span> · sus pedidos pasan a otro vehículo</span>
+                                  </p>
+                                ) : aBordo.length === 0 ? (
                                   <p className="rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-surface)] p-2 text-[10px] italic text-[var(--color-sidebar-text-muted)]">
-                                    Sin pedidos asignados
+                                    Sin pedidos a bordo
                                   </p>
                                 ) : (
                                   <div className="space-y-1.5">
-                                    {vehicleOrders.map((order) => (
+                                    {aBordo.map((order) => (
                                       <div
                                         key={order.id}
-                                        className="rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-surface)] p-2 text-slate-100"
+                                        className={`rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-surface)] p-2 text-slate-100 ${esOrigen(order.id) ? RESALTE_ORIGEN : ''}`}
+                                        title={esOrigen(order.id) ? 'Pedido desde el que llegaste' : undefined}
                                       >
                                         <div className="flex items-center justify-between gap-2">
                                           <span className="font-mono-code text-[10px] font-semibold text-blue-300">
@@ -1426,12 +908,46 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                           <span>
                                             Destino: ({Math.round(order.destination.x)}, {Math.round(order.destination.y)})
                                           </span>
-                                          <span className="font-mono-code text-slate-400">
-                                            Tiempo máximo: {order.slaHours ?? 0} h
+                                          <span className="font-mono-code text-slate-400" title={`Plazo de ${order.slaHours ?? 0} h`}>
+                                            Límite: <span className="text-slate-200">{formatFechaHoraCorta(order.deadlineSimMs)}</span>
                                           </span>
                                         </div>
                                       </div>
                                     ))}
+                                  </div>
+                                )}
+                                {entregadosRuta.length > 0 && (
+                                  <div className="flex flex-wrap gap-1" aria-label="Entregados en esta ruta">
+                                    {entregadosRuta.map((order) => (
+                                      <span key={order.id}
+                                        title={`${order.code} entregado ${formatFechaHoraCorta(order.deliveredSimMs)}`}
+                                        className={`inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono-code text-[9px] text-emerald-300 ${esOrigen(order.id) ? RESALTE_ORIGEN : ''}`}>
+                                        <PackageCheck className="h-2.5 w-2.5" />
+                                        {order.code.length > 8 ? `#${order.code.slice(-4)}` : order.code}
+                                        <span className="text-slate-400">{formatFechaHoraCorta(order.deliveredSimMs).split(' ')[1] ?? ''}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Próxima ruta: asignados que aún no van a bordo, con su código (antes solo
+                                    "+N próx. ruta": quien llegaba desde un pedido no lo encontraba). */}
+                                {proximaRuta.length > 0 && (
+                                  <div className="space-y-1" aria-label="Asignados a su próxima ruta">
+                                    <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-300">
+                                      <Clock className="h-3 w-3 text-slate-400" />Próxima ruta ({proximaRuta.length})
+                                    </span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {proximaRuta.map((order) => (
+                                        <span key={order.id}
+                                          title={`${order.code} · límite ${formatFechaHoraCorta(order.deadlineSimMs)}${esOrigen(order.id) ? ' · pedido desde el que llegaste' : ''}`}
+                                          className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono-code text-[9px] ${esOrigen(order.id)
+                                            ? `bg-cyan-500/20 font-bold text-cyan-200 ${RESALTE_ORIGEN}`
+                                            : 'border-slate-600/60 bg-slate-800/60 text-slate-200'}`}>
+                                          {corto(order.code)}
+                                          <span className="text-slate-400">{formatFechaHoraCorta(order.deadlineSimMs).split(' ')[1] ?? ''}</span>
+                                        </span>
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
 
@@ -1451,7 +967,9 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                     </span>
                                   </div>
                                 )}
-                                {!isBroken && (
+                                {!isBroken && (() => {
+                                  const regla = averiable(v, undefined, marcaVisibleMs, Boolean(averiasProgramadas[v.id]));
+                                  return (
                                   <div className="flex items-center justify-between gap-2">
                                     <span className="text-[11px] text-blue-300 font-mono-code flex items-center gap-1">
                                       <MapPin className="h-3.5 w-3.5" /> X={Math.round(v.position.x)}, Y={Math.round(v.position.y)}
@@ -1459,17 +977,21 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                     <button
                                       type="button"
                                       disabled={isReportingBreakdown}
+                                      aria-disabled={!regla.ok}
+                                      title={regla.motivo}
+                                      aria-label={`Crear avería · ${regla.motivo}`}
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        setIsBreakdownModalOpen(true);
+                                        if (regla.ok) setIsBreakdownModalOpen(true);
                                       }}
-                                      className="text-[10px] font-semibold py-1 px-2 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+                                      className="text-[10px] font-semibold py-1 px-2 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-rose-500/20 transition-colors inline-flex items-center gap-1"
                                     >
                                       <AlertTriangle className="h-3 w-3 text-rose-400" />
                                       Crear avería
                                     </button>
                                   </div>
-                                )}
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>
@@ -1481,15 +1003,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
               ) : (
                 /* PESTAÑA: OPERACIÓN */
                 <div className="space-y-3.5 fade-in">
-                  {/* MÉTRICAS DE DESEMPEÑO (MetricasOperacionDTO completo -- antes solo se leía
-                      contadorIncumplidos para el banner de ejecución detenida, el resto se
-                      descartaba sin mostrarse en ningún lado) */}
-                  {estadoRaw?.metricas && (
-                    <StaticSection title="Métricas de la operación" icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}>
-                      <MetricasStrip metricas={estadoRaw.metricas} />
-                    </StaticSection>
-                  )}
-
+                  {/* Las métricas globales de la operación viven en Reportes (aquí solo almacenes). */}
                   {/* CAPACIDAD DE ALMACENES */}
                   <StaticSection
                     title="Almacenes y capacidad"
@@ -1749,28 +1263,13 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Footer de configuración */}
-            <div className="p-3 border-t border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsConfigModalOpen(true)}
-                className="w-full flex items-center justify-center rounded-xl py-2.5 px-3 transition-colors cursor-pointer text-slate-100 hover:text-white hover:bg-[var(--color-sidebar-surface)] gap-3"
-                title="Configuración"
-              >
-                <SlidersHorizontal className="h-5 w-5 text-white shrink-0" />
-                <span className="text-sm font-medium">Configuración</span>
-              </button>
-            </div>
+            {/* Configuración ya no se repite aquí: está en la barra de secciones (☰). */}
           </div>
         )}
       </aside>
+      )}
 
       {/* Modales Compartidos */}
-      <ConfigModal
-        isOpen={isConfigModalOpen}
-        onClose={() => setIsConfigModalOpen(false)}
-      />
       <BreakdownModal
         isOpen={isBreakdownModalOpen && Boolean(selectedVehicleId)}
         onClose={() => setIsBreakdownModalOpen(false)}

@@ -13,8 +13,12 @@ export interface Order {
   arrivalSimMs?: number;
   createdMinute: number;
   deadlineMinute: number;
+  /** Límite (fechaLimite) en el reloj simulado. */
+  deadlineSimMs?: number;
   status: OrderStatus;
   assignedVehicleId?: string;
+  /** Vehículo que hizo la entrega (evento FIN_SERVICIO_ENTREGA visto en esta sesión), si se conoce. */
+  deliveredByVehicleId?: string;
   urgency: OrderUrgency;
   deliveredMinute?: number;
   /** Instante simulado de la entrega final (PedidoDTO.fechaEntrega), si ya fue entregado. */

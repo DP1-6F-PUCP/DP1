@@ -4,6 +4,7 @@ import { estadoOperacionApi } from './estadoOperacionApi';
 import { simulationEngine } from '../engine/simulationEngine';
 import { adaptEstadoOperacion } from '../utils/backendAdapters';
 import { keepRecentOrders, MAX_LOADED_ORDERS } from '../utils/shipmentList';
+import { olvidarEntregas } from '../utils/entregasPorVehiculo';
 
 /**
  * Ingesta ordenada de lotes numerados. Antes el lote viajaba WS -> caché de React Query -> render
@@ -30,8 +31,21 @@ let cadena: Promise<void> = Promise.resolve();
 
 /** Olvidar la numeración (al iniciar o cerrar una ejecución). */
 export function reiniciarIngesta(idEjecucion: string | null = null): void {
+  if (idEjecucion !== ejecucionActual) olvidarEntregas();
   ejecucionActual = idEjecucion;
   ultimaSecuencia = 0;
+}
+
+/**
+ * Lotes en los que hay que volver a pedir la configuración. Un cambio "en caliente" (velocidad,
+ * capacidad, servicio, almacenes…) lo aplica el backend al INICIO del próximo lote; pedirla justo al
+ * enviar el cambio traía el valor viejo, y como ['configuracion'] vive 60 s en caché, capacidad de
+ * los vehículos, velocidades, ETAs, llenado de flota, Flota y Reportes seguían con lo anterior hasta
+ * un minuto. Ahora se refresca en cada uno de los próximos lotes que lleguen.
+ */
+let lotesConRefrescoDeConfig = 0;
+export function refrescarConfiguracionEnLotes(lotes = 2): void {
+  lotesConRefrescoDeConfig = Math.max(lotesConRefrescoDeConfig, lotes);
 }
 
 export function ultimaSecuenciaIngerida(): number {
@@ -57,6 +71,10 @@ function aplicar(client: QueryClient, estado: EstadoOperacionDTO, ctx: Contexto)
   const pedidos = mezclarPedidos(client.getQueryData<PedidoDTO[]>(['pedidos', ctx.idEjecucion]), estado.pedidosCambiados);
   client.setQueryData(['pedidos', ctx.idEjecucion], pedidos);
   client.setQueryData(['estado-operacion', ctx.idEjecucion], estado);
+  if (lotesConRefrescoDeConfig > 0) {
+    lotesConRefrescoDeConfig--;
+    void client.invalidateQueries({ queryKey: ['configuracion'] });
+  }
   if (estado.secuencia) ultimaSecuencia = Math.max(ultimaSecuencia, estado.secuencia);
   const config = client.getQueryData<ConfiguracionActualDTO>(['configuracion']);
   if (!config) return; // sin configuración aún: lo tomará la ingesta por render

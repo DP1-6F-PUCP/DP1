@@ -26,6 +26,8 @@ import { generateManhattanPath, normalizeManhattanPath } from './manhattan';
 import { parseBackendSimulatedTime } from './backendTime';
 import { BREAKDOWN_LEVEL_CONFIGS } from './vehicleBreakdown';
 import { keepRecentOrders, MAX_LOADED_ORDERS } from './shipmentList';
+import { riesgoMinutos } from './estadoPedidos';
+import { registrarEntregas, vehiculoQueEntrego } from './entregasPorVehiculo';
 
 const TIPO_A_VEHICLE_TYPE: Record<string, VehicleType> = {
   AUTO: 'car',
@@ -86,9 +88,8 @@ const ESTADO_RUTA_A_STATUS: Record<string, Route['status']> = {
   REEMPLAZADA: 'blocked',
 };
 
-// Umbral puramente de UI (no es un parametro de negocio del backend) para resaltar un pedido
-// PENDIENTE que se acerca a su fechaLimite.
-const RIESGO_MINUTOS = 60;
+// RIESGO_MINUTOS (umbral de UI para "en riesgo") vive en estadoPedidos: lo comparte con
+// estadoAlInstante, que recalcula el estado al instante visible del mapa.
 
 function parseNodo(nodo: string): Point {
   const [x, y] = nodo.split(',').map(Number);
@@ -247,6 +248,11 @@ export function adaptVehiculo(
     assignedOrderIds: rutaActiva?.secuenciaEntrega ?? [],
     totalDelivered: 0, // no expuesto por el backend (no hay contador por vehiculo)
     homeWarehouseId: '', // el backend no fija un almacen base por unidad
+    warehouseDepartures: [dto.salidaAlmacen, dto.salidaAlmacenAnterior]
+      .filter((s): s is string => Boolean(s))
+      .map(parseBackendSimulatedTime),
+    breakdownStartMs: dto.inicioAveria ? parseBackendSimulatedTime(dto.inicioAveria) : undefined,
+    breakdownEndMs: dto.finAveria ? parseBackendSimulatedTime(dto.finAveria) : undefined,
   };
 }
 
@@ -410,7 +416,7 @@ export function adaptPedido(
     status = 'delivered';
   } else if (dto.estado === 'INCUMPLIDA') {
     status = 'delayed';
-  } else if (nowMs != null && Number.isFinite(deadlineMs) && deadlineMs - nowMs <= RIESGO_MINUTOS * 60000) {
+  } else if (nowMs != null && Number.isFinite(deadlineMs) && deadlineMs - nowMs <= riesgoMinutos() * 60000) {
     status = 'at_risk';
   } else {
     status = 'on_time';
@@ -469,8 +475,10 @@ export function adaptPedido(
     arrivalSimMs: createdMs,
     createdMinute,
     deadlineMinute,
+    deadlineSimMs: Number.isFinite(deadlineMs) ? deadlineMs : undefined,
     status,
     assignedVehicleId: rutaConPedido?.vehiculoId,
+    deliveredByVehicleId: dto.estado === 'ENTREGADA' ? vehiculoQueEntrego(dto.idPedido) : undefined,
     urgency: status === 'at_risk' || status === 'delayed' ? ('priority' as OrderUrgency) : 'normal',
     clientId: dto.idCliente,
     quantity: dto.cantidadSolicitada,
@@ -552,6 +560,7 @@ export function adaptEstadoOperacion(
   scenarioStartMs: number | null
 ): EstadoAdaptado {
   const nowMs = estado.marcaTiempoActual ? parseBackendSimulatedTime(estado.marcaTiempoActual) : null;
+  registrarEntregas(estado.eventos); // antes de adaptar los pedidos: les da su vehículo de entrega
   const pedidosById = new Map(pedidos.map((p) => [p.idPedido, p]));
   const vehiculosById = new Map(estado.vehiculos.map((v) => [v.idUnidad, v]));
   const blockedStreets = estado.bloqueos.filter((b) => b.vigente).flatMap(adaptBloqueo);

@@ -54,6 +54,25 @@ export function formatBackendSimulatedTime24(milliseconds: number, includeDate =
   return format.format(milliseconds).replace(',', '');
 }
 
+// "03/08 01:14": día/mes y hora en 24 h, sin año. Es el formato de Ingreso / Límite / Entrega en la
+// tabla de Pedidos y en la ficha del panel: el límite suele caer al día siguiente, así que la fecha
+// importa, y las 24 h coinciden con los relojes.
+const formatoFechaHoraCorta = new Intl.DateTimeFormat('es-PE', {
+  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC',
+});
+
+/** Instante simulado como "d/m HH:mm" (24 h), o "—" si no hay dato. */
+export function formatFechaHoraCorta(milliseconds: number | null | undefined): string {
+  if (milliseconds == null || Number.isNaN(milliseconds)) return '—';
+  return formatoFechaHoraCorta.format(milliseconds).replace(',', '');
+}
+
+/** Minuto de simulación (desde el inicio del escenario) como "d/m HH:mm"; "—" sin inicio conocido. */
+export function formatMinutoSimulado(scenarioStartMs: number | null | undefined, minute: number | null | undefined): string {
+  if (scenarioStartMs == null || minute == null) return '—';
+  return formatFechaHoraCorta(scenarioStartMs + minute * 60_000);
+}
+
 export function formatBackendSimulatedTime(
   milliseconds: number,
   includeDate = true,

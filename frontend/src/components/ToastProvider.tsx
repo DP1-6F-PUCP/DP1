@@ -105,7 +105,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
       <aside
         id="toast-portal-region"
         aria-label="Notificaciones del sistema"
-        className="fixed top-4 right-4 z-[2000] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
+        className="tema-panel fixed top-4 right-4 z-[2000] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
       >
         {toasts.map((t) => {
           let borderClass = 'border-blue-500/40 bg-slate-900/95 text-white';

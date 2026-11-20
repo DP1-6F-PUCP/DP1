@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { MapSlot } from '../components/map/MapSlot';
 import { useMapStore } from '../store/mapStore';
 
 export const SeguimientoPage: React.FC = () => {
@@ -17,9 +16,6 @@ export const SeguimientoPage: React.FC = () => {
     }
   }, [targetVehicleId, setSelectedVehicleId]);
 
-  return (
-    <div className="flex-1 flex h-full w-full overflow-hidden bg-[#0B111E] text-slate-100">
-      <MapSlot className="flex-1 relative h-full w-full" />
-    </div>
-  );
+  // El mapa es el de Operación, que el layout mantiene montado siempre: aquí solo se selecciona.
+  return null;
 };

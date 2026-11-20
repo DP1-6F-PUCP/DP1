@@ -4,3 +4,7 @@ target/
 *.iml
 .DS_Store
 .env
+# Logs de cada ejecución (.jsonl, decenas de miles de líneas): se generan solos al correr.
+logs/
+backend/logs/
+*.tsbuildinfo

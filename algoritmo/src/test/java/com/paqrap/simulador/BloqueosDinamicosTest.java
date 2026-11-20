@@ -121,7 +121,15 @@ class BloqueosDinamicosTest {
             assertNotEquals(EstadoRuta.REEMPLAZADA, original.getEstado());
         } finally { runner.detener(); }
     }
-    @Test void nuevoBloqueoDevuelvePedidosEnRutaAlPlanificador(@TempDir Path logs) throws Exception {
+    /**
+     * Un bloqueo nuevo en el camino de una ruta EN EJECUCIÓN: con paqrap.fijarCargadas=false
+     * (por defecto) la ruta se abandona y el pedido vuelve a competir; con fijarCargadas=true un
+     * vehículo que ya salió cargado conserva su pedido y rodea el bloqueo mientras siga llegando a
+     * tiempo (opción medida en el banco: colapsa antes, ver OrquestadorOperacion).
+     */
+    private void bloqueoEnElCamino(Path logs, boolean fijarCargadas) throws Exception {
+        String previo = System.getProperty("paqrap.fijarCargadas");
+        System.setProperty("paqrap.fijarCargadas", String.valueOf(fijarCargadas));
         UnidadTransporte u = unidad(new Nodo(4, 0));
         Pedido p = pedido("en-ruta", new Nodo(4, 6)); // su camino cruza el bloqueo en (4,3)
         Ruta original = ruta(u, p);
@@ -129,6 +137,10 @@ class BloqueosDinamicosTest {
         CountDownLatch primerLote = new CountDownLatch(1);
         Planificador planificador = c -> {
             if (llamadas.getAndIncrement() == 0) return List.of(original);
+            if (fijarCargadas) {
+                assertFalse(c.pedidos().contains(p), "Un pedido que ya va cargado no cambia de vehículo");
+                return List.of();
+            }
             assertTrue(c.pedidos().contains(p), "El pedido en curso debe volver a competir con los pendientes");
             return List.of(ruta(u, p));
         };
@@ -144,10 +156,18 @@ class BloqueosDinamicosTest {
             assertEquals(EstadoRuta.EN_EJECUCION, original.getEstado());
             runner.ejecutarSiguienteLote();
             assertEquals(2, llamadas.get());
-            assertEquals(EstadoRuta.REEMPLAZADA, original.getEstado());
-        } finally { runner.detener(); }
+            assertEquals(fijarCargadas ? EstadoRuta.EN_EJECUCION : EstadoRuta.REEMPLAZADA, original.getEstado());
+        } finally {
+            runner.detener();
+            if (previo == null) System.clearProperty("paqrap.fijarCargadas"); else System.setProperty("paqrap.fijarCargadas", previo);
+        }
     }
-
+    @Test void nuevoBloqueoDevuelvePedidosEnRutaAlPlanificador(@TempDir Path logs) throws Exception {
+        bloqueoEnElCamino(logs, false);
+    }
+    @Test void vehiculoCargadoConservaSuPedidoYRodeaElBloqueo(@TempDir Path logs) throws Exception {
+        bloqueoEnElCamino(logs, true);
+    }
     @Test void ipsoPlanificaParadaEnEsquinaCuyoBloqueoVenceDuranteLaRuta() {
         LocalDateTime ahora = LocalDateTime.of(2026, 11, 17, 21, 10);
         Ciudad ciudad = new Ciudad(70, 50, new Nodo(0, 0), 1, true);

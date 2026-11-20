@@ -2,7 +2,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Wrench } from 'lucide-react';
 import { BreakdownType, Vehicle } from '../../types';
 import { useVehicles } from '../../features/vehiculos/hooks/useVehicles';
-import { useToast } from '../ToastProvider';
+import { useAveriable } from '../../features/flota/useAveriable';
+import { confirmar } from '../Confirmacion';
 
 /* Mismos colores que el distintivo de avería del mapa (BREAKDOWN_COLORS) y la leyenda. */
 const OPCIONES: Array<{ tipo: BreakdownType; color: string; titulo: string; detalle: string }> = [
@@ -12,6 +13,17 @@ const OPCIONES: Array<{ tipo: BreakdownType; color: string; titulo: string; deta
 ];
 
 const ANCHO = 232;
+
+/** Reconfirmación de una avería (mapa y tabla de Flota): no se puede deshacer. */
+export const confirmarAveria = (codigo: string, tipo: BreakdownType) => {
+  const o = OPCIONES.find((x) => x.tipo === tipo);
+  return confirmar({
+    titulo: `¿Averiar ${codigo}?`,
+    detalle: o ? `${o.titulo} · ${o.detalle}. No se puede deshacer.` : 'No se puede deshacer.',
+    accion: 'Averiar',
+    tono: 'peligro',
+  });
+};
 
 interface Props {
   vehiculo: Vehicle;
@@ -27,10 +39,13 @@ interface Props {
  */
 export const MenuAveriaVehiculo: React.FC<Props> = ({ vehiculo, punto, onCerrar }) => {
   const { reportBreakdown, isReportingBreakdown } = useVehicles();
-  const { addToast } = useToast();
   const ref = useRef<HTMLDivElement>(null);
   const [posicion, setPosicion] = useState({ left: punto.x, top: punto.y });
-  const noDisponible = vehiculo.status === 'broken' || vehiculo.status === 'maintenance';
+  // Regla de 4 h (la misma de la tabla de Flota). Se fija al abrir: el reloj avanza mientras el menú
+  // está abierto y no debe cambiar bajo el cursor.
+  const reglaAhora = useAveriable(vehiculo);
+  const [regla] = useState(reglaAhora);
+  const noDisponible = regla ? !regla.ok : vehiculo.status === 'broken' || vehiculo.status === 'maintenance';
 
   useEffect(() => {
     const alTecla = (e: KeyboardEvent) => { if (e.key === 'Escape') onCerrar(); };
@@ -44,23 +59,11 @@ export const MenuAveriaVehiculo: React.FC<Props> = ({ vehiculo, punto, onCerrar 
     };
   }, [onCerrar]);
 
-  const inducir = (tipo: BreakdownType) => {
-    reportBreakdown(
-      { vehicleId: vehiculo.id, type: tipo },
-      {
-        onSuccess: () => addToast({
-          type: 'warning',
-          title: `Avería tipo ${tipo} programada`,
-          description: `${vehiculo.code} se averiará en el próximo lote de planificación.`,
-        }),
-        onError: (error) => addToast({
-          type: 'error',
-          title: `Error al averiar ${vehiculo.code}`,
-          description: error instanceof Error ? error.message : 'No se pudo programar la avería.',
-        }),
-      },
-    );
+  // El aviso de confirmación o error lo da useVehicles (en el useMutation): el menú se cierra ya y,
+  // desmontado, los callbacks de mutate() no se ejecutarían.
+  const inducir = async (tipo: BreakdownType) => {
     onCerrar();
+    if (await confirmarAveria(vehiculo.code, tipo)) reportBreakdown({ vehicleId: vehiculo.id, type: tipo });
   };
 
   // Que no se salga del mapa: si no cabe a la derecha o abajo del clic, se abre hacia el otro lado.
@@ -83,25 +86,26 @@ export const MenuAveriaVehiculo: React.FC<Props> = ({ vehiculo, punto, onCerrar 
       aria-label={`Inducir avería en ${vehiculo.code}`}
       style={{ left: posicion.left, top: posicion.top, width: ANCHO }}
       onContextMenu={(e) => e.preventDefault()}
-      className="absolute z-[1200] overflow-hidden rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] text-slate-100 shadow-2xl"
+      className="tema-panel absolute z-[1200] overflow-hidden rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)] text-slate-100 shadow-2xl"
     >
       <div className="flex items-center gap-2 border-b border-[var(--color-sidebar-border)] px-3 py-2">
         <Wrench className="h-4 w-4 text-rose-400" aria-hidden />
         <span className="text-xs font-semibold">Inducir avería · {vehiculo.code}</span>
       </div>
       {noDisponible ? (
-        <p className="px-3 py-2.5 text-xs text-slate-400">
-          {vehiculo.status === 'broken' ? 'El vehículo ya está averiado.' : 'El vehículo está en mantenimiento.'}
+        <p role="note" className="px-3 py-2.5 text-xs text-slate-400">
+          {regla?.motivo ?? (vehiculo.status === 'broken' ? 'Ya está averiado' : 'Está en mantenimiento')}
         </p>
       ) : (
         <div className="p-1">
+          {regla && <p className="px-2 pb-1 pt-0.5 text-[11px] text-slate-400">{regla.motivo}</p>}
           {OPCIONES.map((o) => (
             <button
               key={o.tipo}
               type="button"
               role="menuitem"
               disabled={isReportingBreakdown}
-              onClick={() => inducir(o.tipo)}
+              onClick={() => void inducir(o.tipo)}
               className="flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-slate-800 focus-visible:bg-slate-800 focus-visible:outline-none disabled:opacity-50"
             >
               <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[1.5px] bg-white text-[8px] font-extrabold"

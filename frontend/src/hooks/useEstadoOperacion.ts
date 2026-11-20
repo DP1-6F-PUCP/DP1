@@ -66,6 +66,12 @@ export function useEstadoOperacion() {
     queryFn: ({ signal }) => configuracionApi.getConfiguracion(signal),
     enabled: !transicion,
     staleTime: 60_000,
+    // Red de seguridad para cambios en caliente (ver ingestaLotes.refrescarConfiguracionEnLotes):
+    // staleTime solo marca el dato como viejo, no lo vuelve a pedir; sin esto una página abierta
+    // podía quedarse con la capacidad/velocidad anterior indefinidamente.
+    refetchInterval: id ? 20_000 : false,
+    // También sin foco (ventana detrás de otra, o pantalla de exposición): si no, TanStack lo pausa.
+    refetchIntervalInBackground: true,
   });
 
   const isLoading = estadoQuery.isLoading || pedidosQuery.isLoading || configuracionQuery.isLoading;

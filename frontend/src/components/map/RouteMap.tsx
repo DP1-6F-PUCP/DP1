@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMapStore } from '../../store/mapStore';
 import { Vehicle, Warehouse, BlockedStreet, Order, Route } from '../../types';
 import { ApiMapa, LeafletManhattanMap } from './LeafletManhattanMap';
@@ -6,8 +6,8 @@ import { ControlesMapa } from './ControlesMapa';
 import { useEstadoOperacion } from '../../hooks/useEstadoOperacion';
 import { useScenarioStore } from '../../store/scenarioStore';
 import { IndicadoresGlobalesMapa } from './IndicadoresGlobalesMapa';
-import { LeyendaMapa } from './LeyendaMapa';
 import { MenuAveriaVehiculo } from './MenuAveriaVehiculo';
+import { almacenVisible, pedidoVisible, vehiculoVisible } from '../../utils/filtrosMapa';
 
 export interface RouteMapProps {
   warehouses?: Warehouse[];
@@ -24,6 +24,9 @@ export interface RouteMapProps {
   onSelectWarehouse?: (warehouse: Warehouse) => void;
   onSelectOrder?: (order: Order) => void;
   isDarkTheme?: boolean;
+  /** Ejecución ya terminada cuyo cierre aún se muestra: los indicadores siguen a la vista (el
+   * "Vencido #…" explica el colapso); el menú de averías no. */
+  vistaFinal?: boolean;
 }
 
 export const RouteMap: React.FC<RouteMapProps> = ({
@@ -37,11 +40,29 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   onSelectWarehouse,
   onSelectOrder,
   isDarkTheme = true,
+  vistaFinal = false,
 }) => {
   const selectedVehicleId = useMapStore((s) => s.selectedVehicleId);
   const selectedWarehouseId = useMapStore((s) => s.selectedWarehouseId);
   const selectedOrderId = useMapStore((s) => s.selectedOrderId);
   const activeLayers = useMapStore((s) => s.activeLayers);
+  const filtros = useMapStore((s) => s.filtros);
+
+  // Filtros de la leyenda. Lo seleccionado se ve siempre (si no, al elegirlo desde la lista o los
+  // indicadores "desaparecería"); las rutas siguen a su vehículo.
+  const vehiculosVisibles = useMemo(
+    () => vehicles.filter((v) => v.id === selectedVehicleId || (activeLayers.vehicles && vehiculoVisible(filtros, v))),
+    [vehicles, filtros, selectedVehicleId, activeLayers.vehicles]);
+  const idsVisibles = useMemo(() => new Set(vehiculosVisibles.map((v) => v.id)), [vehiculosVisibles]);
+  const rutasVisibles = useMemo(
+    () => (idsVisibles.size === vehicles.length ? routes : routes.filter((r) => idsVisibles.has(r.vehicleId))),
+    [routes, idsVisibles, vehicles.length]);
+  const pedidosVisibles = useMemo(
+    () => orders.filter((o) => o.id === selectedOrderId || pedidoVisible(filtros, o)),
+    [orders, filtros, selectedOrderId]);
+  const almacenesVisibles = useMemo(
+    () => warehouses.filter((w) => w.id === selectedWarehouseId || (activeLayers.warehouses && almacenVisible(filtros, w))),
+    [warehouses, filtros, selectedWarehouseId, activeLayers.warehouses]);
   const setSelectedVehicleId = useMapStore((s) => s.setSelectedVehicleId);
   const setSelectedWarehouseId = useMapStore((s) => s.setSelectedWarehouseId);
   const setSelectedOrderId = useMapStore((s) => s.setSelectedOrderId);
@@ -52,6 +73,11 @@ export const RouteMap: React.FC<RouteMapProps> = ({
 
   // Controles del mapa (zoom, ver toda la ciudad, capas): van en esta capa, sobre los paneles.
   const [apiMapa, setApiMapa] = useState<ApiMapa | null>(null);
+  // "Ver en el mapa" desde otra página: centra cuando el mapa vuelve a estar a la vista.
+  const solicitudCentrado = useMapStore((s) => s.solicitudCentrado);
+  useEffect(() => {
+    if (apiMapa && solicitudCentrado) apiMapa.centrar(solicitudCentrado.x, solicitudCentrado.y);
+  }, [apiMapa, solicitudCentrado]);
 
   // Clic derecho sobre un vehículo: menú para inducir una avería.
   const [menuAveria, setMenuAveria] = useState<{ vehicleId: string; punto: { x: number; y: number } } | null>(null);
@@ -88,11 +114,11 @@ export const RouteMap: React.FC<RouteMapProps> = ({
   return (
     <div className="relative w-full h-full">
       <LeafletManhattanMap
-        warehouses={warehouses}
-        vehicles={vehicles}
+        warehouses={almacenesVisibles}
+        vehicles={vehiculosVisibles}
         blockedStreets={blockedStreets}
-        orders={orders}
-        routes={routes}
+        orders={pedidosVisibles}
+        routes={rutasVisibles}
         simMinutes={simMinutes}
         selectedVehicleId={selectedVehicleId}
         selectedWarehouseId={selectedWarehouseId}
@@ -113,11 +139,10 @@ export const RouteMap: React.FC<RouteMapProps> = ({
       {apiMapa && (
         <ControlesMapa onAcercar={apiMapa.acercar} onAlejar={apiMapa.alejar} onEncuadrar={apiMapa.encuadrar} />
       )}
-      {hasActiveExecution && <LeyendaMapa />}
       {hasActiveExecution && menuAveria && vehiculoMenu && (
         <MenuAveriaVehiculo vehiculo={vehiculoMenu} punto={menuAveria.punto} onCerrar={cerrarMenuAveria} />
       )}
-      {hasActiveExecution && (
+      {(hasActiveExecution || vistaFinal) && (
         <IndicadoresGlobalesMapa
           onIrAPedido={(pedido) => apiMapa?.centrar(pedido.destination.x, pedido.destination.y)}
           onIrAPunto={(x, y) => apiMapa?.centrar(x, y)}

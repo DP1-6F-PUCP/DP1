@@ -522,6 +522,9 @@ public class MotorSimulacion {
         // Sale a repartir (desde un almacén, o desde la calle con carga a bordo): deja de ser regreso.
         unidad.setEnRetorno(false, nodo, instanteDespacho);
         ruta.registrarDespacho(nodo, instanteDespacho);
+        if (contexto.almacenes().stream().anyMatch(a -> a.getPosicion().equals(nodo))) {
+            unidad.registrarSalidaAlmacen(instanteDespacho);
+        }
         unidad.setCargaABordo(Math.max(unidad.getCargaABordo(), carga));
         for (ParadaPlanificada pendiente : paradasPendientes) {
             pendiente.getPedido().registrarDespacho(nodo, instanteDespacho);

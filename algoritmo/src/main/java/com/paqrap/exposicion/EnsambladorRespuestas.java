@@ -196,7 +196,10 @@ public final class EnsambladorRespuestas {
         return new VehiculoDTO(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), unidad.getEstado().name(),
                 unidad.getPosicion().x(), unidad.getPosicion().y(), cargaActual, geometriaRetorno,
                 unidad.getActividadActual().name(), calcularActividadDesde(unidad), trayectoria,
-                unidad.getAveriaActual() == null ? null : unidad.getAveriaActual().tipo().name());
+                unidad.getAveriaActual() == null ? null : unidad.getAveriaActual().tipo().name(),
+                unidad.getSalidaAlmacen(), unidad.getSalidaAlmacenAnterior(),
+                unidad.getAveriaActual() == null ? null : unidad.getAveriaActual().fechaInicio(),
+                unidad.getAveriaActual() == null ? null : unidad.getAveriaActual().fechaFinEstimada());
     }
 
     /**

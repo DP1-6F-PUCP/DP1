@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { fileStore, leerYParsearArchivos } from '../../../utils/fileStore';
 import { parseBlockedStreetsFile, parseOrdersFile, parseMaintenanceFile } from '../../../utils/fileParser';
 import { archivosApi } from '../../../services/archivosApi';
+import { confirmar } from '../../../components/Confirmacion';
 import { Warehouse } from '../../../types';
 
 export type CategoriaArchivo = 'blockages' | 'orders' | 'maintenance';
+
+const NOMBRE_CATEGORIA: Record<CategoriaArchivo, string> = { blockages: 'bloqueos', orders: 'pedidos', maintenance: 'mantenimiento' };
 
 export interface EstadoSubida {
   tipo: 'success' | 'error' | 'info';
@@ -12,7 +15,7 @@ export interface EstadoSubida {
 }
 
 /**
- * Unico punto de subida de archivos, usado por DataFilesModal -- antes dos componentes distintos
+ * Unico punto de subida de archivos, usado por Configuración › Datos (CargaMasivaArchivos) -- antes dos componentes distintos
  * (DataFilesModal y el ya borrado SidebarDataFiles) reimplementaban por su cuenta, 3 veces cada
  * uno, el mismo FileReader+parse+dedupe (6 copias en total, confirmado en la revision de
  * codigo). Tambien antes NINGUNO llegaba al backend real
@@ -20,7 +23,7 @@ export interface EstadoSubida {
  * solo para previsualizar (conteo, nombre, contenido), la subida real es la que de verdad aplica
  * el archivo -- el backend no tiene un paso separado de "aplicar", aplica al recibirlo.
  */
-export function useSubidaArchivos(warehouses: Warehouse[]) {
+export function useSubidaArchivos(warehouses: Warehouse[] = []) {
   const [, forceUpdate] = useState(0);
   useEffect(() => fileStore.subscribe(() => forceUpdate((v) => v + 1)), []);
 
@@ -29,10 +32,9 @@ export function useSubidaArchivos(warehouses: Warehouse[]) {
   const [uploadingCategory, setUploadingCategory] = useState<CategoriaArchivo | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ actual: number; total: number } | null>(null);
 
-  const mostrarEstado = (estadoNuevo: EstadoSubida) => {
-    setEstado(estadoNuevo);
-    setTimeout(() => setEstado(null), 3500);
-  };
+  // El resultado queda visible hasta la próxima subida o hasta cerrarlo (antes desaparecía a los
+  // 3,5 s y un error largo del backend no alcanzaba a leerse).
+  const mostrarEstado = (estadoNuevo: EstadoSubida) => setEstado(estadoNuevo);
 
   const subirPorLotes = async <T,>(items: File[], fn: (f: File) => Promise<T>, tamanoLote = 4) => {
     let completados = 0;
@@ -51,6 +53,14 @@ export function useSubidaArchivos(warehouses: Warehouse[]) {
 
   const procesarArchivos = async (categoria: CategoriaArchivo, files: File[]) => {
     if (files.length === 0) return;
+    const ok = await confirmar({
+      titulo: `¿Subir ${files.length} archivo(s) de ${NOMBRE_CATEGORIA[categoria]}?`,
+      detalle: files.length === 1 ? files[0].name : 'Se aplican en el backend al recibirlos.',
+      accion: 'Subir',
+      tono: 'crear',
+    });
+    if (!ok) return;
+    setEstado(null);
     setIsUploading(true);
     setUploadingCategory(categoria);
     setUploadProgress({ actual: 0, total: files.length });
@@ -93,7 +103,8 @@ export function useSubidaArchivos(warehouses: Warehouse[]) {
     }
   };
 
-  const eliminarArchivo = (categoria: CategoriaArchivo, nombre: string) => {
+  const eliminarArchivo = async (categoria: CategoriaArchivo, nombre: string) => {
+    if (!(await confirmar({ titulo: `¿Quitar ${nombre}?`, detalle: 'Sale de la lista de archivos cargados.', accion: 'Quitar', tono: 'peligro' }))) return;
     if (categoria === 'blockages') {
       fileStore.setBlockageFiles((prev) => prev.filter((f) => f.name !== nombre));
     } else if (categoria === 'orders') {
@@ -109,16 +120,24 @@ export function useSubidaArchivos(warehouses: Warehouse[]) {
     maintenanceFiles: fileStore.getMaintenanceFiles(),
     procesarArchivos,
     eliminarArchivo,
-    resetToSamples: () => fileStore.resetToSamples(warehouses),
+    resetToSamples: async () => {
+      if (await confirmar({ titulo: '¿Volver a los archivos de ejemplo?', detalle: 'Reemplaza la lista actual.', accion: 'Reemplazar', tono: 'peligro' })) {
+        fileStore.resetToSamples(warehouses);
+      }
+    },
+    /** Borra en el backend los datos cargados manualmente (DELETE /api/files) y vacía la lista. */
     limpiarTodo: async () => {
-      fileStore.clearAll();
+      if (!(await confirmar({ titulo: '¿Borrar todos los datos cargados?', detalle: 'Pedidos, bloqueos y mantenimientos subidos a mano. No se puede deshacer.', accion: 'Borrar', tono: 'peligro' }))) return;
       try {
         await archivosApi.limpiarArchivos();
-      } catch {
-        // backend opcional o en reinicio
+        fileStore.clearAll();
+        mostrarEstado({ tipo: 'success', mensaje: 'Se borraron los datos cargados manualmente.' });
+      } catch (err) {
+        mostrarEstado({ tipo: 'error', mensaje: (err as Error)?.message || 'No se pudieron borrar los datos cargados.' });
       }
     },
     estado,
+    cerrarEstado: () => setEstado(null),
     isUploading,
     uploadingCategory,
     uploadProgress,

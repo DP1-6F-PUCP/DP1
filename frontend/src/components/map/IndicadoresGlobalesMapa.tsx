@@ -1,16 +1,18 @@
-import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useRef } from 'react';
+import { useAyuda } from './useAyuda';
 import {
-  Activity, ArrowDown, ArrowUp, Boxes, ChevronDown, ChevronUp, CircleCheck, CircleParking, ClipboardList,
+  Activity, AlertTriangle, ArrowDown, ArrowUp, Boxes, ChevronDown, ChevronUp, CircleCheck, CircleParking, ClipboardList,
   Gauge, GripVertical, Hourglass, Inbox, LocateFixed, Navigation, RefreshCw, Star, Timer, Truck, Warehouse as WarehouseIcon, Wrench,
 } from 'lucide-react';
 import { Order, Vehicle } from '../../types';
 import { usePanelFlotante } from '../../hooks/usePanelFlotante';
 import { useEstadoVisual } from '../../engine/useEstadoVisual';
-import { useScenarioStore } from '../../store/scenarioStore';
 import { useMapStore } from '../../store/mapStore';
 import { getFleetFill, getWarehousesFill } from '../../utils/indicadoresGlobales';
-import { WAREHOUSE_STOCK_COLORS, WarehouseStockLevel } from '../../utils/warehouseStock';
+import { nivelStock, WAREHOUSE_STOCK_COLORS, WarehouseStockLevel } from '../../utils/warehouseStock';
+import { useUmbrales } from '../../store/umbralesStore';
+import { duracionCorta, haceCorto, pedidosPorVencer } from '../../utils/estadoPedidos';
+import { estadoVehiculo } from '../../utils/filtrosMapa';
 
 const HORA = 3_600_000;
 /** Ciclo de recarga de los intermedios: múltiplos de su frecuencia desde esta época
@@ -26,21 +28,12 @@ type Tono = 'neutro' | 'ambar' | 'rojo';
 
 /** Escala "Color según su carga" de la leyenda (LeyendaMapa.CARGA / LeafletManhattanMap). */
 
-/** Escala "Color según su stock" de la leyenda (mismos cortes que utils/warehouseStock). */
-const nivelStock = (stock: number, pct: number): Exclude<WarehouseStockLevel, 'central'> =>
-  stock <= 0 ? 'empty' : pct >= 65 ? 'high' : pct >= 30 ? 'medium' : 'low';
+/** Escala "Color según su stock" de la leyenda: nivelStock (utils/warehouseStock). */
 const tonoStock = (nivel: Exclude<WarehouseStockLevel, 'central'>): Tono =>
   nivel === 'low' || nivel === 'empty' ? 'rojo' : nivel === 'medium' ? 'ambar' : 'neutro';
 
-/** Compacto: "42m", "2h 58m", "1d 4h"; negativo = "vencido". */
-const corto = (ms: number): string => {
-  if (ms < 0) return 'vencido';
-  const min = Math.floor(ms / 60_000);
-  if (min < 60) return `${min}m`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return min % 60 ? `${h}h ${min % 60}m` : `${h}h`;
-  return `${Math.floor(h / 24)}d ${h % 24}h`;
-};
+/** Compacto: "42m", "2h 58m", "1d 4h" (compartido con la columna "Faltan" de Pedidos). */
+const corto = duracionCorta;
 
 const ESTILO_TONO: Record<Tono, { tarjeta: string; valor: string; icono: string; chip: string }> = {
   neutro: { tarjeta: 'border-transparent bg-slate-950/40', valor: 'text-slate-50', icono: 'text-slate-400', chip: 'bg-slate-600 text-white' },
@@ -65,66 +58,6 @@ const Tendencia: React.FC<{ dir: 'sube' | 'baja' | null }> = ({ dir }) =>
   dir === 'sube' ? <ArrowUp className="h-3.5 w-3.5 text-rose-400" aria-hidden />
     : dir === 'baja' ? <ArrowDown className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
       : null;
-
-/**
- * Ayuda al pasar el mouse (o enfocar con teclado). Reemplaza al `title` nativo: el panel se vuelve a
- * dibujar varias veces por segundo y, cada vez que el texto cambiaba (p. ej. "vence en 2h 15m"), el
- * navegador cerraba o hacía parpadear su globo. Este queda abierto mientras el puntero esté encima,
- * con el texto al día, en letra legible, y no tapa nada del panel: va en un portal sobre la página,
- * arriba de la tarjeta (o debajo si no cabe), ajustado a los bordes de la ventana. No captura el
- * puntero, así que no puede "robarse" el hover y cerrarse solo.
- */
-function useAyuda(texto: string, contenido?: React.ReactNode) {
-  const id = useId();
-  const ancla = useRef<HTMLElement | null>(null);
-  const globo = useRef<HTMLDivElement | null>(null);
-  const espera = useRef<number | undefined>(undefined);
-  const [abierta, setAbierta] = useState(false);
-
-  const abrir = () => { window.clearTimeout(espera.current); espera.current = window.setTimeout(() => setAbierta(true), 250); };
-  const cerrar = () => { window.clearTimeout(espera.current); setAbierta(false); };
-  useEffect(() => () => window.clearTimeout(espera.current), []);
-
-  // Se reubica en cada dibujo (el texto puede cambiar de largo); sin estado, para no provocar otro dibujo.
-  useLayoutEffect(() => {
-    if (!abierta || !ancla.current || !globo.current) return;
-    const a = ancla.current.getBoundingClientRect();
-    const g = globo.current.getBoundingClientRect();
-    const margen = 8;
-    const left = Math.min(Math.max(margen, a.left + a.width / 2 - g.width / 2), window.innerWidth - g.width - margen);
-    const arriba = a.top - g.height - 6;
-    const top = arriba >= margen ? arriba : Math.min(a.bottom + 6, window.innerHeight - g.height - margen);
-    globo.current.style.left = `${left}px`;
-    globo.current.style.top = `${top}px`;
-    globo.current.style.visibility = 'visible';
-  });
-
-  const props = {
-    ref: (el: HTMLElement | null) => { ancla.current = el; },
-    onPointerEnter: abrir,
-    onPointerLeave: cerrar,
-    onFocus: abrir,
-    onBlur: cerrar,
-    'aria-describedby': abierta ? id : undefined,
-  };
-  const nodo = abierta && texto
-    ? createPortal(
-      <div
-        ref={globo}
-        id={id}
-        role="tooltip"
-        style={{ position: 'fixed', left: 0, top: 0, visibility: 'hidden' }}
-        className="pointer-events-none z-[3000] max-w-[230px] space-y-0.5 rounded-lg border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs leading-snug shadow-xl"
-      >
-        {contenido ?? texto.split('\n').map((linea, i) => (
-          <div key={i} className={i === 0 ? 'font-semibold text-slate-50' : 'text-slate-300'}>{linea}</div>
-        ))}
-      </div>,
-      document.body,
-    )
-    : null;
-  return { props, nodo };
-}
 
 /**
  * Una métrica: ícono + valor grande + rótulo de 1-2 palabras (+ barra opcional). El color solo
@@ -218,7 +151,7 @@ const Nivel: React.FC<{ icono: React.ElementType; titulo: string; tono: Tono; co
 /**
  * Indicadores del operador sobre el mapa: un resumen para leer de un vistazo, en tres niveles por
  * entidad (el modelo mental del operador y, más adelante, una pantalla de detalle por nivel):
- *   Pedidos   → próximo vencimiento (+N que también vencen en < 3 h; clic: lo centra) · sin asignar ·
+ *   Pedidos   → próximo vencimiento (+N más en riesgo o vencidos; clic: lo centra) · sin asignar ·
  *               última hora (entran / entregados)
  *   Flota     → disponibles · en ruta · fuera de servicio (el llenado G01/G02 va en la ayuda del nivel)
  *   Almacenes → cada almacén (central incluido; ∞ si no tiene límite): stock, barra y próxima recarga (el total G04 va en la ayuda del nivel)
@@ -232,45 +165,32 @@ export const IndicadoresGlobalesMapa: React.FC<{
 }> = ({ onIrAPedido, onIrAPunto }) => {
   const panel = usePanelFlotante('paqrap.panel.indicadores', { derecha: 12, vertical: 12 }, 'abajo');
   const { orders, vehicles, warehouses, estadoRaw, marcaVisibleMs } = useEstadoVisual();
-  const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
+  const { riesgoMinutos } = useUmbrales();
+  const RIESGO = riesgoMinutos * 60_000;
   const setSelectedOrderId = useMapStore((s) => s.setSelectedOrderId);
   const setSelectedWarehouseId = useMapStore((s) => s.setSelectedWarehouseId);
   const historial = useRef<Array<{ t: number; n: number }>>([]);
 
   const ahora = marcaVisibleMs;
-  const plazo = (o: Order) => (scenarioStartMs != null ? scenarioStartMs + o.deadlineMinute * 60_000 : NaN);
   const pendientes = ahora == null ? [] : orders.filter((o) => o.status !== 'delivered');
 
-  // Pedidos en servicio: su vehículo ya llegó y está entregando en su destino. El plazo se cumple con
-  // la LLEGADA (el backend evalúa contra el inicio del servicio, que dura tiempoServicioClienteHoras),
-  // así que ya no pueden vencer aunque el servicio termine después del plazo.
-  const enServicio = new Set<string>();
-  for (const v of vehicles) {
-    if (v.status !== 'delivering') continue;
-    for (const o of pendientes) {
-      if (o.assignedVehicleId === v.id
-        && Math.round(o.destination.x) === Math.round(v.position.x)
-        && Math.round(o.destination.y) === Math.round(v.position.y)) enServicio.add(o.id);
-    }
-  }
-  // Riesgo: el próximo vencimiento y cuántos MÁS vencen en < 3 h (el "+N" excluye al próximo).
-  let proximo: Order | null = null;
-  let proximoMs = Infinity;
-  let riesgo1h = 0;
-  let riesgo3h = 0;
-  for (const o of pendientes) {
-    if (enServicio.has(o.id)) continue;
-    const resto = plazo(o) - (ahora ?? 0);
-    if (!Number.isFinite(resto)) continue;
-    if (resto < proximoMs) { proximoMs = resto; proximo = o; }
-    if (resto <= HORA) riesgo1h++;
-    if (resto <= 3 * HORA) riesgo3h++;
-  }
-  const tonoProximo: Tono = proximoMs <= HORA ? 'rojo' : proximoMs <= 3 * HORA ? 'ambar' : 'neutro';
-  const otros3h = Math.max(0, riesgo3h - (proximoMs <= 3 * HORA ? 1 : 0));
-  const otros1h = Math.max(0, riesgo1h - (proximoMs <= HORA ? 1 : 0));
-  const tonoOtros: Tono = otros1h > 0 ? 'rojo' : 'ambar';
+  // Riesgo: los VENCIDOS primero (pendientes con el límite ya pasado al instante visible, no en
+  // servicio: el backend recién lo marca y detiene la operación al cierre del lote) y luego el
+  // próximo vencimiento; "+N" = cuántos MÁS están vencidos o en riesgo (excluye al mostrado).
+  // Misma escala que los pines: rojo = vencido, ámbar = en riesgo (≤ riesgoMinutos, configurable).
+  // Mismo criterio que el filtro "Vence el plazo" de Pedidos (pedidosPorVencer con vencidos).
+  const porVencer = pedidosPorVencer(orders, vehicles, ahora, { incluirVencidos: true });
+  const proximo: Order | null = porVencer[0]?.order ?? null;
+  const proximoMs = porVencer[0]?.restoMs ?? Infinity;
+  const vencido = proximo != null && proximoMs <= 0;
+  const enRiesgoOVencidos = porVencer.filter((p) => p.restoMs <= RIESGO).length;
+  const vencidos = porVencer.filter((p) => p.restoMs <= 0).length;
+  const tonoProximo: Tono = vencido ? 'rojo' : proximoMs <= RIESGO ? 'ambar' : 'neutro';
+  const otros3h = Math.max(0, enRiesgoOVencidos - (proximoMs <= RIESGO ? 1 : 0));
+  const otrosVencidos = Math.max(0, vencidos - (vencido ? 1 : 0));
+  const tonoOtros: Tono = otrosVencidos > 0 ? 'rojo' : 'ambar';
   const idProximo = proximo ? (proximo.code.length > 8 ? `#${proximo.code.slice(-4)}` : proximo.code) : '';
+  const valorProximo = !proximo ? '—' : vencido ? haceCorto(proximoMs) : corto(proximoMs);
   const chipOtros = otros3h > 0 ? (
     <span className={`rounded-full px-1 text-[10px] font-bold leading-[14px] ${ESTILO_TONO[tonoOtros].chip}`}>+{otros3h}</span>
   ) : null;
@@ -291,13 +211,16 @@ export const IndicadoresGlobalesMapa: React.FC<{
   const salen = orders.filter((o) => enUltimaHora(o.deliveredSimMs)).length;
   const tonoFlujo: Tono = entran > salen + 2 ? 'ambar' : 'neutro';
 
-  // Vehículos en tres grupos que suman la flota: disponibles (status 'idle', sin ruta), en ruta (viajando,
-  // entregando o en refrigerio a mitad de ruta) y fuera de servicio (averiados o en mantenimiento).
+  // Vehículos en tres grupos que suman la flota: disponibles (status 'idle', sin ruta), en ruta y fuera
+  // de servicio (averiados o en mantenimiento). "En ruta" agrupa los estados de la leyenda Viajando,
+  // Entregando, Refrigerio y Va al almacén (mismo criterio: estadoVehiculo), así las cuentas coinciden.
   const libres = vehicles.filter((v) => v.status === 'idle');
-  const viajando = vehicles.filter((v) => v.status === 'en_route').length;
-  const entregando = vehicles.filter((v) => v.status === 'delivering').length;
-  const enRefrigerio = vehicles.filter((v) => v.status === 'on_break').length;
-  const enRuta = viajando + entregando + enRefrigerio;
+  const nEstado = (e: ReturnType<typeof estadoVehiculo>) => vehicles.filter((v) => estadoVehiculo(v) === e).length;
+  const viajando = nEstado('en_ruta');
+  const entregando = nEstado('entregando');
+  const enRefrigerio = nEstado('refrigerio');
+  const regresando = nEstado('almacen');
+  const enRuta = viajando + entregando + enRefrigerio + regresando;
   const porTipo = (t: Vehicle['type']) => libres.filter((v) => v.type === t).length;
   const averiados = vehicles.filter((v) => v.status === 'broken').length;
   const mantenimiento = vehicles.filter((v) => v.status === 'maintenance').length;
@@ -342,10 +265,12 @@ export const IndicadoresGlobalesMapa: React.FC<{
   // que la tarjeta no muestra.
   const ayudaProximo = proximo
     ? [
-      'Próximo pedido en vencer',
-      proximo.code,
-      otros3h > 0 ? `+${otros3h} más vencen en < 3 h${otros1h > 0 ? ` (${otros1h} en < 1 h)` : ''}` : '',
-      'Ámbar < 3 h · rojo < 1 h',
+      vencido ? 'Pedido con el plazo VENCIDO' : 'Próximo pedido en vencer',
+      vencido ? `${proximo.code} · venció ${haceCorto(proximoMs)}` : proximo.code,
+      vencido && vencidos > 1 ? `${vencidos} vencidos en total` : '',
+      vencido ? 'La operación se detendrá al cierre del lote' : '',
+      otros3h > 0 ? `+${otros3h} más en riesgo o vencidos${otrosVencidos > 0 ? ` (${otrosVencidos} vencidos)` : ''}` : '',
+      `Ámbar: faltan ≤ ${duracionCorta(RIESGO)} · rojo: vencido`,
       'Click: verlo en el mapa',
     ].filter(Boolean).join('\n')
     : 'Próximo pedido en vencer\nNo hay pedidos pendientes';
@@ -358,7 +283,8 @@ export const IndicadoresGlobalesMapa: React.FC<{
       ref={panel.ref}
       style={panel.style}
       aria-label="Indicadores de la operación"
-      className={`absolute z-[1000] ${panel.colapsado ? '' : 'w-[316px]'} rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)]/95 text-slate-100 shadow-xl backdrop-blur-sm select-none`}
+      data-panel-mapa
+      className={`tema-panel absolute z-[1000] ${panel.colapsado ? '' : 'w-[316px]'} rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)]/95 text-slate-100 shadow-xl backdrop-blur-sm select-none`}
     >
       <div
         {...panel.manejadoresArrastre}
@@ -370,7 +296,7 @@ export const IndicadoresGlobalesMapa: React.FC<{
           // Colapsado: una cifra por nivel, con el color de su peor estado.
           <span className="flex items-center gap-2.5 font-mono-code text-sm font-bold">
             <ConAyuda className={`flex items-center gap-1 ${ESTILO_TONO[tonoPedidos].valor}`} ayuda={ayudaProximo} onClick={proximo ? irAlProximo : undefined}>
-              <ClipboardList className="h-3.5 w-3.5" aria-hidden />{proximo ? corto(proximoMs) : '—'}
+              <ClipboardList className={`h-3.5 w-3.5 ${vencido ? 'animate-pulse' : ''}`} aria-hidden />{!proximo ? '—' : vencido ? `-${corto(-proximoMs)}` : corto(proximoMs)}
             </ConAyuda>
             <ConAyuda className={`flex items-center gap-1 ${ESTILO_TONO[tonoFlota].valor}`} ayuda={`Vehículos disponibles\n${libres.length} de ${vehicles.length}`}>
               <Truck className="h-3.5 w-3.5" aria-hidden />{libres.length}/{vehicles.length}
@@ -398,9 +324,9 @@ export const IndicadoresGlobalesMapa: React.FC<{
         <div className="pb-0.5">
           <Nivel icono={ClipboardList} titulo="Pedidos" tono={tonoPedidos} columnas={3}>
             <Tarjeta
-              icono={Timer}
-              valor={proximo ? corto(proximoMs) : '—'}
-              rotulo={proximo ? `Vence ${idProximo}` : 'Sin pend.'}
+              icono={vencido ? AlertTriangle : Timer}
+              valor={valorProximo}
+              rotulo={proximo ? `${vencido ? 'Vencido' : 'Vence'} ${idProximo}` : 'Sin pend.'}
               ayuda={ayudaProximo}
               tono={tonoProximo}
               pulso={tonoProximo === 'rojo'}
@@ -459,7 +385,7 @@ export const IndicadoresGlobalesMapa: React.FC<{
               icono={Navigation}
               valor={enRuta}
               rotulo="En ruta"
-              ayuda={`Vehículos en ruta\n${viajando} viajando\n${entregando} entregando\n${enRefrigerio} en refrigerio`}
+              ayuda={`Vehículos en ruta (estados de la leyenda)\nViajando: ${viajando}\nEntregando: ${entregando}\nRefrigerio: ${enRefrigerio}\nVa al almacén: ${regresando}`}
             />
             <Tarjeta
               icono={Wrench}

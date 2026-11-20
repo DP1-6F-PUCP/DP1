@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useEscenario } from '../hooks/useEscenario';
+import { confirmar } from '../../../components/Confirmacion';
 import { useDescubrirEjecucionActiva } from '../../../hooks/useDescubrirEjecucionActiva';
 import { useScenarioStore } from '../../../store/scenarioStore';
 import { useConfigInicialStore } from '../../../store/configInicialStore';
@@ -31,7 +32,9 @@ const MODOS_OPERACION: Array<{
 export const SeleccionarEscenarioGate: React.FC<{
   children: React.ReactNode;
   onOpenConfig?: () => void;
-}> = ({ children, onOpenConfig }) => {
+  /** Ejecución ya terminada cuyo cierre todavía se está mostrando (ver useCierreDiferido). */
+  mostrarOperacion?: boolean;
+}> = ({ children, onOpenConfig, mostrarOperacion = false }) => {
   const { ejecucion, iniciarEscenario, isIniciando, error } = useEscenario();
   const { verificando } = useDescubrirEjecucionActiva();
   const tipo = useScenarioStore((s) => s.selectedScenarioType);
@@ -68,7 +71,7 @@ export const SeleccionarEscenarioGate: React.FC<{
 
   const hasActive = Boolean(ejecucion && ESTADOS_ACTIVOS.has(ejecucion.estado));
 
-  if (hasActive) {
+  if (hasActive || mostrarOperacion) {
     return <>{children}</>;
   }
 
@@ -80,9 +83,17 @@ export const SeleccionarEscenarioGate: React.FC<{
     : '';
   const fechaLarga = fechaLargaCruda.charAt(0).toUpperCase() + fechaLargaCruda.slice(1);
 
-  const iniciar = (e: React.FormEvent) => {
+  const iniciar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!puedeIniciar) return;
+    const modo = MODOS_OPERACION.find((m) => m.tipo === tipo)?.label ?? tipo;
+    const ok = await confirmar({
+      titulo: `¿Iniciar «${modo}»?`,
+      detalle: `${tiempoReal ? 'Desde ahora' : `${fechaLarga}, ${hora || '00:00'}`}${ajustesPendientes.length > 0 ? ` · ${ajustesPendientes.length} ajuste(s)` : ''}`,
+      accion: 'Iniciar',
+      tono: 'crear',
+    });
+    if (!ok) return;
     iniciarEscenario({
       tipo,
       fechaInicioSimulada: tiempoReal ? new Date().toISOString() : `${fecha}T${hora || '00:00'}:00Z`,
@@ -115,7 +126,7 @@ export const SeleccionarEscenarioGate: React.FC<{
           <span>Verificando si hay una ejecución activa…</span>
         </div>
       ) : (
-        <form onSubmit={iniciar} className="w-full max-w-[440px]" aria-labelledby="titulo-inicio">
+        <form onSubmit={(e) => void iniciar(e)}className="w-full max-w-[440px]" aria-labelledby="titulo-inicio">
           {/* Dos versiones del logo: colores originales en claro; "Sys" aclarado y azules con más brillo en oscuro. */}
           <img src="/sysmile-logo-fondo-claro.png" alt="SysMile — Last-mile delivery software" className="mx-auto h-40 w-auto dark:hidden" />
           <img src="/sysmile-logo-fondo-oscuro.png" alt="SysMile — Last-mile delivery software" className="mx-auto hidden h-40 w-auto dark:block" />

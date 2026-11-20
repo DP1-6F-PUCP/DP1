@@ -54,6 +54,19 @@ public interface ServicioPlanificacion {
      */
     List<EstadoOperacionDTO> consultarLotesDesde(long desde);
 
+    /**
+     * Calendario de mantenimientos conocido por la ejecución activa (o vacío si no hay), con inicio
+     * en {@code [desde, hasta)} cuando se indican.
+     */
+    default List<MantenimientoDTO> consultarMantenimientos(LocalDateTime desde, LocalDateTime hasta) {
+        return List.of();
+    }
+
+    /** Averías ocurridas en la ejecución activa, en orden de ocurrencia (vacío si no hay ejecución). */
+    default List<AveriaRegistroDTO> consultarHistorialAverias() {
+        return List.of();
+    }
+
     /** Recibe cada lote en el momento en que se publica (lo usa el WebSocket para empujarlo sin demora). */
     void suscribirPublicaciones(java.util.function.Consumer<EstadoOperacionDTO> oyente);
 

@@ -525,7 +525,16 @@ export class SimulationEngine {
     }
 
     const marcaVisibleMs = simNow ?? base.marcaMs;
-    const orders = ordersAtSimulatedTime(base.data.orders, marcaVisibleMs);
+    // Vehículos entregando a este instante (mismo estado visible que abajo): sus pedidos en
+    // servicio no figuran retrasados aunque el reloj pase el límite.
+    const entregandoEn = new Map<string, Point>();
+    for (const v of base.data.vehicles) {
+      const e = estados.get(v.id);
+      if (e ? statusVisible(v.status, e.act, e.moviendo) === 'delivering' : v.status === 'delivering') {
+        entregandoEn.set(v.id, e ? e.nodo : v.position);
+      }
+    }
+    const orders = ordersAtSimulatedTime(base.data.orders, marcaVisibleMs, entregandoEn);
     // `vigente` corresponde al final del lote del servidor, no al reloj visible interpolado.
     const bloqueosVisibles = base.data.estadoRaw && marcaVisibleMs != null
       ? (base.data.estadoRaw.bloqueos ?? []).map((bloqueo, index) => ({ bloqueo, index })).filter(({ bloqueo }) =>
@@ -537,8 +546,12 @@ export class SimulationEngine {
       const e = estados.get(v.id);
       firma += `${v.id}:${e?.moviendo ?? false}:${e?.act ?? '-'}:${e?.ret ?? false}:${e?.carga ?? ''}:${e?.nodo.x ?? ''},${e?.nodo.y ?? ''};`;
     }
-    // La lista puede cambiar dentro del mismo lote, incluso sin vehículos en movimiento.
-    const clave = JSON.stringify([base.arrivalMs, firma, base.data.ordersOmitted, orders.map((order) => order.id),
+    // La lista puede cambiar dentro del mismo lote, incluso sin vehículos en movimiento. También el
+    // estado de un pedido (se entrega o entra en riesgo al avanzar el reloj visible): dentro de un
+    // lote esas transiciones solo avanzan, así que la cuenta por estado basta para notarlas.
+    const porEstado: Record<string, number> = {};
+    for (const order of orders) porEstado[order.status] = (porEstado[order.status] ?? 0) + 1;
+    const clave = JSON.stringify([base.arrivalMs, firma, base.data.ordersOmitted, porEstado, orders.map((order) => order.id),
       bloqueosVisibles?.map((b) => b.index) ?? base.data.blockedStreets.map((b) => b.id)]);
     if (clave === this.claveVisual) return;
     this.claveVisual = clave;
@@ -576,6 +589,25 @@ export class SimulationEngine {
 
   getSnapshotNow(): EngineSnapshot {
     return this.ultimoSnapshot;
+  }
+
+  /** Marca simulada del último lote recibido (hasta dónde puede llegar el reloj visible). */
+  ultimaMarcaMs(): number | null {
+    return this.cuadros.at(-1)?.marcaMs ?? null;
+  }
+
+  /** Retraso de render actual (ms reales que el mapa va detrás del backend). */
+  retrasoRenderMs(): number {
+    return this.renderDelayMs;
+  }
+
+  /**
+   * La ejecución terminó en el backend: el reloj visible sigue reproduciendo los lotes ya recibidos
+   * (interpolando entre ellos) pero ya no extrapola más allá del último, así se detiene justo en el
+   * cierre. Sin esto seguía avanzando con k aunque no fueran a llegar más lotes.
+   */
+  congelarAvance(): void {
+    this.avanzando = false;
   }
 
   /**

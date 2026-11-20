@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '../../../components/ToastProvider';
 import { useEstadoOperacion } from '../../../hooks/useEstadoOperacion';
 import { escenariosApi } from '../../../services/escenariosApi';
+import { useAveriasProgramadasStore } from '../../../store/averiasProgramadasStore';
 import { useScenarioStore } from '../../../store/scenarioStore';
 import { BreakdownType } from '../../../types';
 import { toBackendInstant } from '../../../utils/backendTime';
@@ -9,6 +11,8 @@ export function useVehicles() {
   const { vehicles, isLoading, isError, refetch, estadoRaw } = useEstadoOperacion();
   const queryClient = useQueryClient();
   const ejecucion = useScenarioStore((s) => s.ejecucion);
+  const { addToast } = useToast();
+  const programarAveria = useAveriasProgramadasStore((s) => s.programar);
 
   // El backend no tiene un endpoint dedicado a "reportar averia" -- es una SolicitudOperacion
   // generica (ver ProgramarSolicitudRequest/TipoSolicitud.AVERIA) sobre la ejecucion activa.
@@ -34,8 +38,25 @@ export function useVehicles() {
         valorNuevo: `TIPO_${type}`,
       });
     },
-    onSuccess: () => {
+    // Los avisos van AQUÍ y no en los callbacks de mutate(): el menú de clic derecho se cierra (se
+    // desmonta) al elegir, y TanStack Query no ejecuta los callbacks de mutate() de un componente
+    // desmontado -- por eso no aparecía "Avería tipo N programada". Los de useMutation corren
+    // siempre (addToast es del ToastProvider raíz, que sigue montado).
+    onSuccess: (_data, { vehicleId, type }) => {
+      programarAveria(vehicleId, type);
+      addToast({
+        type: 'warning',
+        title: `Avería tipo ${type} programada`,
+        description: `${vehicleId} se averiará en el próximo lote de planificación.`,
+      });
       queryClient.invalidateQueries({ queryKey: ['estado-operacion'] });
+    },
+    onError: (error, { vehicleId }) => {
+      addToast({
+        type: 'error',
+        title: `Error al averiar ${vehicleId}`,
+        description: error instanceof Error ? error.message : 'No se pudo programar la avería.',
+      });
     },
   });
 

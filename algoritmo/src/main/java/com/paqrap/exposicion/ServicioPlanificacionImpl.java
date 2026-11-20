@@ -202,6 +202,23 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         oyentes.add(oyente);
     }
 
+    /** Calendario y averías de la última ejecución publicada (se copian al cerrar cada lote). */
+    private volatile List<MantenimientoDTO> mantenimientosPublicados = List.of();
+    private volatile List<AveriaRegistroDTO> averiasPublicadas = List.of();
+
+    @Override
+    public List<MantenimientoDTO> consultarMantenimientos(LocalDateTime desde, LocalDateTime hasta) {
+        return mantenimientosPublicados.stream()
+                .filter(m -> desde == null || m.fin().isAfter(desde))
+                .filter(m -> hasta == null || m.inicio().isBefore(hasta))
+                .toList();
+    }
+
+    @Override
+    public List<AveriaRegistroDTO> consultarHistorialAverias() {
+        return averiasPublicadas;
+    }
+
     @Override
     public List<EstadoOperacionDTO> consultarLotesDesde(long desde) {
         synchronized (ultimosLotes) {
@@ -254,6 +271,19 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         }
         pedidosPublicados = java.util.Collections.unmodifiableList(todos);
         pedidosPendientesPublicados = java.util.Collections.unmodifiableList(pendientes);
+        // Se copian aquí, en el hilo del orquestador, que es el único que hace crecer el calendario.
+        List<com.paqrap.dominio.Mantenimiento> calendario = orquestador.getMantenimientos();
+        if (calendario.size() != mantenimientosPublicados.size()) {
+            mantenimientosPublicados = calendario.stream()
+                    .map(m -> new MantenimientoDTO(m.vehiculoAfectado().getIdUnidad(),
+                            m.vehiculoAfectado().getTipoVehiculo().getId(), m.fechaInicio(), m.fechaFinCalculada()))
+                    .sorted(Comparator.comparing(MantenimientoDTO::inicio))
+                    .toList();
+        }
+        averiasPublicadas = orquestador.getHistorialAverias().stream()
+                .map(a -> new AveriaRegistroDTO(a.idUnidad(), a.tipoVehiculo(), a.tipo().name(), a.inicio(),
+                        a.finEstimado(), a.trasladoAlmacen(), a.x(), a.y()))
+                .toList();
         estadoPublicado = EnsambladorRespuestas.ensamblarEstado(contexto, orquestador.getUltimasRutas(),
                 orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte())
                 .conEjecucion(orquestador.getEjecucionActual().getIdEjecucion())
@@ -474,6 +504,8 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         estadoPublicado = null;
         pedidosPublicados = null;
         pedidosPendientesPublicados = List.of();
+        mantenimientosPublicados = List.of();
+        averiasPublicadas = List.of();
         pedidosAnteriores = new java.util.HashMap<>();
         secuenciaPublicacion = 0;
         synchronized (ultimosLotes) {

@@ -1,5 +1,7 @@
 import { httpClient } from './httpClient';
 import {
+  AveriaRegistroDTO,
+  MantenimientoDTO,
   EjecucionEscenarioDTO,
   ProgramarSolicitudRequest,
   SeleccionarEscenarioRequest,
@@ -7,6 +9,14 @@ import {
 } from '../types/backend';
 
 export const escenariosApi = {
+  /** Calendario de mantenimientos de la ejecución activa. */
+  async consultarMantenimientos(signal?: AbortSignal): Promise<MantenimientoDTO[]> {
+    return httpClient.get<MantenimientoDTO[]>('/estado-operacion/mantenimientos', { signal });
+  },
+  /** Averías ocurridas en la ejecución activa. */
+  async consultarAverias(signal?: AbortSignal): Promise<AveriaRegistroDTO[]> {
+    return httpClient.get<AveriaRegistroDTO[]>('/estado-operacion/averias', { signal });
+  },
   async consultarReporte(id: string, signal?: AbortSignal): Promise<ReporteSimulacionDTO> {
     return httpClient.get<ReporteSimulacionDTO>(`/escenarios/${id}/reporte`, { signal });
   },

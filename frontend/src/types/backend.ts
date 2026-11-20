@@ -63,6 +63,33 @@ export interface VehiculoDTO {
   trayectoria: PuntoTrayectoriaDTO[];
   // Tipo de la avería activa ("TIPO_1", "TIPO_2" o "TIPO_3"); null si no está averiado.
   tipoAveria: string | null;
+  // Últimas dos salidas de un almacén (LocalDateTime ISO). El lote llega adelantado al reloj del
+  // mapa: si la última aún no ocurrió en ese reloj, vale la anterior. Opcionales: backend previo.
+  salidaAlmacen?: string | null;
+  salidaAlmacenAnterior?: string | null;
+  // Avería activa: inicio y fin estimado (vuelve a estar disponible).
+  inicioAveria?: string | null;
+  finAveria?: string | null;
+}
+
+/** GET /api/estado-operacion/mantenimientos */
+export interface MantenimientoDTO {
+  idUnidad: string;
+  tipoVehiculo: string;
+  inicio: string;
+  fin: string;
+}
+
+/** GET /api/estado-operacion/averias */
+export interface AveriaRegistroDTO {
+  idUnidad: string;
+  tipoVehiculo: string;
+  tipoAveria: string;
+  inicio: string;
+  finEstimado: string;
+  trasladoAlmacen: string | null;
+  x: number;
+  y: number;
 }
 
 export interface PuntoTrayectoriaDTO {

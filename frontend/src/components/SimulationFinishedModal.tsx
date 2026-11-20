@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AlertCircle, CheckCircle2, Download, Loader2, X } from 'lucide-react';
 import type { ReporteSimulacionDTO } from '../types/backend';
 import { motivosReporte, resumenReporte, totalesReporte } from '../utils/simulationReport';
@@ -6,14 +6,24 @@ import { crearReportePdf } from '../services/simulationReportPdf';
 
 interface Props {
   isOpen: boolean;
+  /** "Aceptar": termina y vuelve al inicio. */
   onAccept: () => void;
+  /** "×" (y Esc): oculta el reporte y deja el mapa final a la vista; si falta, hace lo de Aceptar. */
+  onClose?: () => void;
   reporte: ReporteSimulacionDTO | undefined;
   inicioVisibleMs: number | null;
   isError: boolean;
   onRetry: () => void;
 }
 
-export const SimulationFinishedModal: React.FC<Props> = ({ isOpen, onAccept, reporte, inicioVisibleMs, isError, onRetry }) => {
+export const SimulationFinishedModal: React.FC<Props> = ({ isOpen, onAccept, onClose, reporte, inicioVisibleMs, isError, onRetry }) => {
+  const cerrar = onClose ?? onAccept;
+  useEffect(() => {
+    if (!isOpen) return;
+    const alTecla = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrar(); };
+    window.addEventListener('keydown', alTecla);
+    return () => window.removeEventListener('keydown', alTecla);
+  }, [isOpen, cerrar]);
   if (!isOpen) return null;
   const colapso = reporte?.motivoFinalizacion === 'COLAPSO';
   const totales = reporte ? totalesReporte(reporte) : null;
@@ -22,7 +32,8 @@ export const SimulationFinishedModal: React.FC<Props> = ({ isOpen, onAccept, rep
     <div role="dialog" aria-modal="true" aria-labelledby="simulation-report-title"
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm">
       <div className={`relative flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl border ${colapso ? 'border-red-500' : 'border-slate-700'} bg-[#121722] p-4 text-slate-100 shadow-2xl`}>
-        <button type="button" aria-label="Cerrar reporte" onClick={onAccept} className="absolute right-3 top-3 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
+        <button type="button" aria-label="Cerrar el reporte y ver el mapa final" title="Ver el mapa final (el reporte sigue disponible)"
+          onClick={cerrar} className="absolute right-3 top-3 text-slate-400 hover:text-white"><X className="h-4 w-4" /></button>
         <div className="mb-4 flex items-center gap-3 pr-6">
           <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 ${colapso ? 'border-red-500/80 bg-red-500/10 text-red-500' : 'border-blue-500/80 bg-blue-500/10 text-blue-400'}`}>
             {colapso ? <AlertCircle className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}

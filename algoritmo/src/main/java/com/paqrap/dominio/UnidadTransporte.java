@@ -253,6 +253,33 @@ public class UnidadTransporte {
         this.disponibleDesde = null;
         this.cargaABordo = 0;
         this.enRetorno = false;
+        this.salidaAlmacen = null;
+        this.salidaAlmacenAnterior = null;
+    }
+
+    /**
+     * Últimas dos salidas de un almacén (no cuentan los despachos desde la calle con carga a bordo).
+     * Se guardan dos porque el lote se publica adelantado al reloj que muestra el mapa: si la última
+     * salida aún no llegó en ese reloj, vale la anterior. Regla del profesor: solo se averían
+     * vehículos que salieron del almacén hace menos de 4 h.
+     */
+    private LocalDateTime salidaAlmacen;
+    private LocalDateTime salidaAlmacenAnterior;
+
+    public synchronized void registrarSalidaAlmacen(LocalDateTime instante) {
+        if (instante == null || instante.equals(salidaAlmacen)) {
+            return;
+        }
+        this.salidaAlmacenAnterior = this.salidaAlmacen;
+        this.salidaAlmacen = instante;
+    }
+
+    public synchronized LocalDateTime getSalidaAlmacen() {
+        return salidaAlmacen;
+    }
+
+    public synchronized LocalDateTime getSalidaAlmacenAnterior() {
+        return salidaAlmacenAnterior;
     }
 
     /**

@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { DialogoConfirmacion } from '../components/Confirmacion';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { DashboardPage } from '../pages/DashboardPage';
 import { SeguimientoPage } from '../pages/SeguimientoPage';
+import { FlotaPage } from '../pages/FlotaPage';
+import { ReportesPage } from '../pages/ReportesPage';
+import { ConfiguracionPage } from '../pages/ConfiguracionPage';
+import { PedidosPage } from '../pages/PedidosPage';
+import { guardarNavegacionExpandida, leerNavegacionExpandida, NavegacionLateral } from '../components/NavegacionLateral';
 import { ToastProvider } from '../components/ToastProvider';
 import { LiveAnnouncer } from '../components/LiveAnnouncer';
 import { MapErrorBoundary } from '../components/map/MapErrorBoundary';
@@ -14,6 +20,7 @@ import { SidebarRight } from '../components/SidebarRight';
 import { ConfigModal } from '../components/ConfigModal';
 import { useSimulationSocket } from '../hooks/useSimulationSocket';
 import { useSincronizarEjecucion } from '../hooks/useSincronizarEjecucion';
+import { useRegistrarHistorial } from '../features/reportes/useRegistrarHistorial';
 import { useEstadoOperacion } from '../hooks/useEstadoOperacion';
 import { useSimulationEngineIngest } from '../engine/useSimulationEngineIngest';
 import { useEstadoVisual } from '../engine/useEstadoVisual';
@@ -23,12 +30,18 @@ import { OperacionTopbar } from '../components/OperacionTopbar';
 import { RelojesOperacion } from '../components/RelojesOperacion';
 import { SimulationFinishedModal } from '../components/SimulationFinishedModal';
 import { useReporteFinal } from '../hooks/useReporteFinal';
+import { useCierreDiferido } from '../hooks/useCierreDiferido';
+import { AvisoCierreOperacion } from '../components/AvisoCierreOperacion';
+import { useMapStore } from '../store/mapStore';
+import { TOPE_AVERIA_PROGRAMADA_MS, useAveriasProgramadasStore } from '../store/averiasProgramadasStore';
 
 const ESTADOS_ACTIVOS = new Set(['INICIADA', 'EN_CURSO', 'PAUSADA']);
+
 
 const RootLayout: React.FC = () => {
   useSimulationSocket();
   useSincronizarEjecucion();
+  useRegistrarHistorial(); // historial de Reportes (registra aunque la página no esté abierta)
   const reporteFinal = useReporteFinal();
   const inicioVisibleMs = useScenarioStore((s) => s.playbackStartedAtMs);
 
@@ -36,20 +49,53 @@ const RootLayout: React.FC = () => {
   const isDark = useThemeStore((s) => s.isDark);
   const ejecucion = useScenarioStore((s) => s.ejecucion);
   const setEjecucion = useScenarioStore((s) => s.setEjecucion);
+  const setSelectedOrderId = useMapStore((s) => s.setSelectedOrderId);
+  const centrarEn = useMapStore((s) => s.centrarEn);
   const navigate = useNavigate();
 
   const hasActiveExecution = Boolean(ejecucion && ESTADOS_ACTIVOS.has(ejecucion.estado));
 
+  // Cierre de la ejecución (colapso o fin del periodo). El backend termina al cerrar un lote, pero
+  // el mapa va retrasado: el reporte espera a que el reloj visible llegue al cierre (useCierreDiferido)
+  // y, mientras, la operación sigue a la vista con un aviso no bloqueante. Su "×" ya no termina:
+  // oculta el reporte y deja el mapa final para revisarlo (el aviso ofrece Reporte / Salir).
+  const idEjecucion = ejecucion?.idEjecucion;
+  const esperandoCierre = useCierreDiferido(idEjecucion, reporteFinal.abierto, reporteFinal.data?.finSimulado);
+  const [reporteForzadoPara, setReporteForzadoPara] = useState<string | null>(null);
+  const [reporteOcultoPara, setReporteOcultoPara] = useState<string | null>(null);
+  const esperando = esperandoCierre && reporteForzadoPara !== idEjecucion;
+  const reporteOculto = reporteFinal.abierto && reporteOcultoPara === idEjecucion;
+  const vistaFinal = reporteFinal.abierto && (esperando || reporteOculto);
+  const reporteVisible = reporteFinal.abierto && !esperando && !reporteOculto;
+  // Operación a la vista: en curso, o terminada mientras se ve su cierre.
+  const vistaActiva = hasActiveExecution || vistaFinal;
+  const verReporte = () => { setReporteOcultoPara(null); setReporteForzadoPara(idEjecucion ?? null); };
+  const terminar = () => { setEjecucion(null); navigate('/', { replace: true }); };
+  const irAPedidoIncumplido = (idPedido: string) => {
+    const p = reporteFinal.data?.pedidosFinales.find((x) => x.idPedido === idPedido);
+    setSelectedOrderId(idPedido);
+    if (p) centrarEn(p.posX, p.posY);
+    navigate('/');
+  };
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  // Barra de secciones, fija a la izquierda (el botón ☰ la expande o la deja en íconos). Operación es
+  // el mapa (y /seguimiento, que solo selecciona un vehículo en él); el resto son páginas de gestión
+  // que se dibujan SOBRE el mapa, que sigue montado y corriendo debajo: al volver conserva zoom,
+  // selección y filtros, y no se reinicia nada.
+  const [navExpandida, setNavExpandida] = useState(leerNavegacionExpandida);
+  const alternarNav = () => setNavExpandida((v) => { guardarNavegacionExpandida(!v); return !v; });
+  const { pathname } = useLocation();
+  const enOperacion = pathname === '/' || pathname.startsWith('/seguimiento');
 
   // El panel de operación (SidebarRight) arranca colapsado cada vez que empieza una ejecución --
   // también al recargar con una ya en curso -- para dejar todo el ancho al mapa. Se abre solo al
   // seleccionar un vehículo, almacén o pedido, o con su botón.
   const [ejecucionVista, setEjecucionVista] = useState(false);
-  if (hasActiveExecution !== ejecucionVista) {
-    setEjecucionVista(hasActiveExecution);
-    setIsSidebarCollapsed(hasActiveExecution);
+  if (vistaActiva !== ejecucionVista) {
+    setEjecucionVista(vistaActiva);
+    setIsSidebarCollapsed(vistaActiva);
   }
 
   // Mapa persistente montado una sola vez aqui
@@ -60,6 +106,20 @@ const RootLayout: React.FC = () => {
   // marcadores, reloj, badges y panel muestren el mismo instante.
   useSimulationEngineIngest({ vehicles, routes, orders, ordersTotal, warehouses, blockedStreets, estadoRaw });
   const visual = useEstadoVisual();
+  // Averías programadas (aviso en tooltip/tarjeta hasta que se aplican): se sueltan cuando el
+  // vehículo ya se ve averiado en el mapa, tras el tope, o al cambiar de ejecución.
+  const quitarAverias = useAveriasProgramadasStore((s) => s.quitar);
+  const limpiarAverias = useAveriasProgramadasStore((s) => s.limpiar);
+  useEffect(() => { limpiarAverias(); }, [idEjecucion, limpiarAverias]);
+  useEffect(() => {
+    const pendientes = useAveriasProgramadasStore.getState().pendientes;
+    const ahora = Date.now();
+    const resueltas = Object.entries(pendientes)
+      .filter(([id, p]) => ahora - p.desdeMs > TOPE_AVERIA_PROGRAMADA_MS
+        || visual.vehicles.some((v) => v.id === id && (v.status === 'broken' || v.status === 'maintenance')))
+      .map(([id]) => id);
+    if (resueltas.length) quitarAverias(resueltas);
+  }, [visual.vehicles, quitarAverias]);
   const scenarioStartMs = useScenarioStore((s) => s.scenarioStartMs());
   const simMinutesVisible = visual.marcaVisibleMs != null && scenarioStartMs != null
     ? Math.round((visual.marcaVisibleMs - scenarioStartMs) / 60000)
@@ -69,29 +129,44 @@ const RootLayout: React.FC = () => {
     <LiveAnnouncer>
       <ToastProvider historyScope={ejecucion?.idEjecucion ?? 'global'}>
         <div className="relative flex h-screen w-screen overflow-hidden bg-[#0B111E] text-slate-100 font-sans select-none">
-          {/* Barra lateral solo durante la operación (SidebarRight). Antes de simular, la pantalla de
-              inicio (SeleccionarEscenarioGate) ocupa todo: logo, modo/fecha/hora y Configuración. */}
-          {hasActiveExecution && (
-            <SidebarRight
-              isCollapsed={isSidebarCollapsed}
-              onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            />
-          )}
 
           {/* CONTENIDO PRINCIPAL: Layout Vertical con Header Delgado + Vistas */}
           <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-            {hasActiveExecution && (
-              <OperacionTopbar />
+            {vistaActiva && (
+              <OperacionTopbar
+                menuAbierto={navExpandida}
+                onAlternarMenu={alternarNav}
+              />
             )}
 
             {/* Contenido de la Ruta con Gate de Escenario */}
             <main className="flex-1 flex overflow-hidden relative">
-              {hasActiveExecution && <RelojesOperacion />}
-              <SeleccionarEscenarioGate onOpenConfig={() => setIsConfigOpen(true)}>
+              {/* De izquierda a derecha: barra de secciones (única navegación), el área del mapa /
+                  páginas y el panel de detalle del mapa (solo abierto, al seleccionar algo). Antes de
+                  simular, la pantalla de inicio (SeleccionarEscenarioGate) ocupa todo. */}
+              {vistaActiva && <NavegacionLateral expandida={navExpandida} />}
+              <div className="relative flex min-w-0 flex-1 overflow-hidden">
+              {vistaActiva && enOperacion && <RelojesOperacion />}
+              <SeleccionarEscenarioGate onOpenConfig={() => setIsConfigOpen(true)} mostrarOperacion={vistaFinal}>
                 <MapSlotContext.Provider value={{ slot: mapSlot, setSlot: setMapSlot }}>
-                  <Outlet />
+                  {/* El mapa (DashboardPage) queda montado siempre; las secciones van encima. */}
+                  <DashboardPage />
+                  {enOperacion ? <Outlet /> : (
+                    <div className="absolute inset-0 z-[1500]">
+                      <Outlet />
+                    </div>
+                  )}
                 </MapSlotContext.Provider>
               </SeleccionarEscenarioGate>
+              </div>
+              {/* Panel de detalle a la DERECHA: la izquierda queda solo para navegar y el mapa no se
+                  aleja de la barra al abrir una ficha (Relojes e Indicadores se corren solos). */}
+              {vistaActiva && enOperacion && (
+                <SidebarRight
+                  isCollapsed={isSidebarCollapsed}
+                  onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                />
+              )}
             </main>
           </div>
 
@@ -112,16 +187,24 @@ const RootLayout: React.FC = () => {
             onClose={() => setIsConfigOpen(false)}
           />
 
+          {vistaFinal && (
+            <AvisoCierreOperacion
+              reporte={reporteFinal.data}
+              esperando={esperando}
+              onVerReporte={verReporte}
+              onSalir={esperando ? undefined : terminar}
+              onIrAPedido={irAPedidoIncumplido}
+            />
+          )}
+
           <SimulationFinishedModal
-            isOpen={reporteFinal.abierto}
+            isOpen={reporteVisible}
             reporte={reporteFinal.data}
             inicioVisibleMs={inicioVisibleMs}
             isError={reporteFinal.isError}
             onRetry={() => { void reporteFinal.refetch(); }}
-            onAccept={() => {
-              setEjecucion(null);
-              navigate('/', { replace: true });
-            }}
+            onAccept={terminar}
+            onClose={() => { setReporteOcultoPara(idEjecucion ?? null); setReporteForzadoPara(null); }}
           />
 
           {mapSlot &&
@@ -135,6 +218,7 @@ const RootLayout: React.FC = () => {
                   routes={visual.routes}
                   simMinutes={simMinutesVisible}
                   isDarkTheme={isDark}
+                  vistaFinal={vistaFinal}
                 />
               </MapErrorBoundary>,
               mapSlot,
@@ -152,8 +236,12 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <DashboardPage />,
+        element: null,
       },
+      { path: 'pedidos', element: <PedidosPage /> },
+      { path: 'flota', element: <FlotaPage /> },
+      { path: 'reportes', element: <ReportesPage /> },
+      { path: 'configuracion', element: <ConfiguracionPage /> },
       {
         path: 'seguimiento',
         element: <SeguimientoPage />,
@@ -171,5 +259,10 @@ export const router = createBrowserRouter([
 ]);
 
 export const AppRouter: React.FC = () => {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <DialogoConfirmacion />
+    </>
+  );
 };

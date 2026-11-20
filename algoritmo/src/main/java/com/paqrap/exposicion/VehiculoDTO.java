@@ -28,8 +28,14 @@ import java.util.List;
  *         camino y los tiempos entre dos posiciones finales consecutivas.
  * @param tipoAveria tipo de avería activa ({@code TIPO_1}, {@code TIPO_2} o {@code TIPO_3}), o
  *         {@code null} si la unidad no está averiada.
+ * @param salidaAlmacen última vez que salió de un almacén a repartir ({@code null} si aún no salió).
+ * @param salidaAlmacenAnterior la salida previa: el lote llega adelantado al reloj del mapa, así que
+ *         si {@code salidaAlmacen} todavía no ocurrió en ese reloj, vale esta.
+ * @param inicioAveria inicio de la avería activa, o {@code null}.
+ * @param finAveria fin estimado de la avería activa (vuelve a estar disponible), o {@code null}.
  */
 public record VehiculoDTO(String idUnidad, String tipo, String estado, int posXActual, int posYActual,
         int cargaActual, List<String> geometriaRetorno, String actividad, LocalDateTime actividadDesde,
-        List<PuntoTrayectoriaDTO> trayectoria, String tipoAveria) {
+        List<PuntoTrayectoriaDTO> trayectoria, String tipoAveria, LocalDateTime salidaAlmacen,
+        LocalDateTime salidaAlmacenAnterior, LocalDateTime inicioAveria, LocalDateTime finAveria) {
 }

@@ -1,9 +1,10 @@
 import { Warehouse } from '../types';
+import { umbrales } from '../store/umbralesStore';
 
 /**
- * Semáforo de stock de un almacén (+ estado "vacío"). Mismos cortes que la lista de almacenes del
- * panel derecho, para que el ícono del mapa y el panel nunca muestren colores distintos:
- *  - verde: >= 65 %   - ámbar: >= 30 %   - rojo: > 0 %   - vacío: 0 paquetes
+ * Semáforo de stock de un almacén (+ estado "vacío"), con los cortes configurables
+ * (store/umbralesStore): verde ≥ almacenAlto, ámbar ≥ almacenBajo, rojo > 0 %, vacío = 0 paquetes.
+ * Lo usan el ícono del mapa, el panel, los indicadores y Reportes: nunca muestran colores distintos.
  * La oficina principal (capacidad infinita) siempre se considera abastecida.
  */
 export type WarehouseStockLevel = 'central' | 'high' | 'medium' | 'low' | 'empty';
@@ -31,7 +32,12 @@ export function getWarehouseStockStatus(w: Warehouse): WarehouseStockStatus {
   // occupancyPct viene del backend (AlmacenDTO.nivelOcupacion); currentStock decide "vacío" para
   // que un redondeo a 0 % con algunos paquetes no se pinte como almacén vacío.
   const pct = Math.max(0, Math.min(100, Math.round(w.occupancyPct)));
-  const level: WarehouseStockLevel =
-    w.currentStock <= 0 ? 'empty' : pct >= 65 ? 'high' : pct >= 30 ? 'medium' : 'low';
+  const level = nivelStock(w.currentStock, pct);
   return { level, pct, ...WAREHOUSE_STOCK_COLORS[level] };
+}
+
+/** Nivel del semáforo para un stock (paquetes) y su % de la capacidad. */
+export function nivelStock(stock: number, pct: number): Exclude<WarehouseStockLevel, 'central'> {
+  const u = umbrales();
+  return stock <= 0 ? 'empty' : pct >= u.almacenAlto ? 'high' : pct >= u.almacenBajo ? 'medium' : 'low';
 }

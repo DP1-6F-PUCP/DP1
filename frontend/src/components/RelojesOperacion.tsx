@@ -75,7 +75,8 @@ export const RelojesOperacion: React.FC = () => {
       ref={panel.ref}
       aria-label="Relojes de la operación"
       style={panel.style}
-      className={`absolute z-[1100] ${panel.colapsado ? '' : 'w-[316px]'} rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)]/95 text-slate-100 shadow-xl backdrop-blur-sm select-none`}
+      data-panel-mapa
+      className={`tema-panel absolute z-[1100] ${panel.colapsado ? '' : 'w-[316px]'} rounded-xl border border-[var(--color-sidebar-border)] bg-[var(--color-sidebar-background)]/95 text-slate-100 shadow-xl backdrop-blur-sm select-none`}
     >
       <div
         {...panel.manejadoresArrastre}

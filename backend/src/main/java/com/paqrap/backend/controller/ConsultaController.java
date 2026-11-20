@@ -1,7 +1,9 @@
 package com.paqrap.backend.controller;
 
 import com.paqrap.backend.dto.ApiResponseDTO;
+import com.paqrap.exposicion.AveriaRegistroDTO;
 import com.paqrap.exposicion.ConfiguracionActualDTO;
+import com.paqrap.exposicion.MantenimientoDTO;
 import com.paqrap.exposicion.EstadoOperacionDTO;
 import com.paqrap.exposicion.PaginaPedidosDTO;
 import com.paqrap.exposicion.PedidoDTO;
@@ -45,6 +47,20 @@ public class ConsultaController {
     @GetMapping("/api/estado-operacion/lotes")
     public ApiResponseDTO<List<EstadoOperacionDTO>> consultarLotesDesde(@RequestParam(defaultValue = "1") long desde) {
         return ApiResponseDTO.of(servicioPlanificacion.consultarLotesDesde(desde));
+    }
+
+    /** Calendario de mantenimientos de la ejecución activa (opcionalmente acotado a [desde, hasta)). */
+    @GetMapping("/api/estado-operacion/mantenimientos")
+    public ApiResponseDTO<List<MantenimientoDTO>> consultarMantenimientos(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime hasta) {
+        return ApiResponseDTO.of(servicioPlanificacion.consultarMantenimientos(desde, hasta));
+    }
+
+    /** Averías ocurridas en la ejecución activa, en orden de ocurrencia. */
+    @GetMapping("/api/estado-operacion/averias")
+    public ApiResponseDTO<List<AveriaRegistroDTO>> consultarHistorialAverias() {
+        return ApiResponseDTO.of(servicioPlanificacion.consultarHistorialAverias());
     }
 
     /** Historial paginado (más recientes primero) para buscar pedidos sin traer la lista completa. */

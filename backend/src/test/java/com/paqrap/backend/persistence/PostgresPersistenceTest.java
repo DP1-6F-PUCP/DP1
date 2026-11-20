@@ -16,6 +16,8 @@ import com.paqrap.simulador.EstadoEjecucion;
 import com.paqrap.simulador.SolicitudOperacion;
 import com.paqrap.simulador.TipoEscenario;
 import com.paqrap.simulador.TipoSolicitud;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,7 +30,19 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+/**
+ * Pruebas de persistencia contra un PostgreSQL REAL (antes H2 en "modo PostgreSQL", que no entiende
+ * {@code ON CONFLICT (col)} ni {@code JSONB}: 4 de 5 pruebas fallaban aunque el código sí funciona).
+ *
+ * <p>Cada prueba crea un esquema propio y le aplica la migración real {@code V1__initial_schema}
+ * con Flyway (el catálogo de V2 no: cada prueba siembra el suyo, mínimo), y lo borra al terminar,
+ * así no toca los datos de la aplicación aunque use la misma base. Conexión: las mismas variables
+ * que la aplicación ({@code DB_HOST}, {@code DB_PORT}, {@code DB_NAME}, {@code DB_USER},
+ * {@code DB_PASSWORD}) con sus mismos valores por defecto. Si no hay un PostgreSQL alcanzable, las
+ * pruebas se SALTAN (no fallan): el build no depende de tener la base levantada.
+ */
 class PostgresPersistenceTest {
 
     private JdbcTemplate jdbcTemplate;
@@ -36,96 +50,61 @@ class PostgresPersistenceTest {
     private PostgresRepositorioOperacion repositorio;
     private PostgresCargadorRecursos cargador;
     private CatalogoPersistenceService catalogo;
+    private String esquema;
+    private JdbcTemplate administrador;
+
+    private static String env(String nombre, String porDefecto) {
+        String valor = System.getenv(nombre);
+        return valor != null && !valor.isBlank() ? valor : porDefecto;
+    }
+
+    private static DriverManagerDataSource fuente(String parametros) {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName("org.postgresql.Driver");
+        ds.setUrl("jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432") + "/"
+                + env("DB_NAME", "sysmile_db") + parametros);
+        ds.setUsername(env("DB_USER", "sysmile_user"));
+        ds.setPassword(env("DB_PASSWORD", "sysmile_password"));
+        return ds;
+    }
 
     @BeforeEach
     void setUp() {
-        String dbName = "paqrap_test_" + UUID.randomUUID().toString().replace("-", "");
-        DriverManagerDataSource ds = new DriverManagerDataSource();
-        ds.setDriverClassName("org.h2.Driver");
-        ds.setUrl("jdbc:h2:mem:" + dbName + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1");
-        jdbcTemplate = new JdbcTemplate(ds);
+        DriverManagerDataSource base = fuente("?connectTimeout=3");
+        try (var conexion = base.getConnection()) {
+            assumeTrue(conexion.isValid(3), "PostgreSQL no responde");
+        } catch (java.sql.SQLException ex) {
+            assumeTrue(false, "Sin PostgreSQL alcanzable (" + ex.getMessage() + "): se omiten las pruebas de persistencia");
+        }
+        administrador = new JdbcTemplate(base);
+
+        esquema = "prueba_" + UUID.randomUUID().toString().replace("-", "");
+        Flyway.configure()
+                .dataSource(base)
+                .schemas(esquema)
+                .locations("classpath:db/migration")
+                .target("1") // solo el esquema; el catálogo de prueba se siembra abajo
+                .load()
+                .migrate();
+        jdbcTemplate = new JdbcTemplate(fuente("?currentSchema=" + esquema));
 
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
-        crearEsquemaYCatalogo();
+        sembrarCatalogo();
         repositorio = new PostgresRepositorioOperacion(jdbcTemplate, objectMapper);
         cargador = new PostgresCargadorRecursos("data", "config", jdbcTemplate, objectMapper);
         catalogo = new CatalogoPersistenceService(jdbcTemplate);
     }
 
-    private void crearEsquemaYCatalogo() {
-        jdbcTemplate.execute("""
-                CREATE TABLE city_configs (
-                    id UUID PRIMARY KEY, width INT NOT NULL, height INT NOT NULL,
-                    origin_x INT NOT NULL, origin_y INT NOT NULL,
-                    node_distance_km INT NOT NULL, two_way_streets BOOLEAN NOT NULL,
-                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE operation_configs (
-                    id UUID PRIMARY KEY, shift_duration_hours NUMERIC(8,2) NOT NULL,
-                    shift_start_hour NUMERIC(8,2) NOT NULL, client_service_hours NUMERIC(8,2) NOT NULL,
-                    break_duration_hours NUMERIC(8,2) NOT NULL, break_margin_hours NUMERIC(8,2) NOT NULL,
-                    warehouse_load_hours NUMERIC(8,2) NOT NULL, transshipment_hours NUMERIC(8,2) NOT NULL,
-                    max_stops_per_route INT NOT NULL,
-                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE vehicle_types (
-                    id UUID PRIMARY KEY, type_code VARCHAR(32) NOT NULL UNIQUE, name VARCHAR(64) NOT NULL,
-                    capacity INT NOT NULL, speed_kmh NUMERIC(8,2) NOT NULL, cost_per_km NUMERIC(10,2) NOT NULL,
-                    initial_units INT NOT NULL, maintenance_duration_hours NUMERIC(8,2) NOT NULL,
-                    deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE warehouses (
-                    id UUID PRIMARY KEY, name VARCHAR(64) NOT NULL UNIQUE, warehouse_type VARCHAR(32) NOT NULL,
-                    pos_x INT NOT NULL, pos_y INT NOT NULL, max_capacity INT NOT NULL,
-                    reload_frequency_hours NUMERIC(8,2) NOT NULL, deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE vehicles (
-                    id UUID PRIMARY KEY, vehicle_code VARCHAR(32) NOT NULL UNIQUE,
-                    vehicle_type_id UUID NOT NULL, initial_pos_x INT NOT NULL, initial_pos_y INT NOT NULL,
-                    deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE orders (
-                    id UUID PRIMARY KEY, order_code VARCHAR(64) NOT NULL UNIQUE, client_code VARCHAR(64) NOT NULL,
-                    dest_x INT NOT NULL, dest_y INT NOT NULL, requested_quantity INT NOT NULL, sla_hours INT NOT NULL,
-                    registered_at TIMESTAMP WITH TIME ZONE NOT NULL, period_year INT NOT NULL, period_month INT NOT NULL,
-                    source VARCHAR(16) NOT NULL, deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE street_blockages (
-                    id UUID PRIMARY KEY, start_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                    end_at TIMESTAMP WITH TIME ZONE NOT NULL, nodes_json JSON NOT NULL,
-                    period_year INT NOT NULL, period_month INT NOT NULL,
-                    source VARCHAR(16) NOT NULL, deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE maintenance_schedules (
-                    id UUID PRIMARY KEY, vehicle_code VARCHAR(32) NOT NULL, scheduled_date DATE NOT NULL,
-                    template_month INT NOT NULL, template_day INT NOT NULL,
-                    source VARCHAR(16) NOT NULL, deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE scenario_executions (
-                    id UUID PRIMARY KEY, scenario_type VARCHAR(32) NOT NULL, status VARCHAR(48) NOT NULL,
-                    started_at TIMESTAMP WITH TIME ZONE NOT NULL, ended_at TIMESTAMP WITH TIME ZONE,
-                    simulated_start_at TIMESTAMP WITH TIME ZONE NOT NULL, simulated_end_at TIMESTAMP WITH TIME ZONE,
-                    sa NUMERIC(10,4) NOT NULL, k NUMERIC(10,4) NOT NULL, stop_reason VARCHAR(32),
-                    deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
-        jdbcTemplate.execute("""
-                CREATE TABLE simulation_reports (
-                    id UUID PRIMARY KEY, execution_id UUID NOT NULL UNIQUE, report_payload JSON NOT NULL,
-                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                    deleted_at TIMESTAMP WITH TIME ZONE
-                )""");
+    @AfterEach
+    void tearDown() {
+        if (administrador != null && esquema != null) {
+            administrador.execute("DROP SCHEMA IF EXISTS " + esquema + " CASCADE");
+        }
+    }
 
-        jdbcTemplate.update("INSERT INTO city_configs (id, width, height, origin_x, origin_y, node_distance_km, two_way_streets) "
+    private void sembrarCatalogo() {        jdbcTemplate.update("INSERT INTO city_configs (id, width, height, origin_x, origin_y, node_distance_km, two_way_streets) "
                 + "VALUES ('00000000-0000-0000-0000-000000000001', 70, 50, 0, 0, 1, TRUE)");
         jdbcTemplate.update("INSERT INTO operation_configs (id, shift_duration_hours, shift_start_hour, client_service_hours, "
                 + "break_duration_hours, break_margin_hours, warehouse_load_hours, transshipment_hours, max_stops_per_route) "
