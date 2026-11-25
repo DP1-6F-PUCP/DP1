@@ -21,5 +21,7 @@ public enum TipoEvento {
     FIN_TRASVASE,
     SNAPSHOT_ESTADO,
     PEDIDO_EN_RIESGO_SLA,
+    /** Solicitud de cambio de configuración aplicada en caliente (velocidad, capacidad, flota, etc.). */
+    CAMBIO_CONFIGURACION,
     FIN_SIMULACION
 }

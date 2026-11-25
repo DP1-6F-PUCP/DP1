@@ -69,7 +69,7 @@ export const TablaPlanificacion: React.FC<Props> = ({ filas, corteMs, origen, on
       {filas.length === 0 ? (
         <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400">
           <p className="font-medium text-slate-700 dark:text-slate-300">Sin pedidos en rutas vigentes</p>
-          <p className="mt-1 text-xs">El plan no tiene rutas en ejecución ni planificadas con pedidos en este momento.</p>
+          <p className="mt-1 text-xs">Ahora no hay rutas con pedidos.</p>
         </div>
       ) : (
         <div className="max-h-[480px] overflow-auto">
@@ -123,8 +123,9 @@ export const TablaPlanificacion: React.FC<Props> = ({ filas, corteMs, origen, on
           {filtradas.length === 0 && <p className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">Sin coincidencias para «{q}».</p>}
           {filtradas.length > mostrar && (
             <button type="button" onClick={() => setMostrar((n) => n + PAGINA)}
+              title="La descarga incluye todos los pedidos"
               className="w-full border-t border-slate-200 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:text-white">
-              Ver {Math.min(PAGINA, filtradas.length - mostrar)} más ({filtradas.length - mostrar} restantes · la descarga incluye todos)
+              Ver más <span className="font-mono-code text-slate-400 dark:text-slate-500">+{filtradas.length - mostrar}</span>
             </button>
           )}
         </div>

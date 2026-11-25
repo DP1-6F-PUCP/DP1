@@ -6,6 +6,8 @@ import { useScenarioStore } from '../../../store/scenarioStore';
 import { useConfigInicialStore } from '../../../store/configInicialStore';
 import { formatDateForInput } from '../../../utils/simulation';
 import { TipoEscenarioBackend } from '../../../types/backend';
+import { escenariosReporte } from '../../../utils/simulationReport';
+import { cuenta } from '../../configuracion/components/ui';
 import { Play, Loader2, Radio, Calendar, AlertCircle, SlidersHorizontal } from 'lucide-react';
 
 const ESTADOS_ACTIVOS = new Set(['INICIADA', 'EN_CURSO', 'PAUSADA']);
@@ -86,10 +88,11 @@ export const SeleccionarEscenarioGate: React.FC<{
   const iniciar = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!puedeIniciar) return;
-    const modo = MODOS_OPERACION.find((m) => m.tipo === tipo)?.label ?? tipo;
+    // Mismo nombre que la barra superior y el reporte (escenariosReporte).
+    const modo = escenariosReporte[tipo] ?? tipo;
     const ok = await confirmar({
       titulo: `¿Iniciar «${modo}»?`,
-      detalle: `${tiempoReal ? 'Desde ahora' : `${fechaLarga}, ${hora || '00:00'}`}${ajustesPendientes.length > 0 ? ` · ${ajustesPendientes.length} ajuste(s)` : ''}`,
+      detalle: `${tiempoReal ? 'Desde ahora' : `${fechaLarga}, ${hora || '00:00'}`}${ajustesPendientes.length > 0 ? ` · ${cuenta(ajustesPendientes.length, 'ajuste', 'ajustes')}` : ''}`,
       accion: 'Iniciar',
       tono: 'crear',
     });
@@ -123,7 +126,7 @@ export const SeleccionarEscenarioGate: React.FC<{
       {verificando ? (
         <div role="status" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
           <Loader2 className="h-4 w-4 animate-spin text-blue-500" aria-hidden />
-          <span>Verificando si hay una ejecución activa…</span>
+          <span>Buscando una simulación en curso…</span>
         </div>
       ) : (
         <form onSubmit={(e) => void iniciar(e)}className="w-full max-w-[440px]" aria-labelledby="titulo-inicio">
@@ -203,7 +206,7 @@ export const SeleccionarEscenarioGate: React.FC<{
 
           {ajustesPendientes.length > 0 && (
             <p className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200">
-              Se aplicarán {ajustesPendientes.length} ajuste(s) guardados en Configuración.
+              Se aplicarán {ajustesPendientes.length === 1 ? '1 ajuste guardado' : `${ajustesPendientes.length} ajustes guardados`} en Configuración.
             </p>
           )}
 

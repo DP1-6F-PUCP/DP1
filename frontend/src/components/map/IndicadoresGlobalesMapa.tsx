@@ -268,7 +268,7 @@ export const IndicadoresGlobalesMapa: React.FC<{
       vencido ? 'Pedido con el plazo VENCIDO' : 'Próximo pedido en vencer',
       vencido ? `${proximo.code} · venció ${haceCorto(proximoMs)}` : proximo.code,
       vencido && vencidos > 1 ? `${vencidos} vencidos en total` : '',
-      vencido ? 'La operación se detendrá al cierre del lote' : '',
+      vencido ? 'La operación se detendrá en segundos' : '',
       otros3h > 0 ? `+${otros3h} más en riesgo o vencidos${otrosVencidos > 0 ? ` (${otrosVencidos} vencidos)` : ''}` : '',
       `Ámbar: faltan ≤ ${duracionCorta(RIESGO)} · rojo: vencido`,
       'Click: verlo en el mapa',

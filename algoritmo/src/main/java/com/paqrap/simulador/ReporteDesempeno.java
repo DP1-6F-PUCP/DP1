@@ -3,7 +3,8 @@ package com.paqrap.simulador;
 /** Métricas de desempeño acumuladas por {@link OrquestadorOperacion} a lo largo de una ejecución. */
 public class ReporteDesempeno {
 
-    private float costoTotalAcumulado;
+    /** double: en una corrida larga son muchas sumas chicas y float perdería precisión. */
+    private double costoTotalAcumulado;
     private int contadorEntregados;
     private int contadorIncumplidos;
     private int contadorParadasReasignadas;
@@ -11,7 +12,7 @@ public class ReporteDesempeno {
     private int contadorInterferenciasBloqueo;
 
     public float getCostoTotalAcumulado() {
-        return costoTotalAcumulado;
+        return (float) costoTotalAcumulado;
     }
 
     public void sumarCosto(double costo) {

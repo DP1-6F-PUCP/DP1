@@ -1,0 +1,7 @@
+# Override SOLO para desarrollo local (no se carga solo: hay que pedirlo explícitamente).
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Publica PostgreSQL en el host para psql / IDE / PostgresPersistenceTest. Nunca usar en el servidor.
+services:
+  db:
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"

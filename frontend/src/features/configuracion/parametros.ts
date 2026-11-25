@@ -67,40 +67,20 @@ export const CAMPOS_OPERACION: DefCampoOperacion[] = [
   { campo: 'tiempoTrasvaseHoras', label: 'Trasvase por avería', unidad: 'h', min: 0, max: 24, paso: 0.25, grupo: 'tiempos',
     ayuda: 'Tiempo para pasar la carga de un vehículo averiado a otro.' },
   { campo: 'maxParadasPorRuta', label: 'Máx. paradas por ruta', unidad: 'paradas', min: 1, max: 50, entero: true, paso: 1, grupo: 'rutas',
-    ayuda: 'Entregas que el planificador puede encadenar en una misma salida.' },
+    ayuda: 'Entregas que se pueden encadenar en una misma salida.' },
 ];
 
 /**
- * Valores oficiales del caso PaqRap (situación auténtica + PaqRapConfig). El backend conserva los
- * ajustes de ejecuciones anteriores (su configuración es estado compartido), así que "por defecto"
- * no puede leerse del servidor: tiene que venir de aquí.
+ * Valores oficiales del caso PaqRap. Vienen del servidor (GET /configuracion/oficial, perfil
+ * inmutable en la base): única fuente de verdad, antes copiada aquí. La configuración vigente
+ * (/configuracion) no sirve como "por defecto" porque conserva los ajustes de ejecuciones anteriores.
  */
-export const VALORES_OFICIALES = {
-  tipos: {
-    AUTO: { velocidad: 40, capacidad: 24, cantidad: 10 },
-    MOTO: { velocidad: 25, capacidad: 8, cantidad: 15 },
-    BICI: { velocidad: 12, capacidad: 4, cantidad: 12 },
-  } as Record<string, { velocidad: number; capacidad: number; cantidad: number }>,
-  almacenes: {
-    Central: { x: 27, y: 14 },
-    'Nor-Oeste': { x: 12, y: 38, capacidad: 1000, frecuencia: 24 },
-    Este: { x: 57, y: 27, capacidad: 1000, frecuencia: 24 },
-  } as Record<string, { x: number; y: number; capacidad?: number; frecuencia?: number }>,
-  operacion: {
-    duracionTurnoHoras: 8,
-    horaInicioTurno: 7,
-    tiempoServicioClienteHoras: 1,
-    duracionRefrigerioHoras: 1,
-    margenRefrigerioHoras: 1,
-    tiempoCargaAlmacenHoras: 0,
-    tiempoTrasvaseHoras: 0.5,
-    maxParadasPorRuta: 2,
-  } as Record<CampoOperacion, number>,
-};
+export interface ValoresOficiales {
+  tipos: Record<string, { velocidad: number; capacidad: number; cantidad: number }>;
+  almacenes: Record<string, { x: number; y: number; capacidad?: number; frecuencia?: number }>;
+  operacion: Record<CampoOperacion, number>;
+}
 
-const CANTIDADES_OFICIALES: Record<string, number> = Object.fromEntries(
-  Object.entries(VALORES_OFICIALES.tipos).map(([id, tipo]) => [id, tipo.cantidad]),
-);
 const CAPACIDAD_ALMACEN_OFICIAL = 1000;
 const FRECUENCIA_RECARGA_OFICIAL = 24;
 
@@ -111,7 +91,7 @@ export const desdeConfiguracion = (config: ConfiguracionActualDTO): FormValues =
       {
         velocidad: String(t.velocidadKmH),
         capacidad: String(t.capacidad),
-        cantidad: String(t.cantidadUnidades ?? CANTIDADES_OFICIALES[t.id] ?? 0),
+        cantidad: String(t.cantidadUnidades ?? 0),
       },
     ]),
   ),
@@ -171,29 +151,29 @@ export const aplicarAjustes = (base: FormValues, ajustes: AjusteInicial[]): Form
  * Valores oficiales sobre la estructura actual. `soloEnCaliente`: conserva los campos que solo se
  * definen al inicio (cantidad de flota y posición de almacén), que durante la simulación no se tocan.
  */
-export const valoresOficiales = (actual: FormValues, soloEnCaliente: boolean): FormValues => {
+export const valoresOficiales = (actual: FormValues, soloEnCaliente: boolean, oficiales: ValoresOficiales): FormValues => {
   const form: FormValues = structuredClone(actual);
   for (const [id, tipo] of Object.entries(form.tipos)) {
-    const oficial = VALORES_OFICIALES.tipos[id];
+    const oficial = oficiales.tipos[id];
     if (!oficial) continue;
     tipo.velocidad = String(oficial.velocidad);
     tipo.capacidad = String(oficial.capacidad);
     if (!soloEnCaliente) tipo.cantidad = String(oficial.cantidad);
   }
   for (const [nombre, almacen] of Object.entries(form.almacenes)) {
-    const oficial = VALORES_OFICIALES.almacenes[nombre];
+    const oficial = oficiales.almacenes[nombre];
     if (!oficial) continue;
     if (!soloEnCaliente) {
       almacen.x = String(oficial.x);
       almacen.y = String(oficial.y);
     }
     if (!almacen.esCentral) {
-      almacen.capacidad = String(oficial.capacidad);
-      almacen.frecuencia = String(oficial.frecuencia);
+      if (oficial.capacidad !== undefined) almacen.capacidad = String(oficial.capacidad);
+      if (oficial.frecuencia !== undefined) almacen.frecuencia = String(oficial.frecuencia);
     }
   }
   for (const { campo } of CAMPOS_OPERACION) {
-    form.operacion[campo] = String(VALORES_OFICIALES.operacion[campo]);
+    if (oficiales.operacion[campo] !== undefined) form.operacion[campo] = String(oficiales.operacion[campo]);
   }
   return form;
 };

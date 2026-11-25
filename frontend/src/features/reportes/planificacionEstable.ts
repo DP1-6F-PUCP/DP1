@@ -32,8 +32,8 @@ export interface FilaPlan {
   nivel: 'on_time' | 'at_risk' | 'delayed' | 'delivered' | 'collapsed';
 }
 
-const ESTADO_RUTA: Record<string, string> = {
-  EN_EJECUCION: 'En ejecución', PLANIFICADA: 'Planificada', FINALIZADA: 'Finalizada', REEMPLAZADA: 'Reemplazada',
+export const ESTADO_RUTA: Record<string, string> = {
+  EN_EJECUCION: 'En curso', PLANIFICADA: 'Planificada', FINALIZADA: 'Finalizada', REEMPLAZADA: 'Reemplazada',
 };
 export const ESTADO_PEDIDO: Record<FilaPlan['nivel'], string> = {
   on_time: 'A tiempo', at_risk: 'En riesgo', delayed: 'Retrasado', collapsed: 'Colapsado', delivered: 'Entregado',

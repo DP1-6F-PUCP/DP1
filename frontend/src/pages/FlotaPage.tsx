@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ArrowUpDown, Clock, Gauge, LocateFixed, MapPin, Package, PackageCheck, Search, Truck, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Clock, Gauge, LocateFixed, MapPin, Package, PackageCheck, Search, Truck, Wrench, X } from 'lucide-react';
 import { Faltan } from '../components/Faltan';
 import { useEstadoVisual } from '../engine/useEstadoVisual';
 import { useVehicles } from '../features/vehiculos/hooks/useVehicles';
@@ -33,7 +33,7 @@ import { BotonAveria } from '../features/flota/components/BotonAveria';
 import { HistorialAverias } from '../features/flota/components/HistorialAverias';
 import { Mantenimientos, useMantenimientos } from '../features/flota/components/Mantenimientos';
 import {
-  ACENTO, BarraCarga, BORDE, CAMPO, Chip, ChipEstado, corto, DistintivoAveria, FOCO, ICONO_ESTADO, ICONO_TIPO,
+  ACENTO, BarraCarga, BORDE, CAMPO, Chip, ChipEstado, corto, FOCO, ICONO_ESTADO, ICONO_TIPO,
   NOMBRE_TIPO, TEXTO, TEXTO_FUERTE, TEXTO_TENUE, TIPOS_VEHICULO,
 } from '../features/flota/components/piezas';
 
@@ -44,7 +44,7 @@ const TIPOS = ['car', 'motorcycle', 'bicycle'] as const;
 /**
  * Flota: todos los vehículos a todo el ancho, al instante visible del mapa. Arriba los KPI por estado
  * (un click filtra la tabla), debajo la tabla con búsqueda, filtros (en la URL, como Pedidos), orden
- * por columnas y, por fila, "Ver en el mapa" y "Averiar" (regla: salió hace < 4 h). Al pie, el
+ * por columnas y, por fila, "Ver" (en el mapa) y "Averiar" (regla: salió hace < 4 h). Al pie, el
  * historial de averías de la ejecución y los mantenimientos.
  */
 export const FlotaPage: React.FC = () => {
@@ -263,14 +263,15 @@ export const FlotaPage: React.FC = () => {
             );
           })}
           <div className={`rounded-xl border ${BORDE} bg-[var(--color-surface)] p-2.5 shadow-sm`}
-            title={`Llenado de la flota (G01/G02): carga a bordo / capacidad total.\n${llenado.load} de ${llenado.capacity} paquetes.\nVerde < ${umbrales.flotaAlta} % · ámbar ${umbrales.flotaAlta}–${umbrales.flotaSaturada - 1} % · rojo ≥ ${umbrales.flotaSaturada} %`}>
+            title={`Llenado de la flota: carga a bordo / capacidad total.\n${llenado.load} de ${llenado.capacity} paquetes.\nVerde < ${umbrales.flotaAlta} % · ámbar ${umbrales.flotaAlta}–${umbrales.flotaSaturada - 1} % · rojo ≥ ${umbrales.flotaSaturada} %`}>
             <div className="flex items-center gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `${llenado.hex}1F`, color: llenado.hex }}>
                 <Gauge className="h-4 w-4" aria-hidden />
               </span>
               <span className="min-w-0">
                 <span className={`block font-mono-code text-lg font-semibold leading-tight ${TEXTO_FUERTE}`}>{llenado.pct}%</span>
-                <span className={`block truncate text-xs ${TEXTO_TENUE}`}>Llenado de flota</span>
+                {/* «Llenado de flota» se truncaba en la fila de 8 KPI; el detalle está en el tooltip. */}
+                <span className={`block truncate text-xs ${TEXTO_TENUE}`}>Llenado</span>
               </span>
             </div>
             <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" aria-hidden>
@@ -312,12 +313,12 @@ export const FlotaPage: React.FC = () => {
           </div>
           <Chip activo={soloAveriables} onClick={() => actualizar({ averiable: soloAveriables ? null : '1' })}
             title="Vehículos a los que se les puede provocar una avería: salieron del almacén hace menos de 4 h">
-            Se pueden averiar <span className={`font-mono-code ${TEXTO_TENUE}`}>{nAveriables}</span>
+            <Wrench className="h-3.5 w-3.5" aria-hidden />Averiables <span className={`font-mono-code ${TEXTO_TENUE}`}>{nAveriables}</span>
           </Chip>
           {hayFiltros && (
             <button type="button" onClick={limpiarFiltros}
               className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${ACENTO} hover:bg-cyan-500/10 ${FOCO}`}>
-              <X className="h-3.5 w-3.5" aria-hidden />Quitar filtros
+              <X className="h-3.5 w-3.5" aria-hidden />Limpiar
             </button>
           )}
         </div>
@@ -327,13 +328,13 @@ export const FlotaPage: React.FC = () => {
           <div className={`rounded-xl border border-dashed ${BORDE} bg-[var(--color-surface)] p-10 text-center ${TEXTO_TENUE}`}>
             <Truck className="mx-auto mb-2 h-7 w-7 text-slate-400 dark:text-slate-600" aria-hidden />
             <p className={`font-medium ${TEXTO}`}>Aún no hay datos de la flota</p>
-            <p className="mt-1 text-sm">Aparecen con el primer lote de la simulación.</p>
+            <p className="mt-1 text-sm">Aparecen en cuanto arranca la simulación.</p>
           </div>
         ) : ordenadas.length === 0 ? (
           <div className={`rounded-xl border border-dashed ${BORDE} bg-[var(--color-surface)] p-10 text-center ${TEXTO_TENUE}`}>
             <Truck className="mx-auto mb-2 h-7 w-7 text-slate-400 dark:text-slate-600" aria-hidden />
             <p className={`font-medium ${TEXTO}`}>Ningún vehículo con estos filtros</p>
-            <button type="button" onClick={limpiarFiltros} className={`mt-2 text-sm font-semibold ${ACENTO} hover:underline ${FOCO}`}>Quitar filtros</button>
+            <button type="button" onClick={limpiarFiltros} title="Quitar todos los filtros" className={`mt-2 text-sm font-semibold ${ACENTO} hover:underline ${FOCO}`}>Limpiar</button>
           </div>
         ) : (
           <div className={`overflow-x-auto rounded-xl border ${BORDE} bg-[var(--color-surface)] shadow-sm`}>
@@ -376,7 +377,7 @@ export const FlotaPage: React.FC = () => {
                           <ChipEstado vehiculo={v} />
                           {prog && e !== 'averiado' && (
                             <span className="inline-flex items-center gap-1 rounded-md border border-dashed border-rose-500/60 px-1.5 py-px text-[11px] font-semibold text-rose-700 dark:text-rose-300"
-                              title="Solicitud enviada: el backend la aplica al cerrar el siguiente lote">
+                              title="Se aplica en unos segundos">
                               <Clock className="h-3 w-3" aria-hidden />Avería T{prog.tipo} programada
                             </span>
                           )}
@@ -400,7 +401,7 @@ export const FlotaPage: React.FC = () => {
                           </div>
                         ) : porTrasvasar ? (
                           <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300"
-                            title="Sus pedidos ya se replanificaron en otros vehículos; los paquetes pasan a ellos en el trasvase">
+                            title="Sus pedidos pasaron a otros vehículos; los paquetes se les entregan en el trasvase">
                             <Package className="h-3.5 w-3.5" aria-hidden />{v.currentLoad} paq. por trasvasar
                           </span>
                         ) : ruta.proximaRuta.length > 0 ? (
@@ -441,8 +442,9 @@ export const FlotaPage: React.FC = () => {
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-1.5">
                           <button type="button" onClick={() => verEnMapa(v)} title={`Seleccionar ${v.code} y centrar el mapa en él`}
+                            aria-label={`Ver ${v.code} en el mapa`}
                             className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${ACENTO} hover:bg-cyan-500/10 ${FOCO}`}>
-                            <LocateFixed className="h-3.5 w-3.5" aria-hidden />Ver en el mapa
+                            <LocateFixed className="h-3.5 w-3.5" aria-hidden />Ver
                           </button>
                           <BotonAveria vehiculo={v} estado={averia} ocupado={isReportingBreakdown} onAveriar={averiar} />
                         </div>
@@ -457,13 +459,14 @@ export const FlotaPage: React.FC = () => {
 
         {!sinDatos && (
           <p className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${TEXTO_TENUE}`}>
-            <span className="inline-flex items-center gap-1"><DistintivoAveria tipo={1} />Averiar: solo vehículos que salieron del almacén hace menos de 4 h</span>
-            <span>· «Salida» es la hora de salida de su ruta despachada más reciente (el estado no trae otra hora de salida del vehículo)</span>
-            {totalAveriados > 0 && <span>· {totalAveriados} averiado(s) ahora</span>}
+            {/* Cómo se obtiene «Salida» ya está en el tooltip de su columna. */}
+            <span className="inline-flex items-center gap-1"><Wrench className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" aria-hidden />Averiar: salió del almacén hace &lt; 4 h</span>
+            {totalAveriados > 0 && <span>· {totalAveriados === 1 ? '1 averiado' : `${totalAveriados} averiados`} ahora</span>}
           </p>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        {/* items-start: un historial vacío no se estira al alto del calendario de mantenimientos. */}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
           <HistorialAverias vehiculos={vehicles} marcaVisibleMs={marcaVisibleMs} onVer={verEnMapa} />
           <Mantenimientos vehiculos={vehicles} marcaVisibleMs={marcaVisibleMs} />
         </div>

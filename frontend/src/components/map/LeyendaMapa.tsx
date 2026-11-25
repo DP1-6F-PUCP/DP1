@@ -7,19 +7,17 @@ import { useEstadoVisual } from '../../engine/useEstadoVisual';
 import { MapLayersState, useMapStore } from '../../store/mapStore';
 import { useAyuda } from './useAyuda';
 import { useUmbrales } from '../../store/umbralesStore';
-import { estadoVehiculo, GrupoFiltro, hayFiltros, nivelAlmacen, nivelCarga } from '../../utils/filtrosMapa';
+import { estadoVehiculo, GrupoFiltro, hayFiltros, nivelAlmacen, nivelCarga, SEMAFORO_CARGA } from '../../utils/filtrosMapa';
 
 /*
  * Colores tomados de LeafletManhattanMap (marcadores, rutas y bloqueos) y de warehouseStock: si
  * cambian allá, hay que actualizarlos aquí.
  */
-// La carga ya no es un color en el mapa (los vehículos son neutros, ver LeafletManhattanMap
-// COLOR_VEHICULO): aquí queda solo como filtro, con barras de nivel en vez de colores de semáforo.
-const CARGA = [
-  { valor: 'alta', barras: 3, label: 'Alta' },
-  { valor: 'media', barras: 2, label: 'Media' },
-  { valor: 'baja', barras: 1, label: 'Baja' },
-];
+// Semáforo de capacidad del vehículo (color del ícono en el mapa, ver SEMAFORO_CARGA): las barras
+// dicen cuánto lleva y el color, cuánta capacidad le queda (verde libre, rojo lleno).
+const CARGA = (['baja', 'media', 'alta'] as const).map((valor, i) => ({
+  valor, barras: i + 1, hex: SEMAFORO_CARGA[valor].hex, label: SEMAFORO_CARGA[valor].label,
+}));
 const GRIS_ALMACEN = '#6B7280';
 // Descripción de cada tipo para la ayuda al pasar el mouse (mismas reglas que
 // utils/vehicleBreakdown.BREAKDOWN_LEVEL_CONFIGS, en versión corta).
@@ -167,12 +165,12 @@ const Punto: React.FC<{ hex: string }> = ({ hex }) => (
   <span className="block h-3 w-3 rounded-[3px]" style={{ backgroundColor: hex }} />
 );
 
-/** Nivel de carga como 3 barras ascendentes (las llenas = cuánto lleva), sin color de alarma. */
-const NivelCarga: React.FC<{ barras: number }> = ({ barras }) => (
+/** Nivel de carga como 3 barras ascendentes (las llenas = cuánto lleva), con el color del semáforo. */
+const NivelCarga: React.FC<{ barras: number; hex: string }> = ({ barras, hex }) => (
   <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden>
     {[0, 1, 2].map((i) => (
       <rect key={i} x={1 + i * 4.5} y={8 - i * 3} width="3" height={4 + i * 3} rx="0.8"
-        fill={i < barras ? '#E2E8F0' : 'none'} stroke="#94A3B8" strokeWidth="0.8" />
+        fill={i < barras ? hex : 'none'} stroke={hex} strokeWidth="0.8" />
     ))}
   </svg>
 );
@@ -236,9 +234,9 @@ export const LeyendaCapas: React.FC = () => {
               <Item grupo="vehTipo" valor="motorcycle" cantidad={nTipo.motorcycle ?? 0} simbolo={<FaMotorcycle className="h-3.5 w-3.5 text-slate-300" />}>Moto</Item>
               <Item grupo="vehTipo" valor="bicycle" cantidad={nTipo.bicycle ?? 0} simbolo={<FaBicycle className="h-3.5 w-3.5 text-slate-300" />}>Bici</Item>
             </Fila>
-            <Fila columnas={3} rotulo={`Carga (alta ≥ ${umbrales.cargaAlta} %, baja < ${umbrales.cargaMedia} %)`}>
+            <Fila columnas={3} rotulo={`Capacidad (lleno ≥ ${umbrales.cargaAlta} %, libre < ${umbrales.cargaMedia} %)`}>
               {CARGA.map((c) => (
-                <Item key={c.valor} grupo="vehCarga" valor={c.valor} cantidad={nCarga[c.valor] ?? 0} simbolo={<NivelCarga barras={c.barras} />}>{c.label}</Item>
+                <Item key={c.valor} grupo="vehCarga" valor={c.valor} cantidad={nCarga[c.valor] ?? 0} simbolo={<NivelCarga barras={c.barras} hex={c.hex} />}>{c.label}</Item>
               ))}
             </Fila>
             <Fila columnas={2} rotulo="Estado">

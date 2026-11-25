@@ -37,6 +37,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Orquesta la ejecución periódica de un {@link Planificador} (ALNS o IPSO, indistintamente — el
@@ -226,20 +227,35 @@ public class OrquestadorOperacion {
 
     /**
      * Incorpora nuevos pedidos, bloqueos o mantenimientos a una ejecución en curso.
+     *
+     * <p>No entran los pedidos que ingresaron antes del inicio de la simulación ni los que ya están
+     * vencidos al subirlos: un pedido vencido se daría por incumplido al instante y detendría la
+     * simulación por algo que el operador no pudo evitar. Se devuelven contados para avisarle.
      */
-    public synchronized void incorporarDatos(List<Pedido> pedidos, List<Bloqueo> bloqueos,
-            List<Mantenimiento> mantenimientos) {
+    public synchronized com.paqrap.exposicion.ResumenIncorporacion incorporarDatos(List<Pedido> pedidos,
+            List<Bloqueo> bloqueos, List<Mantenimiento> mantenimientos) {
+        int incorporados = 0;
+        int programados = 0;
+        int anteriores = 0;
+        int vencidos = 0;
         if (pedidos != null && !pedidos.isEmpty()) {
             LocalDateTime ahora = contextoProblema.marcaTiempoActual();
             List<Pedido> paraAgregarAlContexto = new ArrayList<>();
             for (Pedido p : pedidos) {
                 if (p.getFechaIngreso().isBefore(instanteInicioEscenario)) {
+                    anteriores++;
+                    continue;
+                }
+                if (p.getFechaLimite() != null && !p.getFechaLimite().isAfter(ahora)) {
+                    vencidos++;
                     continue;
                 }
                 if (!p.getFechaIngreso().isAfter(ahora)) {
+                    incorporados++;
                     historialPedidos.put(p.getIdPedido(), p);
                     paraAgregarAlContexto.add(p);
                 } else {
+                    programados++;
                     pedidosPorIncorporar.add(p);
                 }
             }
@@ -258,6 +274,7 @@ public class OrquestadorOperacion {
         if (mantenimientos != null && !mantenimientos.isEmpty()) {
             todosLosMantenimientos.addAll(mantenimientos);
         }
+        return new com.paqrap.exposicion.ResumenIncorporacion(incorporados, programados, anteriores, vencidos);
     }
 
     /**
@@ -282,6 +299,16 @@ public class OrquestadorOperacion {
         // Historial completo de eventos de esta ejecución en disco (evidencia); en memoria solo los recientes.
         gestorLog.iniciarArchivo("ejecucion-" + tipoEscenario + "-"
                 + contextoProblema.marcaTiempoActual().toLocalDate() + "-" + ejecucionActual.getIdEjecucion());
+        // Antes del primer lote: quien persiste la ejecución la registra aquí, así las averías y
+        // solicitudes que se guarden después ya tienen a qué ejecución apuntar.
+        Consumer<EjecucionEscenario> oyenteInicio = alIniciar;
+        if (oyenteInicio != null) {
+            try {
+                oyenteInicio.accept(ejecucionActual);
+            } catch (Exception ex) {
+                log.error("Falló el registro del inicio de la ejecución {}", ejecucionActual.getIdEjecucion(), ex);
+            }
+        }
         this.detenido = false;
         this.bloqueosNotificados.clear();
         this.bloqueosEnUltimaPlanificacion = Set.of();
@@ -674,14 +701,10 @@ public class OrquestadorOperacion {
         ultimasRutas = todasLasRutas;
         long tDespuesSimular = System.currentTimeMillis();
 
-        // Solo se suma el costo de las rutas NUEVAS -- el de las que ya venían EN_EJECUCION se
-        // contabilizó una única vez, en el lote donde se planificaron por primera vez.
-        for (Ruta ruta : rutasNuevas) {
-            reporte.sumarCosto(ruta.getCostoEstimado());
-        }
-        for (Ruta ruta : rutasTrasvase) {
-            reporte.sumarCosto(ruta.getCostoEstimado());
-        }
+        // Costo de lo RECORRIDO en el lote. Antes se sumaba el costo estimado completo de cada ruta
+        // nueva (ida, regreso al punto de partida y, con IPSO, penalizaciones) y no se descontaba si
+        // la ruta se abandonaba: cada reorganización lo inflaba (medido: S/ 23 404 contra ~4 452).
+        reporte.sumarCosto(motorSimulacion.getCostoRecorrido());
         reporte.incrementarEntregados(motorSimulacion.getPedidosCompletados().size());
 
         LocalDateTime instanteAnterior = contextoProblema.marcaTiempoActual();
@@ -750,16 +773,52 @@ public class OrquestadorOperacion {
         this.alCerrarLote = alCerrarLote;
     }
 
+    /** Se invoca una vez, al crear la ejecución y antes de su primer lote. */
+    private volatile Consumer<EjecucionEscenario> alIniciar;
+    /** Se invoca por cada avería aplicada (al iniciar o en caliente), en el hilo del orquestador. */
+    private volatile Consumer<RegistroAveria> alRegistrarAveria;
+    /** Se invoca por cada solicitud vencida, se haya aplicado o descartado por error. */
+    private volatile Consumer<SolicitudProcesada> alProcesarSolicitud;
+
+    public void setAlIniciar(Consumer<EjecucionEscenario> alIniciar) {
+        this.alIniciar = alIniciar;
+    }
+
+    public void setAlRegistrarAveria(Consumer<RegistroAveria> alRegistrarAveria) {
+        this.alRegistrarAveria = alRegistrarAveria;
+    }
+
+    public void setAlProcesarSolicitud(Consumer<SolicitudProcesada> alProcesarSolicitud) {
+        this.alProcesarSolicitud = alProcesarSolicitud;
+    }
+
+    /** Resultado de procesar una solicitud en caliente: {@code detalle} explica un descarte. */
+    public record SolicitudProcesada(SolicitudOperacion solicitud, boolean aplicada, String detalle) {
+    }
+
+    /**
+     * Cuántas solicitudes que cambian la configuración (todas menos {@code AVERIA}) se aplicaron de
+     * verdad. Quien persiste la configuración maestra la guarda cuando este número cambia, no al
+     * programar la solicitud (que puede aplicarse varios lotes después).
+     */
+    private volatile long cambiosConfiguracionAplicados;
+
+    public long getCambiosConfiguracionAplicados() {
+        return cambiosConfiguracionAplicados;
+    }
+
     private void notificarCierreDeLote() {
         Runnable callback = alCerrarLote;
-        if (callback == null) {
-            return;
+        if (callback != null) {
+            try {
+                callback.run();
+            } catch (Exception ex) {
+                log.error("Falló la publicación del estado al cerrar el lote", ex);
+            }
         }
-        try {
-            callback.run();
-        } catch (Exception ex) {
-            log.error("Falló la publicación del estado al cerrar el lote", ex);
-        }
+        // El archivo .jsonl se vuelca a disco en cada lote: un apagado brusco pierde a lo sumo el
+        // lote en curso (antes, hasta 499 eventos).
+        gestorLog.volcar();
     }
 
     /**
@@ -801,12 +860,31 @@ public class OrquestadorOperacion {
 
     /** Detiene el ciclo periódico. Si la ejecución no terminó por incumplimiento, la marca {@code FINALIZADA}. */
     public synchronized void detener() {
+        detener(EstadoEjecucion.FINALIZADA);
+    }
+
+    /**
+     * Detiene el ciclo porque el backend se apaga: la ejecución queda {@code INTERRUMPIDA} con motivo
+     * {@code REINICIO_SERVIDOR}, y el reporte final se arma igual con lo simulado hasta aquí.
+     */
+    public synchronized void detenerPorApagado() {
+        if (detenido) {
+            return;
+        }
+        motivoForzado = "REINICIO_SERVIDOR";
+        detener(EstadoEjecucion.INTERRUMPIDA);
+    }
+
+    private String motivoForzado;
+
+    private void detener(EstadoEjecucion estadoFinal) {
         detenido = true;
         if (programador != null) {
             programador.shutdown();
         }
-        if (ejecucionActual != null && ejecucionActual.getEstado() != EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO) {
-            ejecucionActual.setEstado(EstadoEjecucion.FINALIZADA);
+        if (ejecucionActual != null && ejecucionActual.getEstado() != EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO
+                && ejecucionActual.getEstado() != EstadoEjecucion.INTERRUMPIDA) {
+            ejecucionActual.setEstado(estadoFinal);
         }
         if (ejecucionActual != null) {
             ejecucionActual.registrarFin();
@@ -817,6 +895,7 @@ public class OrquestadorOperacion {
 
     public String getMotivoFinalizacion() {
         if (ejecucionActual.getEstado() == EstadoEjecucion.DETENIDA_POR_INCUMPLIMIENTO) return "COLAPSO";
+        if (motivoForzado != null) return motivoForzado;
         if (fechaFinSimulada != null && !contextoProblema.marcaTiempoActual().isBefore(fechaFinSimulada))
             return "PERIODO_COMPLETADO";
         return "PARADA_MANUAL";
@@ -845,9 +924,18 @@ public class OrquestadorOperacion {
     private void registrarAveriaEnHistorial(UnidadTransporte unidad) {
         Averia a = unidad.getAveriaActual();
         if (a == null) return;
-        historialAverias.add(new RegistroAveria(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), a.tipo(),
+        RegistroAveria registro = new RegistroAveria(unidad.getIdUnidad(), unidad.getTipoVehiculo().getId(), a.tipo(),
                 a.fechaInicio(), a.fechaFinEstimada(), a.fechaTrasladoAlmacen(), unidad.getPosicion().x(),
-                unidad.getPosicion().y()));
+                unidad.getPosicion().y());
+        historialAverias.add(registro);
+        Consumer<RegistroAveria> oyente = alRegistrarAveria;
+        if (oyente != null) {
+            try {
+                oyente.accept(registro);
+            } catch (Exception ex) {
+                log.error("No se pudo registrar la avería de {}: {}", registro.idUnidad(), ex.getMessage());
+            }
+        }
     }
 
     /**
@@ -975,6 +1063,8 @@ public class OrquestadorOperacion {
             // siempre, no solo descartaba esa solicitud. Aislar el fallo por solicitud (no por
             // lote entero, ver ejecutarLoteProtegido) y retirarla de la cola SIEMPRE, se aplicara
             // o no, es lo que evita ambos efectos.
+            boolean aplicada = true;
+            String detalle = null;
             try {
                 switch (solicitud.tipoSolicitud()) {
                     case AVERIA -> aplicarAveria(solicitud);
@@ -985,13 +1075,34 @@ public class OrquestadorOperacion {
                     case CAMBIO_CANTIDAD_VEHICULOS -> aplicarCambioCantidadVehiculos(solicitud);
                     case CAMBIO_FRECUENCIA_RECARGA -> aplicarCambioFrecuenciaRecarga(solicitud);
                     case CAMBIO_CONFIGURACION_OPERACION -> aplicarCambioConfiguracionOperacion(solicitud);
-                    default -> log.warn("Tipo de solicitud aún no implementado: {}", solicitud.tipoSolicitud());
+                    default -> {
+                        aplicada = false;
+                        detalle = "Tipo de solicitud aún no implementado";
+                        log.warn("Tipo de solicitud aún no implementado: {}", solicitud.tipoSolicitud());
+                    }
                 }
             } catch (Exception ex) {
+                aplicada = false;
+                detalle = ex.getMessage();
                 log.error("Solicitud {} sobre {} descartada por error al aplicarla: {}", solicitud.tipoSolicitud(),
                         solicitud.entidadObjetivo(), ex.getMessage());
             }
             solicitudesPendientes.remove(solicitud);
+            if (aplicada && solicitud.tipoSolicitud() != TipoSolicitud.AVERIA) {
+                cambiosConfiguracionAplicados++;
+                // Sin esto el .jsonl no dejaba rastro de ningún cambio de configuración en caliente.
+                gestorLog.registrarEvento(new EventoSimulacion(0.0, TipoEvento.CAMBIO_CONFIGURACION, null, null, -1,
+                        -1, "Cambio aplicado: " + solicitud.tipoSolicitud() + " sobre " + solicitud.entidadObjetivo(),
+                        "valorNuevo=" + solicitud.valorNuevo() + " instante=" + ahora));
+            }
+            Consumer<SolicitudProcesada> oyente = alProcesarSolicitud;
+            if (oyente != null) {
+                try {
+                    oyente.accept(new SolicitudProcesada(solicitud, aplicada, detalle));
+                } catch (Exception ex) {
+                    log.error("No se pudo registrar la solicitud {}: {}", solicitud.tipoSolicitud(), ex.getMessage());
+                }
+            }
         }
     }
 

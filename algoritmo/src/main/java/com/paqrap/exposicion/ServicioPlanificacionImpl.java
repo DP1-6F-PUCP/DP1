@@ -75,9 +75,24 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     private final List<Pedido> pedidosRecibidos = new CopyOnWriteArrayList<>();
     private final List<Bloqueo> bloqueosRecibidos = new CopyOnWriteArrayList<>();
     private final List<Mantenimiento> mantenimientosRecibidos = new CopyOnWriteArrayList<>();
+    /** SHA-256 de las cargas manuales vigentes de este proceso (la BD guarda las de antes del reinicio). */
+    private final java.util.Set<String> hashesCargados = ConcurrentHashMap.newKeySet();
     private final Map<String, OrquestadorOperacion> ejecuciones = new ConcurrentHashMap<>();
     private volatile String idEjecucionActiva;
-    private volatile boolean configuracionPendientePersistir;
+    /**
+     * Último valor visto de {@link OrquestadorOperacion#getCambiosConfiguracionAplicados()}: la
+     * configuración maestra se persiste cuando un cambio en caliente se APLICA, no cuando se programa
+     * (antes una solicitud para un instante futuro borraba la marca antes de aplicarse y nunca se guardaba).
+     */
+    private long cambiosConfiguracionPersistidos;
+    /** Solicitudes de la ejecución activa, para el reporte final (también se guardan en BD). */
+    private final Map<String, SolicitudRegistroDTO> solicitudesEjecucion = java.util.Collections
+            .synchronizedMap(new java.util.LinkedHashMap<>());
+    /** Ids de registro de las solicitudes en caliente aún sin procesar (misma instancia que se encola). */
+    private final Map<SolicitudOperacion, String> idsSolicitudesEncoladas = java.util.Collections
+            .synchronizedMap(new java.util.IdentityHashMap<>());
+    /** Reportes ya armados que la BD no pudo guardar; se reintenta en cada consulta y al apagar. */
+    private final Map<String, OrquestadorOperacion> reportesPendientesDeGuardar = new ConcurrentHashMap<>();
 
     public ServicioPlanificacionImpl(Ciudad ciudad, ConfiguracionOperacion configuracionOperacion,
             List<TipoVehiculo> tiposVehiculo, List<Almacen> almacenes, List<UnidadTransporte> flota,
@@ -110,10 +125,27 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
     @Override
     public synchronized void recibirArchivo(ArchivoEntrada archivo, TipoArchivo tipoExplicito) {
+        recibirArchivoConResumen(archivo, tipoExplicito);
+    }
+
+    @Override
+    public synchronized ResumenIncorporacion recibirArchivoConResumen(ArchivoEntrada archivo, TipoArchivo tipoExplicito) {
         TipoArchivo tipo = tipoExplicito != null ? tipoExplicito : inferirTipoArchivo(archivo.nombreArchivo());
         YearMonth periodo = inferirPeriodo(archivo.nombreArchivo()).orElse(YearMonth.now());
 
-        CargaArchivo carga = new CargaArchivo(archivo.nombreArchivo(), tipo, periodo);
+        // Una carga con exactamente el mismo contenido que otra vigente se rechaza: antes los pedidos
+        // se deduplicaban por id, pero los bloqueos y mantenimientos se duplicaban en silencio.
+        String sha256 = sha256(archivo.contenido());
+        if (hashesCargados.contains(sha256) || repositorioOperacion.existeImportacionManual(sha256)) {
+            throw new IllegalArgumentException("El archivo " + archivo.nombreArchivo()
+                    + " ya se cargó con este mismo contenido.");
+        }
+
+        // Prefijo propio por carga: los ids "PED-<periodo>-NNNN" de una carga manual chocaban con los
+        // oficiales del mismo mes (y con cargas manuales ya limpiadas) y la BD los descartaba sin avisar.
+        String idImportacion = java.util.UUID.randomUUID().toString();
+        CargaArchivo carga = new CargaArchivo(archivo.nombreArchivo(), tipo, periodo,
+                "MAN-" + idImportacion.substring(0, 8));
         carga.procesarArchivo(archivo.contenido());
 
         if (!carga.getErrores().isEmpty()) {
@@ -121,52 +153,74 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                     + carga.getErrores().size() + " línea(s) inválida(s): " + carga.getErrores().get(0).tipoError());
         }
 
-        // Deduplica pedidos por idPedido si se sube el mismo archivo varias veces
-        java.util.Set<String> idsExistentes = pedidosRecibidos.stream()
-                .map(Pedido::getIdPedido)
-                .collect(java.util.stream.Collectors.toSet());
-        List<Pedido> nuevosPedidos = new ArrayList<>();
-        for (Pedido p : carga.getPedidos()) {
-            if (!idsExistentes.contains(p.getIdPedido())) {
-                pedidosRecibidos.add(p);
-                nuevosPedidos.add(p);
-                idsExistentes.add(p.getIdPedido());
-            }
-        }
-
-        bloqueosRecibidos.addAll(carga.getBloqueos());
-
+        List<Pedido> nuevosPedidos = new ArrayList<>(carga.getPedidos());
         List<Mantenimiento> nuevosMantenimientos = new ArrayList<>();
         for (var pendiente : carga.getMantenimientosPendientes()) {
             resolverMantenimientosBimensuales(pendiente, nuevosMantenimientos);
         }
-        mantenimientosRecibidos.addAll(nuevosMantenimientos);
 
-        // Persistir archivos manuales en BD si hay repositorio configurado
-        if (!nuevosPedidos.isEmpty()) {
-            repositorioOperacion.guardarPedidosManuales(nuevosPedidos);
-        }
-        if (!carga.getBloqueos().isEmpty()) {
-            repositorioOperacion.guardarBloqueosManuales(carga.getBloqueos());
-        }
-        if (!carga.getMantenimientosPendientes().isEmpty()) {
-            repositorioOperacion.guardarMantenimientosManuales(carga.getMantenimientosPendientes());
-        }
+        // Primero la BD (todo o nada) y recién después la memoria: si la BD falla, la carga no queda
+        // a medias visible solo en este proceso.
+        repositorioOperacion.guardarImportacionManual(new RepositorioOperacion.ImportacionArchivo(idImportacion,
+                tipo.name(), archivo.nombreArchivo(), periodo.getYear(), periodo.getMonthValue(), sha256,
+                carga.getTotalRegistros()), nuevosPedidos, carga.getBloqueos(), carga.getMantenimientosPendientes());
+
+        hashesCargados.add(sha256);
+        pedidosRecibidos.addAll(nuevosPedidos);
+        bloqueosRecibidos.addAll(carga.getBloqueos());
+        mantenimientosRecibidos.addAll(nuevosMantenimientos);
 
         // Si ya hay una ejecución activa (p. ej. DIA_A_DIA), incorporar los datos en caliente
         OrquestadorOperacion activo = ejecucionActivaOrquestador();
         if (activo != null && esEjecucionActiva(activo.getEjecucionActual())) {
-            activo.incorporarDatos(nuevosPedidos, carga.getBloqueos(), nuevosMantenimientos);
+            ResumenIncorporacion resumen = activo.incorporarDatos(nuevosPedidos, carga.getBloqueos(), nuevosMantenimientos);
+            if (resumen.vencidos() > 0 || resumen.anterioresAlInicio() > 0) {
+                log.info("Carga {} en curso: {} pedido(s) vencidos y {} anteriores al inicio no se incorporaron.",
+                        archivo.nombreArchivo(), resumen.vencidos(), resumen.anterioresAlInicio());
+            }
+            return resumen;
         }
+        return null;
     }
 
     @Override
     public synchronized void limpiarArchivosCargados() {
+        repositorioOperacion.limpiarDatosManuales();
         pedidosRecibidos.clear();
         bloqueosRecibidos.clear();
         mantenimientosRecibidos.clear();
-        repositorioOperacion.limpiarDatosManuales();
+        hashesCargados.clear();
         log.info("Archivos de pedidos, bloqueos y mantenimientos limpiados.");
+    }
+
+    @Override
+    public List<RepositorioOperacion.ImportacionVigente> listarArchivosCargados() {
+        return repositorioOperacion.listarImportaciones();
+    }
+
+    @Override
+    public synchronized void borrarArchivoCargado(String idImportacion) {
+        String origen = repositorioOperacion.borrarImportacion(idImportacion);
+        if (origen == null) {
+            throw new IllegalArgumentException("Ese archivo ya no está cargado.");
+        }
+        // Las listas en memoria no saben de qué carga vino cada dato: se vacían y la próxima
+        // simulación vuelve a leer de la BD solo las cargas manuales vigentes.
+        pedidosRecibidos.clear();
+        bloqueosRecibidos.clear();
+        mantenimientosRecibidos.clear();
+        hashesCargados.clear();
+        log.info("Archivo cargado {} ({}) borrado.", idImportacion, origen);
+    }
+
+    @Override
+    public synchronized void limpiarTodosLosDatos() {
+        repositorioOperacion.limpiarTodosLosDatos();
+        pedidosRecibidos.clear();
+        bloqueosRecibidos.clear();
+        mantenimientosRecibidos.clear();
+        hashesCargados.clear();
+        log.warn("Se borraron TODOS los datos de entrada (también los estándar precargados).");
     }
 
     /**
@@ -280,10 +334,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                     .sorted(Comparator.comparing(MantenimientoDTO::inicio))
                     .toList();
         }
-        averiasPublicadas = orquestador.getHistorialAverias().stream()
-                .map(a -> new AveriaRegistroDTO(a.idUnidad(), a.tipoVehiculo(), a.tipo().name(), a.inicio(),
-                        a.finEstimado(), a.trasladoAlmacen(), a.x(), a.y()))
-                .toList();
+        averiasPublicadas = orquestador.getHistorialAverias().stream().map(ServicioPlanificacionImpl::aAveriaDTO).toList();
         estadoPublicado = EnsambladorRespuestas.ensamblarEstado(contexto, orquestador.getUltimasRutas(),
                 orquestador.getUltimosEventos(), orquestador.getAnclaUltimoLote(), orquestador.getReporte())
                 .conEjecucion(orquestador.getEjecucionActual().getIdEjecucion())
@@ -309,41 +360,100 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
             planificacionesEstables.put(id, cierre);
         }
         if (orquestador.getEjecucionActual().getFinReal() != null) {
-            reportesFinales.computeIfAbsent(id, clave -> {
+            // Antes: computeIfAbsent con la escritura a BD adentro. Si la BD fallaba, el reporte se
+            // perdía también en memoria; y la E/S corría bajo el candado interno del mapa.
+            if (!reportesFinales.containsKey(id)) {
                 ReporteSimulacionDTO reporte = crearReporte(orquestador, cierre);
-                repositorioOperacion.registrarActualizacionEjecucion(orquestador.getEjecucionActual(),
-                        orquestador.getMotivoFinalizacion(), cierre.estado().marcaTiempoActual());
-                repositorioOperacion.guardarReporteFinal(id, reporte);
-                return reporte;
-            });
+                if (reportesFinales.putIfAbsent(id, reporte) == null) {
+                    reportesPendientesDeGuardar.put(id, orquestador);
+                    guardarReportePendiente(id);
+                }
+            }
+        } else {
+            try {
+                repositorioOperacion.registrarLatido(id, cierre.estado().marcaTiempoActual());
+            } catch (RuntimeException ex) {
+                log.warn("No se pudo registrar el latido de la ejecución {}: {}", id, ex.getMessage());
+            }
         }
-        if (configuracionPendientePersistir) {
-            configuracionPendientePersistir = false;
+        long aplicados = orquestador.getCambiosConfiguracionAplicados();
+        if (aplicados != cambiosConfiguracionPersistidos) {
+            cambiosConfiguracionPersistidos = aplicados;
             this.configuracionOperacion = contexto.configuracionOperacion();
-            repositorioOperacion.guardarConfiguracionMaestra(ciudad, configuracionOperacion, tiposVehiculo, almacenes,
-                    flota);
+            try {
+                repositorioOperacion.guardarConfiguracionMaestra(ciudad, configuracionOperacion, tiposVehiculo,
+                        almacenes, flota);
+            } catch (RuntimeException ex) {
+                log.error("No se pudo guardar la configuración tras un cambio en caliente: {}", ex.getMessage());
+            }
         }
+    }
+
+    /**
+     * Guarda en BD (estado final + reporte, en una transacción) un reporte ya armado en memoria.
+     * Si falla queda pendiente y se reintenta al consultar reportes y al apagar el backend.
+     */
+    private boolean guardarReportePendiente(String idEjecucion) {
+        OrquestadorOperacion orquestador = reportesPendientesDeGuardar.get(idEjecucion);
+        ReporteSimulacionDTO reporte = reportesFinales.get(idEjecucion);
+        if (orquestador == null || reporte == null) {
+            return true;
+        }
+        try {
+            repositorioOperacion.finalizarEjecucion(orquestador.getEjecucionActual(), reporte.motivoFinalizacion(),
+                    reporte.finSimulado(), reporte);
+            reportesPendientesDeGuardar.remove(idEjecucion);
+            return true;
+        } catch (RuntimeException ex) {
+            log.error("No se pudo guardar el reporte final de la ejecución {} (se reintentará): {}", idEjecucion,
+                    ex.getMessage());
+            return false;
+        }
+    }
+
+    private void reintentarReportesPendientes() {
+        reportesPendientesDeGuardar.keySet().forEach(this::guardarReportePendiente);
+    }
+
+    private static AveriaRegistroDTO aAveriaDTO(OrquestadorOperacion.RegistroAveria a) {
+        return new AveriaRegistroDTO(a.idUnidad(), a.tipoVehiculo(), a.tipo().name(), a.inicio(), a.finEstimado(),
+                a.trasladoAlmacen(), a.x(), a.y());
     }
 
     private ReporteSimulacionDTO crearReporte(OrquestadorOperacion orquestador, CierrePublicado cierre) {
         var ejecucion = orquestador.getEjecucionActual();
         var estable = planificacionesEstables.get(ejecucion.getIdEjecucion());
         var fin = cierre.estado().marcaTiempoActual();
+        List<SolicitudRegistroDTO> solicitudes;
+        synchronized (solicitudesEjecucion) {
+            solicitudes = List.copyOf(solicitudesEjecucion.values());
+        }
         return new ReporteSimulacionDTO(ejecucion.getIdEjecucion(), ejecucion.getTipoEscenario().name(),
                 orquestador.getMotivoFinalizacion(), ejecucion.getInicioReal(), ejecucion.getFinReal(),
                 java.time.Duration.between(ejecucion.getInicioReal(), ejecucion.getFinReal()).toMillis(),
                 ejecucion.getFechaInicioSimulada(), fin,
                 java.time.Duration.between(ejecucion.getFechaInicioSimulada(), fin).toMillis(),
                 cierre.estado(), cierre.pedidos(), estable != null ? estable.estado() : null,
-                estable != null ? estable.pedidos() : List.of());
+                estable != null ? estable.pedidos() : List.of(),
+                orquestador.getHistorialAverias().stream().map(ServicioPlanificacionImpl::aAveriaDTO).toList(),
+                solicitudes);
     }
 
     @Override
     public ReporteSimulacionDTO consultarReporteFinal(String idEjecucion) {
+        reintentarReportesPendientes();
         var conservado = reportesFinales.get(idEjecucion);
         if (conservado != null) return conservado;
         var desdeRepo = repositorioOperacion.consultarReporteFinal(idEjecucion);
         if (desdeRepo.isPresent()) return desdeRepo.get();
+        if (!ejecuciones.containsKey(idEjecucion)) {
+            var historica = repositorioOperacion.consultarEjecucionHistorica(idEjecucion);
+            if (historica.isPresent()
+                    && historica.get().getEstado() == com.paqrap.simulador.EstadoEjecucion.INTERRUMPIDA) {
+                throw new IllegalStateException("La ejecución se interrumpió por un reinicio del servidor sin apagado "
+                        + "ordenado; no tiene reporte final.");
+            }
+        }
         var orquestador = orquestadorDe(idEjecucion);
         synchronized (orquestador) {
             var reporte = reportesFinales.get(idEjecucion);
@@ -401,6 +511,10 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         ConfiguracionOperacion operacionVigente = activo != null
                 ? activo.getContextoProblema().configuracionOperacion()
                 : configuracionOperacion;
+        return configuracionCon(operacionVigente);
+    }
+
+    private ConfiguracionActualDTO configuracionCon(ConfiguracionOperacion operacionVigente) {
         return new ConfiguracionActualDTO(
                 EnsambladorRespuestas.aCiudadDTO(ciudad),
                 EnsambladorRespuestas.aConfiguracionOperacionDTO(operacionVigente),
@@ -464,8 +578,9 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
 
         // Esperar al cierre del lote anterior antes de reutilizar flota y almacenes.
         ejecuciones.values().forEach(OrquestadorOperacion::detener);
+        reintentarReportesPendientes();
         reiniciarFlotaYAlmacenes(fechaInicioSimulada);
-        aplicarAjustesIniciales(ajustesIniciales, fechaInicioSimulada);
+        List<SolicitudRegistroDTO> ajustesRegistrados = aplicarAjustesIniciales(ajustesIniciales, fechaInicioSimulada);
 
         List<Pedido> pedidosFuente = !pedidosRecibidos.isEmpty()
                 ? pedidosRecibidos
@@ -513,9 +628,35 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         }
         orquestador.setLotesPrecalculados(lotesPrecalculados);
         orquestador.setAlCerrarLote(() -> publicarEstado(orquestador));
+        cambiosConfiguracionPersistidos = 0;
+        solicitudesEjecucion.clear();
+        idsSolicitudesEncoladas.clear();
+        ajustesRegistrados.forEach(s -> solicitudesEjecucion.put(s.id(), s));
+        // Se registra la ejecución (con la foto de la configuración ya ajustada) antes de su primer
+        // lote, y enseguida los ajustes iniciales y las averías de arranque, que apuntan a ella.
+        ConfiguracionActualDTO fotoConfiguracion = configuracionCon(configuracionOperacion);
+        orquestador.setAlIniciar(ejecucionNueva -> {
+            repositorioOperacion.registrarInicioEjecucion(ejecucionNueva, ta, algoritmoPorDefecto.name(),
+                    fotoConfiguracion);
+            ajustesRegistrados.forEach(s -> registrarSolicitudSegura(ejecucionNueva.getIdEjecucion(), s));
+            orquestador.getHistorialAverias()
+                    .forEach(a -> repositorioOperacion.registrarAveria(ejecucionNueva.getIdEjecucion(), aAveriaDTO(a)));
+        });
+        orquestador.setAlRegistrarAveria(a -> repositorioOperacion
+                .registrarAveria(orquestador.getEjecucionActual().getIdEjecucion(), aAveriaDTO(a)));
+        orquestador.setAlProcesarSolicitud(procesada -> {
+            String idRegistro = idsSolicitudesEncoladas.remove(procesada.solicitud());
+            SolicitudRegistroDTO previa = idRegistro != null ? solicitudesEjecucion.get(idRegistro) : null;
+            if (previa == null) {
+                return;
+            }
+            SolicitudRegistroDTO resultado = previa.conResultado(procesada.aplicada() ? "APLICADA" : "DESCARTADA",
+                    procesada.detalle(), orquestador.getContextoProblema().marcaTiempoActual());
+            solicitudesEjecucion.put(idRegistro, resultado);
+            repositorioOperacion.actualizarSolicitud(resultado);
+        });
 
         EjecucionEscenario ejecucion = orquestador.iniciarCicloPeriodico(tipo);
-        repositorioOperacion.registrarInicioEjecucion(ejecucion);
         // Llegar aquí implica que ninguna ejecución previa sigue activa (ver el chequeo de arriba):
         // se descartan para no retener indefinidamente su ContextoProblema (meses de pedidos,
         // bloqueos, historial de rutas) -- antes se acumulaban una por cada corrida del proceso.
@@ -565,8 +706,13 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
      * uno mal formado no debe impedir que los demás se apliquen ni abortar el arranque del
      * escenario).
      */
-    private void aplicarAjustesIniciales(List<SolicitudOperacion> ajustes, LocalDateTime fechaInicioSimulada) {
+    private List<SolicitudRegistroDTO> aplicarAjustesIniciales(List<SolicitudOperacion> ajustes,
+            LocalDateTime fechaInicioSimulada) {
+        List<SolicitudRegistroDTO> registrados = new ArrayList<>();
         for (SolicitudOperacion ajuste : ajustes) {
+            String valorAnterior = valorVigente(ajuste.tipoSolicitud(), ajuste.entidadObjetivo());
+            String estado = "APLICADA";
+            String detalle = null;
             try {
                 switch (ajuste.tipoSolicitud()) {
                     case AVERIA -> aplicarAveriaInicial(ajuste, fechaInicioSimulada);
@@ -592,13 +738,92 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
                     case CAMBIO_CONFIGURACION_OPERACION -> aplicarCambioConfiguracionOperacionInicial(ajuste);
                 }
             } catch (Exception ex) {
+                estado = "DESCARTADA";
+                detalle = ex.getMessage();
                 log.error("Ajuste inicial {} sobre {} descartado por error al aplicarlo: {}", ajuste.tipoSolicitud(),
                         ajuste.entidadObjetivo(), ex.getMessage());
             }
+            registrados.add(new SolicitudRegistroDTO(java.util.UUID.randomUUID().toString(),
+                    ajuste.tipoSolicitud().name(), ajuste.entidadObjetivo(), valorAnterior, ajuste.valorNuevo(),
+                    fechaInicioSimulada, estado, detalle, fechaInicioSimulada));
         }
         if (!ajustes.isEmpty()) {
-            repositorioOperacion.guardarConfiguracionMaestra(ciudad, configuracionOperacion, tiposVehiculo, almacenes,
-                    flota);
+            // Fuera del try por ajuste, pero sin abortar el arranque: antes un fallo de la BD aquí
+            // respondía 500 con la configuración en memoria ya cambiada. Ahora la ejecución arranca
+            // con los ajustes y la BD se pone al día en el próximo guardado.
+            try {
+                repositorioOperacion.guardarConfiguracionMaestra(ciudad, configuracionOperacion, tiposVehiculo,
+                        almacenes, flota);
+            } catch (RuntimeException ex) {
+                log.error("No se pudo guardar la configuración con los ajustes iniciales: {}", ex.getMessage());
+            }
+        }
+        return registrados;
+    }
+
+    private void registrarSolicitudSegura(String idEjecucion, SolicitudRegistroDTO solicitud) {
+        try {
+            repositorioOperacion.registrarSolicitud(idEjecucion, solicitud);
+        } catch (RuntimeException ex) {
+            log.error("No se pudo registrar la solicitud {} de la ejecución {}: {}", solicitud.tipoSolicitud(),
+                    idEjecucion, ex.getMessage());
+        }
+    }
+
+    /**
+     * Valor vigente de lo que una solicitud va a cambiar, para dejarlo en el registro de auditoría
+     * ({@code null} si no aplica o no se pudo determinar).
+     */
+    private String valorVigente(TipoSolicitud tipo, String objetivo) {
+        try {
+            return switch (tipo) {
+                case CAMBIO_VELOCIDAD -> tipoVehiculoPorId(objetivo).map(tv -> String.valueOf(tv.getVelocidadKmH()))
+                        .orElse(null);
+                case CAMBIO_CAPACIDAD -> tipoVehiculoPorId(objetivo).map(tv -> String.valueOf(tv.getCapacidad()))
+                        .orElse(null);
+                case CAMBIO_CAPACIDAD_ALMACEN -> intermedioPorNombre(objetivo)
+                        .map(a -> String.valueOf(a.getCapacidadMaxima())).orElse(null);
+                case CAMBIO_FRECUENCIA_RECARGA -> intermedioPorNombre(objetivo)
+                        .map(a -> String.valueOf(a.getFrecuenciaRecargaHoras())).orElse(null);
+                case CAMBIO_POSICION_ALMACEN -> almacenes.stream()
+                        .filter(a -> nombreAlmacen(a).equalsIgnoreCase(objetivo)).findFirst()
+                        .map(a -> a.getPosicion().x() + "," + a.getPosicion().y()).orElse(null);
+                case CAMBIO_CANTIDAD_VEHICULOS -> String.valueOf(flota.stream()
+                        .filter(u -> u.getTipoVehiculo().getId().equalsIgnoreCase(objetivo)).count());
+                // Los campos de ciudad y de operación son los nombres de los componentes de sus records.
+                case CAMBIO_CONFIGURACION_OPERACION -> String.valueOf(ConfiguracionOperacion.class.getMethod(objetivo)
+                        .invoke(operacionVigente()));
+                case CAMBIO_CONFIGURACION_CIUDAD -> String.valueOf(Ciudad.class.getMethod(objetivo).invoke(ciudad));
+                case AVERIA -> null;
+            };
+        } catch (ReflectiveOperationException | RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private ConfiguracionOperacion operacionVigente() {
+        OrquestadorOperacion activo = ejecucionActivaOrquestador();
+        return activo != null && esEjecucionActiva(activo.getEjecucionActual())
+                ? activo.getContextoProblema().configuracionOperacion()
+                : configuracionOperacion;
+    }
+
+    private java.util.Optional<TipoVehiculo> tipoVehiculoPorId(String id) {
+        return tiposVehiculo.stream().filter(tv -> tv.getId().equalsIgnoreCase(id)).findFirst();
+    }
+
+    private java.util.Optional<AlmacenIntermedio> intermedioPorNombre(String nombre) {
+        return almacenes.stream().filter(AlmacenIntermedio.class::isInstance).map(AlmacenIntermedio.class::cast)
+                .filter(a -> a.getNombre().equalsIgnoreCase(nombre)).findFirst();
+    }
+
+    private static String sha256(String contenido) {
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(contenido.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
         }
     }
 
@@ -769,7 +994,18 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
     @Override
     public void programarSolicitud(EjecucionEscenario ejecucion, LocalDateTime tiempoSimulado,
             TipoSolicitud tipoSolicitud, String entidadObjetivo, String valorNuevo) {
+        OrquestadorOperacion orquestador = ejecuciones.get(ejecucion.getIdEjecucion());
+        if (orquestador == null) {
+            throw new IllegalArgumentException("No hay una ejecución activa con id " + ejecucion.getIdEjecucion());
+        }
+        SolicitudRegistroDTO registro = new SolicitudRegistroDTO(java.util.UUID.randomUUID().toString(),
+                tipoSolicitud.name(), entidadObjetivo, valorVigente(tipoSolicitud, entidadObjetivo), valorNuevo,
+                tiempoSimulado, "PROGRAMADA", null, null);
         if (tipoSolicitud == TipoSolicitud.CAMBIO_CONFIGURACION_CIUDAD) {
+            SolicitudRegistroDTO rechazada = registro.conResultado("RECHAZADA",
+                    "La ciudad no se puede cambiar con la ejecución en curso", null);
+            solicitudesEjecucion.put(rechazada.id(), rechazada);
+            registrarSolicitudSegura(ejecucion.getIdEjecucion(), rechazada);
             // Rechazado aquí, a la entrada, en vez de encolarse y descartarse en silencio dentro de
             // OrquestadorOperacion.aplicarSolicitudesVencidas: cambiar las dimensiones de la ciudad
             // en caliente deja posiciones ya existentes fuera de la grilla nueva y CalculadorDistancia
@@ -779,14 +1015,14 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
             throw new IllegalArgumentException(
                     "La configuración de ciudad no se puede cambiar una vez iniciada la ejecución; fíjala antes de iniciar el escenario.");
         }
-        OrquestadorOperacion orquestador = ejecuciones.get(ejecucion.getIdEjecucion());
-        if (orquestador == null) {
-            throw new IllegalArgumentException("No hay una ejecución activa con id " + ejecucion.getIdEjecucion());
-        }
-        orquestador.encolarSolicitud(new SolicitudOperacion(tiempoSimulado, tipoSolicitud, entidadObjetivo, valorNuevo));
-        if (tipoSolicitud != TipoSolicitud.AVERIA) {
-            configuracionPendientePersistir = true;
-        }
+        SolicitudOperacion solicitud = new SolicitudOperacion(tiempoSimulado, tipoSolicitud, entidadObjetivo, valorNuevo);
+        // Se registra (memoria y BD) antes de encolarla: el orquestador puede procesarla en su
+        // próximo lote, y ese aviso busca el registro por esta misma instancia.
+        solicitudesEjecucion.put(registro.id(), registro);
+        idsSolicitudesEncoladas.put(solicitud, registro.id());
+        registrarSolicitudSegura(ejecucion.getIdEjecucion(), registro);
+        orquestador.encolarSolicitud(solicitud);
+        // La configuración maestra se persiste cuando el orquestador APLICA el cambio (ver publicarEstado).
     }
 
     private void resolverMantenimientosBimensuales(CargaArchivo.MantenimientoPendiente pendiente,
@@ -839,6 +1075,22 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         }
         return repositorioOperacion.consultarEjecucionHistorica(idEjecucion)
                 .orElseThrow(() -> new IllegalArgumentException("No hay una ejecución activa con id " + idEjecucion));
+    }
+
+    @Override
+    public synchronized void detenerPorApagado() {
+        OrquestadorOperacion activo = ejecucionActivaOrquestador();
+        if (activo != null && esEjecucionActiva(activo.getEjecucionActual())) {
+            log.warn("Apagado del backend con la ejecución {} activa: se detiene como INTERRUMPIDA y se guarda su reporte",
+                    activo.getEjecucionActual().getIdEjecucion());
+            activo.detenerPorApagado();
+        }
+        reintentarReportesPendientes();
+    }
+
+    @Override
+    public List<ResumenEjecucionDTO> listarEjecuciones(int pagina, int tamano) {
+        return repositorioOperacion.listarEjecuciones(Math.max(0, pagina), Math.max(1, Math.min(tamano, 200)));
     }
 
     @Override
@@ -895,7 +1147,7 @@ public class ServicioPlanificacionImpl implements ServicioPlanificacion {
         }
         return switch (ejecucion.getEstado()) {
             case INICIADA, EN_CURSO, PAUSADA -> true;
-            case FINALIZADA, DETENIDA_POR_INCUMPLIMIENTO -> false;
+            case FINALIZADA, DETENIDA_POR_INCUMPLIMIENTO, INTERRUMPIDA -> false;
         };
     }
 

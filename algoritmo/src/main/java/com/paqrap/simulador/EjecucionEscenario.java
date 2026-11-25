@@ -8,8 +8,8 @@ public class EjecucionEscenario {
     private final String idEjecucion;
     private final TipoEscenario tipoEscenario;
     private EstadoEjecucion estado;
-    private final LocalDateTime fechaInicio;
-    private final java.time.Instant inicioReal = java.time.Instant.now();
+    private LocalDateTime fechaInicio;
+    private java.time.Instant inicioReal = java.time.Instant.now();
     private java.time.Instant finReal;
     private final LocalDateTime fechaInicioSimulada;
     // sa/k se guardan aqui (no solo en OrquestadorOperacion) para poder exponerlos via
@@ -29,6 +29,23 @@ public class EjecucionEscenario {
         this.estado = EstadoEjecucion.INICIADA;
         this.sa = sa;
         this.k = k;
+    }
+
+    /**
+     * Reconstruye una ejecución ya terminada desde la base de datos, con sus instantes reales (el
+     * constructor normal toma "ahora", que para una ejecución histórica es falso).
+     */
+    public static EjecucionEscenario restaurar(String idEjecucion, TipoEscenario tipoEscenario,
+            LocalDateTime fechaInicioSimulada, float sa, float k, EstadoEjecucion estado,
+            java.time.Instant inicioReal, java.time.Instant finReal) {
+        EjecucionEscenario ejecucion = new EjecucionEscenario(idEjecucion, tipoEscenario, fechaInicioSimulada, sa, k);
+        ejecucion.estado = estado;
+        if (inicioReal != null) {
+            ejecucion.inicioReal = inicioReal;
+            ejecucion.fechaInicio = LocalDateTime.ofInstant(inicioReal, java.time.ZoneId.systemDefault());
+        }
+        ejecucion.finReal = finReal;
+        return ejecucion;
     }
 
     /** Marca el inicio formal de la ejecución (transición a {@link EstadoEjecucion#EN_CURSO}). */

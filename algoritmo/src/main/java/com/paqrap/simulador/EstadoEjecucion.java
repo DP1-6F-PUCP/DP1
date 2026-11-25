@@ -6,5 +6,7 @@ public enum EstadoEjecucion {
     EN_CURSO,
     PAUSADA,
     FINALIZADA,
-    DETENIDA_POR_INCUMPLIMIENTO
+    DETENIDA_POR_INCUMPLIMIENTO,
+    /** Cortada por un apagado o reinicio del backend (ordenado, o detectada como huérfana al arrancar). */
+    INTERRUMPIDA
 }

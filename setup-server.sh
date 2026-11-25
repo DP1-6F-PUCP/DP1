@@ -306,7 +306,7 @@ EOF
 
     # Generar contraseña aleatoria para la base de datos
     SECURE_PWD=$(openssl rand -hex 16)
-    sed -i "s/DB_PASSWORD=sysmile_password/DB_PASSWORD=${SECURE_PWD}/" .env || true
+    sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${SECURE_PWD}/" .env || true
     log_success "Archivo .env creado con credenciales seguras."
 else
     log_info "Archivo .env detectado. Se conserva la configuración existente."

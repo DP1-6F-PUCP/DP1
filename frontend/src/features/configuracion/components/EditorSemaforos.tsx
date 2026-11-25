@@ -4,13 +4,12 @@ import { UMBRALES_DEFAULT, type Umbrales } from '../../../store/umbralesStore';
 import { FLEET_FILL_COLORS } from '../../../utils/indicadoresGlobales';
 import { WAREHOUSE_STOCK_COLORS } from '../../../utils/warehouseStock';
 import { duracionCorta } from '../../../utils/estadoPedidos';
+import { SEMAFORO_CARGA } from '../../../utils/filtrosMapa';
 import type { ParametrosSistema } from '../useParametrosSistema';
 import { CampoNumero, TEXTO, TEXTO_FUERTE, TEXTO_TENUE } from './ui';
 
 /** Colores de los pines de pedido (mismos que el mapa). */
 const PIN = { a_tiempo: '#10B981', riesgo: '#F59E0B', vencido: '#F43F5E' };
-/** La carga no es un semáforo: niveles neutros de un mismo tono, de menos a más intenso. */
-const CARGA = { baja: '#67E8F9', media: '#06B6D4', alta: '#0E7490' };
 
 interface Tramo {
   hasta: number;
@@ -47,15 +46,15 @@ const FILAS: DefFila[] = [
     maximo: () => 100,
   },
   {
-    titulo: 'Niveles de carga de vehículo',
+    titulo: 'Capacidad de vehículo',
     icono: <Package className="h-4 w-4 text-cyan-600 dark:text-cyan-400" aria-hidden />,
-    descripcion: 'No es un semáforo (ni poca ni mucha carga es mala): solo agrupa los vehículos en el filtro de carga del mapa.',
+    descripcion: 'Color de cada vehículo en el mapa según su carga a bordo: verde le queda capacidad, rojo va lleno.',
     unidad: '%',
-    campos: [{ clave: 'cargaMedia', label: 'Media desde' }, { clave: 'cargaAlta', label: 'Alta desde' }],
+    campos: [{ clave: 'cargaMedia', label: 'Ámbar desde' }, { clave: 'cargaAlta', label: 'Rojo desde' }],
     tramos: (u) => [
-      { hasta: u.cargaMedia, hex: CARGA.baja, etiqueta: 'Baja' },
-      { hasta: u.cargaAlta, hex: CARGA.media, etiqueta: 'Media' },
-      { hasta: 100, hex: CARGA.alta, etiqueta: 'Alta' },
+      { hasta: u.cargaMedia, hex: SEMAFORO_CARGA.baja.hex, etiqueta: SEMAFORO_CARGA.baja.label },
+      { hasta: u.cargaAlta, hex: SEMAFORO_CARGA.media.hex, etiqueta: SEMAFORO_CARGA.media.label },
+      { hasta: 100, hex: SEMAFORO_CARGA.alta.hex, etiqueta: SEMAFORO_CARGA.alta.label },
     ],
     maximo: () => 100,
   },
@@ -106,11 +105,18 @@ const BarraTramos: React.FC<{ tramos: Tramo[]; maximo: number; unidad: '%' | 'mi
     if (i === partes.length - 1) return unidad === '%' ? `≥ ${fmt(p.ini, unidad)}` : `> ${fmt(p.ini, unidad)}`;
     return unidad === '%' ? `${p.ini}–${p.fin - 1} %` : `${fmt(p.ini, unidad)} – ${fmt(p.fin, unidad)}`;
   };
+  // Un tramo "hasta 0" (plazo ya pasado) no tiene ancho a escala: se le da un tramo fijo al inicio
+  // para que su color se vea, y el resto se reparte en lo que queda.
+  const TRAMO_FIJO = 10;
+  const fijos = partes.filter((p) => p.hasta <= 0).length;
+  const escala = 100 - fijos * TRAMO_FIJO;
+  const ancho = (p: (typeof partes)[number]) =>
+    p.hasta <= 0 ? TRAMO_FIJO : maximo > 0 ? ((p.fin - p.ini) / maximo) * escala : 0;
   return (
     <div>
       <div className="flex h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" aria-hidden>
         {partes.map((p) => (
-          <div key={p.etiqueta} style={{ width: `${maximo > 0 ? ((p.fin - p.ini) / maximo) * 100 : 0}%`, backgroundColor: p.hex }} />
+          <div key={p.etiqueta} style={{ width: `${ancho(p)}%`, backgroundColor: p.hex }} />
         ))}
       </div>
       <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
@@ -159,7 +165,7 @@ export const EditorSemaforos: React.FC<{ p: ParametrosSistema }> = ({ p }) => {
                   onChange={(v) => updateUmbral(c.clave, v.trim() === '' ? NaN : Number(v))}
                   error={erroresUmbrales[c.clave]}
                   modificado={umbrales[c.clave] !== umbralesGuardados[c.clave]}
-                  ayuda={`Por defecto: ${fmt(UMBRALES_DEFAULT[c.clave], f.unidad)}`} />
+                  ayuda={`Estándar: ${fmt(UMBRALES_DEFAULT[c.clave], f.unidad)}`} />
               ))}
               <div className={`md:pt-6 ${f.campos.length === 1 ? 'md:col-span-2' : ''}`}>
                 {invalida

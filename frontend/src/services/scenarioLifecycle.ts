@@ -44,7 +44,7 @@ async function prepararReproduccion(client: QueryClient, dto: EjecucionEscenario
     if (!['INICIADA', 'EN_CURSO'].includes(actual.estado)) {
       // Incluso una ejecución que finaliza durante la carga debe presentar su reporte.
       if (actual.estado !== 'PAUSADA') return actual;
-      throw new Error('La ejecución se pausó antes de completar la preparación inicial.');
+      throw new Error('La simulación se pausó antes de terminar de prepararse.');
     }
     // Muestrear con más frecuencia que Sa para conservar la trayectoria de cada lote.
     await new Promise<void>((resolve) => setTimeout(resolve, Math.min(500, dto.sa * 30_000)));
@@ -65,7 +65,7 @@ export async function iniciarEjecucion(client: QueryClient, request: Seleccionar
     if (dto.tipoEscenario !== request.tipo || (request.tipo !== 'DIA_A_DIA'
         && request.fechaInicioSimulada
         && parseBackendSimulatedTime(dto.fechaInicioSimulada) !== parseBackendSimulatedTime(request.fechaInicioSimulada))) {
-      throw new Error('El servidor conserva otro escenario activo. Ciérralo antes de iniciar la fecha seleccionada.');
+      throw new Error('Ya hay otra simulación en curso. Deténla antes de iniciar esta.');
     }
     creada = dto;
     store.setTransicion('preparando');
@@ -95,7 +95,9 @@ export async function cerrarEjecucion(client: QueryClient, id: string) {
     await escenariosApi.detener(id);
     const actual = useScenarioStore.getState().ejecucion;
     if (actual?.idEjecucion === id) store.setEjecucion({ ...actual, estado: 'FINALIZADA' });
-    limpiarVista(client, true);
+    // Igual que al colapsar: el mapa se queda quieto en su último estado (no se limpia) y encima
+    // aparece el reporte. La vista se limpia recién al iniciar la siguiente simulación.
+    simulationEngine.congelarAvance();
   } finally {
     store.setTransicion(null);
   }

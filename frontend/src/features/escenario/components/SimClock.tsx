@@ -32,7 +32,7 @@ export const SimClock: React.FC = () => {
   return (
     <div
       className="flex items-center gap-2 px-0 pt-0.5 text-[11px] font-mono-code text-slate-300"
-      title="Hora simulada actual de la ejecución"
+      title="Hora simulada"
     >
       <Clock className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
       <span className="text-slate-100 font-medium">{fechaFormateada}</span>

@@ -18,11 +18,47 @@ interface ToastContextType {
 }
 
 const NOTIFICATION_HISTORY_KEY = 'sysmile_notification_history';
+/** Tope del historial por ejecución (antes crecía sin límite hasta llenar la cuota del navegador). */
+const MAX_NOTIFICACIONES = 200;
+/** Historiales de ejecuciones que se conservan; los de ejecuciones más viejas se borran. */
+const MAX_HISTORIALES = 5;
+
+/**
+ * Borra los historiales de ejecuciones viejas (había una clave por ejecución que nunca se borraba).
+ * Se queda con los MAX_HISTORIALES más recientes según la notificación más nueva de cada uno.
+ */
+const limpiarHistorialesViejos = (scopeActual: string) => {
+  try {
+    const prefijo = `${NOTIFICATION_HISTORY_KEY}:`;
+    const historiales: { clave: string; ultima: number }[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const clave = localStorage.key(i);
+      if (!clave?.startsWith(prefijo) || clave === prefijo + scopeActual) continue;
+      let ultima = 0;
+      try {
+        const lista: unknown = JSON.parse(localStorage.getItem(clave) ?? '[]');
+        if (Array.isArray(lista) && typeof lista[0]?.createdAt === 'number') ultima = lista[0].createdAt;
+      } catch {
+        // dato corrupto: se trata como el más viejo
+      }
+      historiales.push({ clave, ultima });
+    }
+    historiales.sort((a, b) => b.ultima - a.ultima);
+    historiales.slice(MAX_HISTORIALES - 1).forEach(({ clave }) => localStorage.removeItem(clave));
+  } catch {
+    // sin storage: nada que limpiar
+  }
+};
 
 const getStoredNotifications = (scope: string): ToastItem[] => {
   if (typeof window === 'undefined') return [];
 
-  const stored = localStorage.getItem(`${NOTIFICATION_HISTORY_KEY}:${scope}`);
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(`${NOTIFICATION_HISTORY_KEY}:${scope}`);
+  } catch {
+    return [];
+  }
   if (!stored) return [];
 
   try {
@@ -39,7 +75,7 @@ const getStoredNotifications = (scope: string): ToastItem[] => {
         (notification.description === undefined || typeof notification.description === 'string') &&
         typeof notification.createdAt === 'number'
       );
-    });
+    }).slice(0, MAX_NOTIFICACIONES);
   } catch {
     return [];
   }
@@ -72,14 +108,23 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
     if (loadedScopeRef.current !== historyScope) {
       loadedScopeRef.current = historyScope;
       setNotifications(getStoredNotifications(historyScope));
+      limpiarHistorialesViejos(historyScope);
       return;
     }
 
-    localStorage.setItem(
-      `${NOTIFICATION_HISTORY_KEY}:${historyScope}`,
-      JSON.stringify(notifications)
-    );
+    try {
+      localStorage.setItem(
+        `${NOTIFICATION_HISTORY_KEY}:${historyScope}`,
+        JSON.stringify(notifications)
+      );
+    } catch {
+      // Cuota llena o sin storage: el historial solo dura esta sesión (antes la excepción rompía el efecto).
+    }
   }, [historyScope, notifications]);
+
+  useEffect(() => {
+    limpiarHistorialesViejos(loadedScopeRef.current);
+  }, []);
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -90,7 +135,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
       const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const newToast: ToastItem = { ...toast, id, createdAt: Date.now() };
       setToasts((prev) => [newToast, ...prev].slice(0, 5));
-      setNotifications((prev) => [newToast, ...prev]);
+      setNotifications((prev) => [newToast, ...prev].slice(0, MAX_NOTIFICACIONES));
 
       setTimeout(() => {
         removeToast(id);
@@ -105,7 +150,8 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({
       <aside
         id="toast-portal-region"
         aria-label="Notificaciones del sistema"
-        className="tema-panel fixed top-4 right-4 z-[2000] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
+        // Debajo de la barra superior (h-14): en top-4 tapaba el botón Detener varios segundos.
+        className="tema-panel fixed top-[4.5rem] right-4 z-[2000] flex flex-col gap-2 max-w-sm w-full pointer-events-none"
       >
         {toasts.map((t) => {
           let borderClass = 'border-blue-500/40 bg-slate-900/95 text-white';

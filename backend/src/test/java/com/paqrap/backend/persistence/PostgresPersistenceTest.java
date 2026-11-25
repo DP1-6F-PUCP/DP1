@@ -79,11 +79,12 @@ class PostgresPersistenceTest {
         administrador = new JdbcTemplate(base);
 
         esquema = "prueba_" + UUID.randomUUID().toString().replace("-", "");
+        // Todas las migraciones (V1..última): así la prueba valida también las nuevas. El catálogo
+        // oficial que siembra V2 se reemplaza abajo por uno mínimo.
         Flyway.configure()
                 .dataSource(base)
                 .schemas(esquema)
                 .locations("classpath:db/migration")
-                .target("1") // solo el esquema; el catálogo de prueba se siembra abajo
                 .load()
                 .migrate();
         jdbcTemplate = new JdbcTemplate(fuente("?currentSchema=" + esquema));
@@ -104,7 +105,9 @@ class PostgresPersistenceTest {
         }
     }
 
-    private void sembrarCatalogo() {        jdbcTemplate.update("INSERT INTO city_configs (id, width, height, origin_x, origin_y, node_distance_km, two_way_streets) "
+    private void sembrarCatalogo() {
+        jdbcTemplate.execute("TRUNCATE vehicles, vehicle_types, warehouses, city_configs, operation_configs CASCADE");
+        jdbcTemplate.update("INSERT INTO city_configs (id, width, height, origin_x, origin_y, node_distance_km, two_way_streets) "
                 + "VALUES ('00000000-0000-0000-0000-000000000001', 70, 50, 0, 0, 1, TRUE)");
         jdbcTemplate.update("INSERT INTO operation_configs (id, shift_duration_hours, shift_start_hour, client_service_hours, "
                 + "break_duration_hours, break_margin_hours, warehouse_load_hours, transshipment_hours, max_stops_per_route) "
@@ -113,6 +116,8 @@ class PostgresPersistenceTest {
                 + "VALUES ('00000000-0000-0000-0000-000000000101', 'AUTO', 'Auto', 24, 40, 8, 1, 48)");
         jdbcTemplate.update("INSERT INTO warehouses (id, name, warehouse_type, pos_x, pos_y, max_capacity, reload_frequency_hours) "
                 + "VALUES ('00000000-0000-0000-0000-000000000201', 'Central', 'CENTRAL', 27, 14, 0, 0)");
+        jdbcTemplate.update("INSERT INTO warehouses (id, name, warehouse_type, pos_x, pos_y, max_capacity, reload_frequency_hours) "
+                + "VALUES ('00000000-0000-0000-0000-000000000202', 'Este', 'INTERMEDIO', 57, 27, 1000, 24)");
         jdbcTemplate.update("INSERT INTO vehicles (id, vehicle_code, vehicle_type_id, initial_pos_x, initial_pos_y) "
                 + "VALUES ('00000000-0000-0001-0000-000000000001', 'TA01', '00000000-0000-0000-0000-000000000101', 27, 14)");
     }
@@ -129,7 +134,7 @@ class PostgresPersistenceTest {
         assertEquals(50, ciudad.alto());
         assertEquals(2, op.maxParadasPorRuta());
         assertEquals(1, tipos.size());
-        assertEquals(1, almacenes.size());
+        assertEquals(2, almacenes.size());
         assertEquals(1, flota.size());
         assertEquals("TA01", flota.get(0).getIdUnidad());
     }
@@ -239,5 +244,166 @@ class PostgresPersistenceTest {
         assertEquals(40.0, catalogo.cargarTiposVehiculo().get(0).getVelocidadKmH());
         assertEquals(1, catalogo.cargarFlota(catalogo.cargarTiposVehiculo()).size());
         assertEquals(2, catalogo.cargarConfiguracionOperacion().maxParadasPorRuta());
+    }
+
+    private ServicioPlanificacionImpl servicio() {
+        var tipos = catalogo.cargarTiposVehiculo();
+        var almacenes = catalogo.cargarAlmacenes();
+        return new ServicioPlanificacionImpl(catalogo.cargarCiudad(), catalogo.cargarConfiguracionOperacion(),
+                tipos, almacenes, catalogo.cargarFlota(tipos), TipoAlgoritmo.IPSO, java.util.Map.of(), "logs",
+                cargador, repositorio);
+    }
+
+    @Test
+    void pedidoManualConMismoCodigoQueUnoOficialYaNoSeDescarta() {
+        // Antes: los manuales se llamaban PED-2026-09-0001 igual que los oficiales, order_code era
+        // único global y ON CONFLICT DO NOTHING los descartaba sin avisar.
+        jdbcTemplate.update("INSERT INTO orders (id, order_code, client_code, dest_x, dest_y, requested_quantity, sla_hours, "
+                + "registered_at, period_year, period_month, source) VALUES (?, 'PED-2026-09-0001', 'c1', 1, 1, 1, 4, "
+                + "'2026-09-01 00:00:00+00', 2026, 9, 'OFFICIAL')", UUID.randomUUID());
+        var servicio = servicio();
+        var archivo = new com.paqrap.exposicion.ArchivoEntrada("ventas.202609.txt", "01d00h00m:4,4,c1,1,4");
+
+        servicio.recibirArchivo(archivo);
+        var manuales = repositorio.obtenerPedidosManuales();
+        assertEquals(1, manuales.size());
+        assertTrue(manuales.get(0).getIdPedido().startsWith("MAN-"), manuales.get(0).getIdPedido());
+
+        // El mismo contenido dos veces se rechaza con un mensaje (antes los bloqueos se duplicaban).
+        assertThrows(IllegalArgumentException.class, () -> servicio.recibirArchivo(archivo));
+
+        // Tras limpiar, volver a subirlo SÍ guarda (antes chocaba con la fila borrada lógicamente).
+        servicio.limpiarArchivosCargados();
+        assertTrue(repositorio.obtenerPedidosManuales().isEmpty());
+        servicio.recibirArchivo(archivo);
+        assertEquals(1, repositorio.obtenerPedidosManuales().size());
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM data_imports WHERE source = 'MANUAL' AND deleted_at IS NULL", Integer.class));
+    }
+
+    @Test
+    void frecuenciaDeRecargaGuardadaSobreviveAlReinicio() {
+        var tipos = catalogo.cargarTiposVehiculo();
+        var almacenes = catalogo.cargarAlmacenes();
+        var este = (com.paqrap.dominio.AlmacenIntermedio) almacenes.stream()
+                .filter(a -> a instanceof com.paqrap.dominio.AlmacenIntermedio).findFirst().orElseThrow();
+        este.setFrecuenciaRecargaHoras(12);
+        repositorio.guardarConfiguracionMaestra(catalogo.cargarCiudad(), catalogo.cargarConfiguracionOperacion(), tipos,
+                almacenes, catalogo.cargarFlota(tipos));
+
+        // "Reinicio": se vuelve a leer el catálogo desde la BD.
+        var recargado = (com.paqrap.dominio.AlmacenIntermedio) catalogo.cargarAlmacenes().stream()
+                .filter(a -> a instanceof com.paqrap.dominio.AlmacenIntermedio).findFirst().orElseThrow();
+        assertEquals(12.0, recargado.getFrecuenciaRecargaHoras());
+    }
+
+    @Test
+    void ejecucionHuerfanaSeMarcaInterrumpidaAlArrancar() {
+        String id = UUID.randomUUID().toString();
+        LocalDateTime simInicio = LocalDateTime.of(2026, 1, 1, 7, 0);
+        EjecucionEscenario ej = new EjecucionEscenario(id, TipoEscenario.COLAPSO_LOGISTICO, simInicio, 0.1f, 600f);
+        ej.iniciar();
+        repositorio.registrarInicioEjecucion(ej, 0.03f, "IPSO", null);
+        repositorio.registrarLatido(id, simInicio.plusHours(3));
+
+        assertEquals(1, repositorio.marcarEjecucionesHuerfanas());
+        assertEquals(0, repositorio.marcarEjecucionesHuerfanas());
+
+        var historica = repositorio.consultarEjecucionHistorica(id).orElseThrow();
+        assertEquals(EstadoEjecucion.INTERRUMPIDA, historica.getEstado());
+        assertEquals(ej.getInicioReal().toEpochMilli() / 1000, historica.getInicioReal().toEpochMilli() / 1000);
+        assertNotNull(historica.getFinReal());
+        var fila = repositorio.listarEjecuciones(0, 10).get(0);
+        assertEquals("REINICIO_SERVIDOR", fila.motivoFinalizacion());
+        assertEquals(simInicio.plusHours(3), fila.finSimulado());
+        assertFalse(fila.tieneReporte());
+    }
+
+    private void esperar(java.util.function.BooleanSupplier condicion) throws InterruptedException {
+        long limite = System.nanoTime() + 10_000_000_000L;
+        while (!condicion.getAsBoolean() && System.nanoTime() < limite) Thread.sleep(20);
+        assertTrue(condicion.getAsBoolean(), "La condición no se cumplió a tiempo");
+    }
+
+    @Test
+    void averiasYSolicitudesQuedanRegistradasYEnElReporte() throws Exception {
+        var servicio = servicio();
+        LocalDateTime inicio = LocalDateTime.of(2026, 1, 1, 7, 0);
+        var ej = servicio.seleccionarEscenario(TipoEscenario.DIA_A_DIA, inicio, 0.001f, 0.0001f, 1f, 1f, List.of(
+                new SolicitudOperacion(inicio, TipoSolicitud.AVERIA, "TA01", "TIPO_1"),
+                new SolicitudOperacion(inicio, TipoSolicitud.CAMBIO_VELOCIDAD, "AUTO", "50")));
+        String id = ej.getIdEjecucion();
+        try {
+            servicio.programarSolicitud(ej, inicio, TipoSolicitud.CAMBIO_CAPACIDAD, "AUTO", "30");
+            esperar(() -> repositorio.consultarSolicitudes(id).stream()
+                    .anyMatch(s -> "CAMBIO_CAPACIDAD".equals(s.tipoSolicitud()) && "APLICADA".equals(s.estado())));
+            // La configuración maestra se guarda cuando el cambio se aplica, no al programarlo.
+            esperar(() -> catalogo.cargarTiposVehiculo().get(0).getCapacidad() == 30);
+        } finally {
+            servicio.detenerEjecucion(id);
+        }
+
+        var averias = repositorio.consultarAverias(id);
+        assertEquals(1, averias.size());
+        assertEquals("TA01", averias.get(0).idUnidad());
+        var solicitudes = repositorio.consultarSolicitudes(id);
+        assertEquals(3, solicitudes.size());
+        var capacidad = solicitudes.stream().filter(s -> "CAMBIO_CAPACIDAD".equals(s.tipoSolicitud())).findFirst()
+                .orElseThrow();
+        assertEquals("24", capacidad.valorAnterior());
+        assertEquals("30", capacidad.valorNuevo());
+        var velocidad = solicitudes.stream().filter(s -> "CAMBIO_VELOCIDAD".equals(s.tipoSolicitud())).findFirst()
+                .orElseThrow();
+        assertEquals("APLICADA", velocidad.estado());
+        assertEquals("40.0", velocidad.valorAnterior());
+
+        var reporte = repositorio.consultarReporteFinal(id).orElseThrow();
+        assertEquals(1, reporte.averias().size());
+        assertEquals(3, reporte.solicitudes().size());
+        assertNotNull(jdbcTemplate.queryForObject("SELECT total_orders FROM simulation_reports WHERE execution_id = ?",
+                Integer.class, UUID.fromString(id)));
+        assertNotNull(jdbcTemplate.queryForObject("SELECT config_snapshot::text FROM scenario_executions WHERE id = ?",
+                String.class, UUID.fromString(id)));
+    }
+
+    @Test
+    void apagadoOrdenadoGuardaReporteComoInterrumpida() throws Exception {
+        var servicio = servicio();
+        LocalDateTime inicio = LocalDateTime.of(2026, 1, 1, 7, 0);
+        var ej = servicio.seleccionarEscenario(TipoEscenario.CINCO_DIAS, inicio, 0.001f, 0.0001f, 1f, 1f, List.of());
+        servicio.detenerPorApagado();
+
+        var reporte = repositorio.consultarReporteFinal(ej.getIdEjecucion()).orElseThrow();
+        assertEquals("REINICIO_SERVIDOR", reporte.motivoFinalizacion());
+        assertEquals(EstadoEjecucion.INTERRUMPIDA,
+                repositorio.consultarEjecucionHistorica(ej.getIdEjecucion()).orElseThrow().getEstado());
+        assertNull(servicio.consultarEjecucionActiva());
+        // Al arrancar de nuevo no queda nada huérfano.
+        assertEquals(0, repositorio.marcarEjecucionesHuerfanas());
+    }
+
+    @Test
+    void seederNoRecargaArchivosSinCambios(@org.junit.jupiter.api.io.TempDir java.nio.file.Path datos) throws Exception {
+        var ventas = java.nio.file.Files.createDirectories(datos.resolve("ventas"));
+        var archivo = ventas.resolve("ventas.202601.txt");
+        java.nio.file.Files.writeString(archivo, "01d00h00m:4,4,c1,1,4\n01d01h00m:5,5,c2,2,4\n");
+        var seeder = new DatabaseSeederRunner(jdbcTemplate, objectMapper);
+
+        seeder.sincronizar(datos);
+        var idsAntes = jdbcTemplate.queryForList("SELECT id::text FROM orders WHERE source = 'OFFICIAL' ORDER BY order_code",
+                String.class);
+        assertEquals(2, idsAntes.size());
+
+        // Sin cambios: no se borra ni se reinserta nada (los UUID se mantienen).
+        seeder.sincronizar(datos);
+        assertEquals(idsAntes, jdbcTemplate.queryForList(
+                "SELECT id::text FROM orders WHERE source = 'OFFICIAL' ORDER BY order_code", String.class));
+
+        // Con cambios: se reemplaza solo ese período.
+        java.nio.file.Files.writeString(archivo, "01d00h00m:4,4,c1,1,4\n");
+        seeder.sincronizar(datos);
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM orders WHERE source = 'OFFICIAL'", Integer.class));
+        assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM data_imports WHERE source = 'OFFICIAL' AND deleted_at IS NULL", Integer.class));
     }
 }

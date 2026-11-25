@@ -6,9 +6,9 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-sysmile_db}
       POSTGRES_USER: ${DB_USER:-sysmile_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-sysmile_password}
-    ports:
-      - "${DB_PORT:-5432}:5432"
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env (ver .env.example)}
+    # Sin "ports": la base solo es accesible dentro de la red de compose (backend, adminer).
+    # Para publicarla en el host en desarrollo: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,7 +31,14 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-sysmile_db}
       DB_USER: ${DB_USER:-sysmile_user}
-      DB_PASSWORD: ${DB_PASSWORD:-sysmile_password}
+      DB_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env (ver .env.example)}
+    # Logs .jsonl de cada ejecución (evidencia): en un volumen para que sobrevivan a la recreación
+    # del contenedor que hace Watchtower en cada release.
+    volumes:
+      - backend_logs:/app/logs
+    # Margen para el apagado ordenado (ApagadoOrdenado + server.shutdown=graceful, 20 s): Docker
+    # manda SIGTERM y espera esto antes del SIGKILL. Por defecto eran 10 s.
+    stop_grace_period: 30s
     depends_on:
       db:
         condition: service_healthy
@@ -61,13 +68,17 @@ services:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_INTERVAL:-60}
       - WATCHTOWER_INCLUDE_RESTARTING=true
-    command: --interval ${WATCHTOWER_INTERVAL:-60} --cleanup backend frontend
+    # --stop-timeout: Watchtower detiene el contenedor viejo con su propio plazo (10 s por defecto),
+    # que debe alcanzar para el apagado ordenado del backend.
+    command: --interval ${WATCHTOWER_INTERVAL:-60} --cleanup --stop-timeout 30s backend frontend
   dozzle:
     image: amir20/dozzle:latest
     container_name: dozzle
     restart: unless-stopped
+    # Solo en la interfaz ADMIN_BIND (127.0.0.1 por defecto): expone logs de todos los contenedores
+    # sin autenticación propia. Acceso por túnel SSH o por un Nginx del mismo host.
     ports:
-      - "8888:8080"
+      - "${ADMIN_BIND:-127.0.0.1}:8888:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - dozzle_data:/data
@@ -78,8 +89,9 @@ services:
     image: adminer:latest
     container_name: adminer
     restart: unless-stopped
+    # Igual que Dozzle: solo en ADMIN_BIND (127.0.0.1 por defecto).
     ports:
-      - "8082:8080"
+      - "${ADMIN_BIND:-127.0.0.1}:8082:8080"
     environment:
       ADMINER_DEFAULT_SERVER: db
     depends_on:
@@ -89,3 +101,4 @@ services:
 volumes:
   dozzle_data:
   postgres_data:
+  backend_logs:

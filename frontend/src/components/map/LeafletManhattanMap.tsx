@@ -12,6 +12,7 @@ import {
   VEHICLE_TYPE_META,
 } from '../../utils/vehicleStatus';
 import { getWarehouseStockStatus } from '../../utils/warehouseStock';
+import { colorCarga } from '../../utils/filtrosMapa';
 import { vehicleIdsCarryingOrder } from '../../utils/orderRoutes';
 import { fixedDashOffset, routeLineKey } from '../../utils/routeLine';
 import { simulationEngine } from '../../engine/simulationEngine';
@@ -63,15 +64,11 @@ const nombreTipo = (tipo: Vehicle['type']): string =>
   (VEHICLE_TYPE_META[tipo]?.shortLabel ?? tipo).split(' · ')[0];
 
 /**
- * Color del vehículo cuando no hay nada que señalar: neutro. Antes el color era su carga (verde /
- * ámbar / rojo), pero la carga no pide ninguna acción del operador y el rojo de "poca carga" se
- * leía como alarma; además, con 37 vehículos de colores, una avería o un vehículo que va al almacén
- * no resaltaban. El semáforo queda donde sí avisa algo (pines de pedidos, stock de almacenes); la
- * carga se ve en la tooltip, en el panel de flota y como filtro de la leyenda.
+ * Color del vehículo: semáforo de CAPACIDAD (requisito del curso; ver SEMAFORO_CARGA en
+ * utils/filtrosMapa). Va invertido respecto de la carga a propósito: verde = le queda capacidad,
+ * rojo = lleno. Antes era verde = mucha carga y el rojo de "poca carga" se leía como alarma.
+ * Excepciones que mandan sobre el color: avería (su color propio) y regreso al almacén (gris).
  */
-// Modo oscuro: gris azulado claro y no blanco puro, que sobre el fondo oscuro "se corre" a tamaño
-// chico y borra la silueta.
-const COLOR_VEHICULO = { oscuro: '#CBD5E1', claro: '#1F3864' } as const;
 
 const ETIQUETA_ESTADO: Record<string, string> = {
   idle: 'Inactivo',
@@ -171,12 +168,29 @@ const autoVistaSuperior = (color: string) => {
   </svg>`;
 };
 
+/** Unidades del marcador por cuadra cuando el tope (LADO_MAX_CUADRAS) manda sobre la escala. */
+const UNIDADES_POR_CUADRA = EXTENSION_VEHICULO / LADO_MAX_CUADRAS;
 /**
- * Tamaño relativo del glifo por tipo, como en la realidad (y en proporción a lo que llevan: 24 / 8 / 4
- * paquetes). Sin gastar color, ayuda a no confundir moto y bici, que de perfil se parecen. Todos
- * quedan dentro del tope de LADO_MAX_CUADRAS: el más grande (auto) es el de siempre.
+ * Largo de moto y bici en cuadras (elegido por el equipo); el auto conserva su tamaño natural. Son
+ * dibujos de trazo fino y de perfil: al mismo tamaño que el auto (una mancha llena) se ven más
+ * chicos. La bici queda menor que la moto, que ayuda a distinguirlas.
  */
-const ESCALA_TIPO: Record<Vehicle['type'], number> = { car: 1, motorcycle: 0.85, bicycle: 0.7 };
+const CUADRAS_MOTO = 1.3;
+const CUADRAS_BICI = 1.1;
+const ESCALA_TIPO: Record<Vehicle['type'], number> = {
+  car: 1,
+  motorcycle: (CUADRAS_MOTO * UNIDADES_POR_CUADRA) / TAMANO_GLIFO,
+  bicycle: (CUADRAS_BICI * UNIDADES_POR_CUADRA) / TAMANO_GLIFO,
+};
+/** Lado mayor del dibujo a escala 1 (unidades del marcador): el auto no llena su recuadro de 22. */
+const LADO_GLIFO: Record<Vehicle['type'], number> = { car: 18, motorcycle: TAMANO_GLIFO, bicycle: TAMANO_GLIFO };
+/**
+ * Cuánto crece el latido de "entregando" (ver parpadeo-entrega en global.css). EXTENSION_VEHICULO
+ * equivale a LADO_MAX_CUADRAS, así que ni en el pico del latido el ícono pasa de ese tope.
+ */
+const PULSO_MAX = 1.35;
+const pulsoDe = (tipo: Vehicle['type']): number =>
+  Math.max(1, Math.min(PULSO_MAX, EXTENSION_VEHICULO / ((LADO_GLIFO[tipo] ?? TAMANO_GLIFO) * (ESCALA_TIPO[tipo] ?? 1))));
 
 const getVehicleIconMarkup = (vehicle: Vehicle, color: string) => {
   const iconProps = {
@@ -915,8 +929,8 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
 
     vehicles.forEach((v) => {
       const isSelected = selectedVehicleId === v.id;
-      // Color neutro salvo excepción (avería, va al almacén): ver COLOR_VEHICULO. El plazo se ve en el
-      // pin de cada pedido; el distintivo de esta esquina queda solo para las averías.
+      // Semáforo de capacidad salvo excepción (avería, va al almacén): ver SEMAFORO_CARGA. El plazo se
+      // ve en el pin de cada pedido; el distintivo de esta esquina queda solo para las averías.
       const isBroken = v.status === 'broken';
       const activeRoute = routes.find(
         (route) => route.vehicleId === v.id && route.status === 'in_progress'
@@ -943,7 +957,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
         ? breakdownColor
         : isReturning
           ? '#6B7280'
-          : isDarkTheme ? COLOR_VEHICULO.oscuro : COLOR_VEHICULO.claro;
+          : colorCarga(v);
       const vehicleIconMarkup = getVehicleIconMarkup(v, bubbleFill);
       // Solo la imagen (pedido del profesor: sin burbuja, halo ni contorno). La selección se marca
       // con un resplandor, que es lo único que distingue al vehículo elegido en el mapa.
@@ -971,7 +985,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
               <g transform="scale(${ESCALA_TIPO[v.type] ?? 1}) translate(${-TAMANO_GLIFO / 2} ${-TAMANO_GLIFO / 2})">
                 <!-- Grupo propio para el pulso de "entregando": la rotación usa el atributo transform
                      de .vehicle-glyph y un transform CSS ahí la pisaría. -->
-                <g class="glifo-pulso">${vehicleIconMarkup}</g>
+                <g class="glifo-pulso" style="--pulso: ${pulsoDe(v.type).toFixed(3)}">${vehicleIconMarkup}</g>
               </g>
             </g>
 
@@ -1021,7 +1035,7 @@ export const LeafletManhattanMap: React.FC<LeafletManhattanMapProps> = ({
           <div><strong>Ocupación:</strong> ${v.currentLoad} / ${v.capacity} paq (${pct}%)</div>
           <div><strong>Estado:</strong> ${estadoTexto}</div>
           ${averiaTexto ? `<div style="margin-top:2px;color:${breakdownColor};"><strong>${averiaTexto}</strong></div>` : ''}
-          ${programada ? `<div style="margin-top:2px;color:${BREAKDOWN_COLORS[programada.tipo]};"><strong>⏳ Avería tipo ${programada.tipo} programada</strong> · próximo lote</div>` : ''}
+          ${programada ? `<div style="margin-top:2px;color:${BREAKDOWN_COLORS[programada.tipo]};"><strong>⏳ Avería tipo ${programada.tipo} programada</strong> · en segundos</div>` : ''}
         </div>
       `;
 

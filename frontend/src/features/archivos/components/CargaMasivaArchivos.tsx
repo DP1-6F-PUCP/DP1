@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { AlertCircle, CheckCircle2, FileText, Layers, Loader2, Package, Trash2, Upload, Wrench, X, Zap } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileText, Layers, Loader2, Package, RotateCcw, Trash2, Upload, Wrench, X, Zap } from 'lucide-react';
 import { CategoriaArchivo, useSubidaArchivos } from '../hooks/useSubidaArchivos';
+import type { ArchivoCargadoDTO } from '../../../types/backend';
+// Mismas piezas visuales que el resto de Configuración (antes se duplicaban aquí).
+import { BORDE, cuenta, TEXTO_FUERTE, TEXTO_TENUE } from '../../configuracion/components/ui';
 
 /**
  * Carga masiva de los archivos del caso (POST /api/files/orders | blocked-streets | maintenance).
@@ -11,9 +14,6 @@ import { CategoriaArchivo, useSubidaArchivos } from '../hooks/useSubidaArchivos'
  * Antes había una 4.ª tarjeta "Almacenes y flota" que solo mostraba el nombre del archivo elegido:
  * el backend no tiene endpoint para eso. La flota y los almacenes se configuran en sus bloques.
  */
-const BORDE = 'border-slate-200 dark:border-slate-700/70';
-const TEXTO_FUERTE = 'text-slate-900 dark:text-slate-100';
-const TEXTO_TENUE = 'text-slate-500 dark:text-slate-400';
 
 const TARJETAS: {
   categoria: CategoriaArchivo;
@@ -56,12 +56,24 @@ const TARJETAS: {
 
 export const CargaMasivaArchivos: React.FC<{ enCaliente: boolean }> = ({ enCaliente }) => {
   const {
-    blockageFiles, ordersFiles, maintenanceFiles, procesarArchivos, eliminarArchivo, limpiarTodo,
+    procesarArchivos, cargados, borrarArchivo, limpiarTodo, borrarTodo, restaurarEstandar,
     estado, cerrarEstado, isUploading, uploadingCategory, uploadProgress,
   } = useSubidaArchivos();
   const [arrastrando, setArrastrando] = useState<CategoriaArchivo | null>(null);
-  const archivos = { blockages: blockageFiles, orders: ordersFiles, maintenance: maintenanceFiles };
-  const total = blockageFiles.length + ordersFiles.length + maintenanceFiles.length;
+  // Lo que dice el servidor: subidos a mano por categoría y resumen de los precargados.
+  const manuales = cargados.filter((c) => c.origen === 'MANUAL');
+  const archivos: Record<CategoriaArchivo, ArchivoCargadoDTO[]> = {
+    orders: manuales.filter((c) => c.tipoArchivo === 'PEDIDOS'),
+    blockages: manuales.filter((c) => c.tipoArchivo === 'BLOQUEOS'),
+    maintenance: manuales.filter((c) => c.tipoArchivo === 'MANTENIMIENTO'),
+  };
+  const total = manuales.length;
+  const precargados = cargados.filter((c) => c.origen === 'OFFICIAL');
+  const resumenPrecargado = (tipo: ArchivoCargadoDTO['tipoArchivo'], nombre: string) => {
+    const deTipo = precargados.filter((c) => c.tipoArchivo === tipo);
+    const filas = deTipo.reduce((s, c) => s + c.filas, 0);
+    return `${nombre} ${filas.toLocaleString('es-PE')}`;
+  };
 
   const subir = async (categoria: CategoriaArchivo, event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -76,11 +88,12 @@ export const CargaMasivaArchivos: React.FC<{ enCaliente: boolean }> = ({ enCalie
         : 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-100'}`}>
         <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
         <p>
-          {enCaliente
-            ? <><strong>Se aplica al subir, sin pasar por «Aplicar».</strong> Hay una simulación en curso: los datos válidos se incorporan a ella de inmediato.</>
-            : <><strong>Se aplica al subir, sin pasar por «Guardar».</strong> Los datos quedan cargados para la próxima simulación.</>}
-          {' '}El periodo (año y mes) se toma del nombre del archivo, p. ej. <span className="font-mono-code">202609</span>. Si una línea es inválida, se rechaza el archivo completo.
-          {' '}Sin subir nada, la simulación usa los archivos oficiales del curso.
+          {/* Corto a propósito: el ejemplo de nombre ya está en cada tarjeta y el detalle del formato,
+              en el tooltip. Lo que importa al operador: cuándo tiene efecto. */}
+          <strong>{enCaliente ? 'Entra al subir.' : 'Se usa en la próxima simulación.'}</strong>
+          <span title="El mes sale del nombre del archivo (p. ej. ventas.202609.txt = septiembre 2026). Si una línea tiene mal formato, se rechaza el archivo entero.">
+            {' '}El mes sale del nombre del archivo.
+          </span>
         </p>
       </div>
 
@@ -88,8 +101,11 @@ export const CargaMasivaArchivos: React.FC<{ enCaliente: boolean }> = ({ enCalie
         <div role={estado.tipo === 'error' ? 'alert' : 'status'}
           className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${estado.tipo === 'error'
             ? 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-100'
-            : 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-100'}`}>
-          {estado.tipo === 'error'
+            : estado.tipo === 'info'
+              // Subida correcta pero con pedidos que no entraron (vencidos o anteriores al inicio).
+              ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-100'}`}>
+          {estado.tipo !== 'success'
             ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
             : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />}
           <span className="min-w-0 flex-1 break-words">{estado.mensaje}</span>
@@ -102,7 +118,7 @@ export const CargaMasivaArchivos: React.FC<{ enCaliente: boolean }> = ({ enCalie
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {TARJETAS.map(({ categoria, titulo, descripcion, ejemplo, accept, Icono, acento }) => {
           const lista = archivos[categoria];
-          const registros = lista.reduce((s, f) => s + f.count, 0);
+          const registros = lista.reduce((s, f) => s + f.filas, 0);
           const subiendo = uploadingCategory === categoria;
           return (
             <section key={categoria} className={`flex min-w-0 flex-col rounded-xl border ${BORDE} bg-[var(--color-surface)] shadow-sm`}>
@@ -130,7 +146,7 @@ export const CargaMasivaArchivos: React.FC<{ enCaliente: boolean }> = ({ enCalie
                   <span className={`font-medium ${TEXTO_FUERTE}`}>
                     {subiendo
                       ? `Subiendo${uploadProgress ? ` ${uploadProgress.actual}/${uploadProgress.total}` : ''}…`
-                      : 'Elegir archivos o arrastrarlos aquí'}
+                      : 'Elegir o arrastrar'}
                   </span>
                   <span className={TEXTO_TENUE}>Ej.: <span className="font-mono-code">{ejemplo}</span></span>
                   <input type="file" multiple accept={accept || undefined}className="sr-only" disabled={isUploading}
@@ -139,21 +155,21 @@ export const CargaMasivaArchivos: React.FC<{ enCaliente: boolean }> = ({ enCalie
 
                 <div className="min-w-0">
                   <p className={`mb-1.5 text-[11px] font-semibold uppercase tracking-wide ${TEXTO_TENUE}`}>
-                    {lista.length > 0 ? `Subidos en esta sesión · ${lista.length} arch. · ${registros.toLocaleString('es-PE')} reg.` : 'Nada subido en esta sesión'}
+                    {lista.length > 0 ? `Subidos · ${cuenta(lista.length, 'archivo', 'archivos')} · ${registros.toLocaleString('es-PE')} reg.` : 'Nada subido'}
                   </p>
+                  {/* Lista del servidor (sobrevive a recargar la página); cada archivo se borra con sus datos. */}
                   {lista.length > 0 && (
                     <ul className="max-h-40 space-y-1 overflow-y-auto pr-1">
                       {lista.map((f) => (
-                        <li key={f.name} title={`${f.name} (${f.count} registros)`}
+                        <li key={f.id} title={`${f.nombreArchivo} (${f.filas.toLocaleString('es-PE')} registros)`}
                           className={`flex items-center gap-2 rounded-md border ${BORDE} bg-slate-50 px-2 py-1 text-xs dark:bg-slate-900/60`}>
                           <FileText className={`h-3.5 w-3.5 shrink-0 ${TEXTO_TENUE}`} aria-hidden />
-                          <span className={`min-w-0 flex-1 truncate font-mono-code ${TEXTO_FUERTE}`}>{f.name}</span>
-                          <span className={`shrink-0 font-mono-code ${TEXTO_TENUE}`}>{f.count.toLocaleString('es-PE')}</span>
-                          {/* Solo la quita de esta lista: el backend no permite borrar un archivo suelto. */}
-                          <button type="button" onClick={() => eliminarArchivo(categoria, f.name)}
-                            title="Quitar de la lista (no deshace la carga en el servidor)" aria-label={`Quitar ${f.name} de la lista`}
-                            className="shrink-0 rounded p-0.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400">
-                            <X className="h-3.5 w-3.5" />
+                          <span className={`min-w-0 flex-1 truncate font-mono-code ${TEXTO_FUERTE}`}>{f.nombreArchivo}</span>
+                          <span className={`shrink-0 font-mono-code ${TEXTO_TENUE}`}>{f.filas.toLocaleString('es-PE')}</span>
+                          <button type="button" onClick={() => void borrarArchivo(f)} disabled={isUploading}
+                            title="Borrar este archivo y sus datos" aria-label={`Borrar ${f.nombreArchivo}`}
+                            className="shrink-0 rounded p-0.5 text-slate-400 hover:text-rose-600 disabled:opacity-50 dark:hover:text-rose-400">
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </li>
                       ))}
@@ -170,15 +186,44 @@ export const CargaMasivaArchivos: React.FC<{ enCaliente: boolean }> = ({ enCalie
         <div className="min-w-0">
           <p className={`text-sm font-medium ${TEXTO_FUERTE}`}>Borrar datos cargados manualmente</p>
           <p className={`text-xs ${TEXTO_TENUE}`}>
-            Elimina del servidor todos los pedidos, bloqueos y mantenimientos subidos a mano (no los oficiales del curso).
-            {enCaliente && ' No retira los que la simulación en curso ya incorporó.'}
+            Solo los subidos a mano; los estándar se mantienen.
+            {enCaliente && ' No retira lo que la simulación en curso ya incorporó.'}
           </p>
         </div>
         {/* limpiarTodo pide la reconfirmación (components/Confirmacion). */}
+        {/* Botón de una palabra; el conteo va en el tooltip. */}
         <button type="button" onClick={() => void limpiarTodo()} disabled={isUploading}
-          className={`inline-flex items-center gap-1.5 rounded-lg border ${BORDE} px-3 py-1.5 text-sm text-slate-700 hover:border-rose-400 hover:text-rose-600 disabled:opacity-50 dark:text-slate-300 dark:hover:text-rose-400`}>
-          <Trash2 className="h-4 w-4" aria-hidden />Borrar{total > 0 ? ` (${total} en la lista)` : ''}
+          title={total > 0 ? `${cuenta(total, 'archivo', 'archivos')} en la lista` : 'Borrar los datos subidos a mano'}
+          // Destructivo: rojo también en reposo (mismo estilo que «Descartar» del diálogo de salida).
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40">
+          <Trash2 className="h-4 w-4" aria-hidden />Borrar
         </button>
+      </div>
+
+      {/* Prueba de "sistema sin datos" (pedido del profesor): borra también los estándar precargados.
+          «Cargar» los vuelve a traer; también se recuperan solos al reiniciar el sistema. */}
+      <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border ${BORDE} bg-[var(--color-surface)] px-4 py-3`}>
+        <div className="min-w-0">
+          <p className={`text-sm font-medium ${TEXTO_FUERTE}`}>Datos precargados</p>
+          <p className={`text-xs ${TEXTO_TENUE}`}>
+            {precargados.length === 0
+              ? <span className="font-medium text-rose-600 dark:text-rose-400">Sin datos precargados: usa «Cargar».</span>
+              : <>{resumenPrecargado('PEDIDOS', 'Pedidos')} · {resumenPrecargado('BLOQUEOS', 'Calles')} · {resumenPrecargado('MANTENIMIENTO', 'Mant.')}</>}
+            {enCaliente && ' · La simulación en curso conserva lo que ya tenía.'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void restaurarEstandar()} disabled={isUploading}
+            title="Volver a cargar los datos precargados que falten"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">
+            <RotateCcw className="h-4 w-4" aria-hidden />Cargar
+          </button>
+          <button type="button" onClick={() => void borrarTodo()} disabled={isUploading || cargados.length === 0}
+            title="Borrar todos los datos: precargados y subidos a mano"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-400">
+            <Trash2 className="h-4 w-4" aria-hidden />Borrar todo
+          </button>
+        </div>
       </div>
     </div>
   );

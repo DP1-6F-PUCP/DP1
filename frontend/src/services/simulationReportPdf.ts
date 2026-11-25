@@ -94,8 +94,8 @@ export function crearReportePdf(reporte: ReporteSimulacionDTO, inicioVisibleMs: 
   page('Resultados de simulación');
   paragraph(`${escenariosReporte[reporte.tipoEscenario]} | Corte simulado: ${date(reporte.finSimulado)}`);
   paragraph(motivosReporte[reporte.motivoFinalizacion], reporte.motivoFinalizacion === 'COLAPSO' ? C.red : C.teal);
-  if (reporte.motivoFinalizacion !== 'PERIODO_COMPLETADO') paragraph('Ejecución detenida: los resultados corresponden únicamente al periodo alcanzado.');
-  section('01  Avance de la ejecución');
+  if (reporte.motivoFinalizacion !== 'PERIODO_COMPLETADO') paragraph('Simulación detenida: los resultados corresponden solo al periodo alcanzado.');
+  section('01  Avance de la simulación');
   paragraph(`Tiempo simulado: ${duracionReporte(reporte.duracionSimuladaMs)}`);
   if (reporte.tipoEscenario === 'CINCO_DIAS') {
     const pct = Math.max(0, Math.min(100, reporte.duracionSimuladaMs / (5 * 86400000) * 100));
@@ -106,21 +106,21 @@ export function crearReportePdf(reporte: ReporteSimulacionDTO, inicioVisibleMs: 
   section('02  Resultado del servicio');
   bars([{ name: 'Entregados', value: totals.entregados }, { name: 'Pendientes', value: totals.pendientes, color: C.amber }, { name: 'Incumplidos', value: totals.incumplidos, color: C.red }], Math.max(1, totals.recibidos));
   table(['Indicador', 'Resultado'], [
-    ['Costo acumulado estimado', money(metrics.costoTotalAcumulado)],
+    ['Costo acumulado (km recorridos)', money(metrics.costoTotalAcumulado)],
     ['Cumplimiento sobre pedidos resueltos', metrics.contadorEntregados + metrics.contadorIncumplidos ? `${number(metrics.porcentajeEntregasATiempo)} %` : 'No aplica: sin pedidos resueltos'],
     ['Averías registradas', metrics.contadorAverias],
   ], [120, 60]);
-  paragraph('Cumplimiento = entregados / (entregados + incumplidos), según los contadores del servidor. Los pendientes no forman parte del denominador.');
+  paragraph('Cumplimiento = entregados / (entregados + incumplidos). Los pendientes no cuentan.');
 
   const stable = reporte.ultimaPlanificacionEstable;
   page('Rutas de la planificación');
-  if (!stable) paragraph('No hubo un lote estable completado antes del cierre. No se dispone de rutas, flota ni almacenes de una planificación estable.');
+  if (!stable) paragraph('No hubo un plan estable antes del cierre: no hay rutas, flota ni almacenes que mostrar.');
   else {
     paragraph(`Última planificación estable: ${date(stable.marcaTiempoActual)}. Este corte puede ser anterior al estado final.`);
     const routes = stable.rutas.filter(r => r.secuenciaEntrega.length > 0);
     section('03  Rutas con pedidos');
     paragraph(`${routes.length} rutas listadas | Suma de costos estimados: ${money(routes.reduce((s, r) => s + r.costoEstimado, 0))}`);
-    paragraph('Esta suma corresponde solo a las rutas listadas. No se suma al costo acumulado de la ejecución.');
+    paragraph('Esta suma corresponde solo a las rutas listadas, no al costo acumulado.');
     bars(counts(routes.map(r => r.estado)).map(([name, value]) => ({ name: label(name), value })));
     if (!routes.length) paragraph('Sin rutas con pedidos en esta planificación.');
     else table(['Unidad / ruta', 'Estado', 'Secuencia de pedidos', 'Costo'], routes.map(r => [`${r.vehiculoId}\n${r.idRuta}`, label(r.estado), r.secuenciaEntrega.join(' > '), money(r.costoEstimado)]), [47, 29, 76, 28]);
@@ -130,7 +130,7 @@ export function crearReportePdf(reporte: ReporteSimulacionDTO, inicioVisibleMs: 
     page('Flota y abastecimiento');
     paragraph(`Fotografía de la última planificación estable: ${date(stable.marcaTiempoActual)}`);
     section('04  Estado de la flota');
-    paragraph(`${stable.vehiculos.length} unidades registradas. Estos estados describen un instante; no representan utilización durante toda la ejecución.`);
+    paragraph(`${stable.vehiculos.length} unidades registradas. Estos estados describen un instante, no toda la simulación.`);
     bars(counts(stable.vehiculos.map(v => v.estado)).map(([name, value]) => ({ name: label(name), value })));
     table(['Tipo de vehículo', 'En ruta', 'Disponibles', 'Mant.', 'Averiados', 'Total'], counts(stable.vehiculos.map(v => v.tipo)).map(([type, total]) => {
       const units = stable.vehiculos.filter(v => v.tipo === type);
@@ -167,8 +167,8 @@ export function crearReportePdf(reporte: ReporteSimulacionDTO, inicioVisibleMs: 
   const failed = reporte.pedidosFinales.filter(p => p.estado === 'INCUMPLIDA');
   if (failed.length) { section('PEDIDOS INCUMPLIDOS AL CIERRE'); orderTable(failed); }
   page('Ficha técnica y anexos');
-  section('07  Datos de la ejecución');
-  table(['Campo', 'Valor'], [['Identificador de ejecución', reporte.idEjecucion], ...resumenReporte(reporte, inicioVisibleMs)], [69, 111]);
+  section('07  Datos de la simulación');
+  table(['Campo', 'Valor'], [['Identificador', reporte.idEjecucion], ...resumenReporte(reporte, inicioVisibleMs)], [69, 111]);
   paragraph('Fechas simuladas conservadas sin conversión de zona horaria. Fechas reales de esta ficha expresadas en la zona del navegador.');
   if (stable) {
     section('Detalle de la flota en la planificación estable');

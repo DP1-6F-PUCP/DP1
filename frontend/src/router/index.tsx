@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { DialogoConfirmacion } from '../components/Confirmacion';
+import { confirmar, DialogoConfirmacion } from '../components/Confirmacion';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { DashboardPage } from '../pages/DashboardPage';
 import { SeguimientoPage } from '../pages/SeguimientoPage';
@@ -65,12 +65,22 @@ const RootLayout: React.FC = () => {
   const [reporteOcultoPara, setReporteOcultoPara] = useState<string | null>(null);
   const esperando = esperandoCierre && reporteForzadoPara !== idEjecucion;
   const reporteOculto = reporteFinal.abierto && reporteOcultoPara === idEjecucion;
-  const vistaFinal = reporteFinal.abierto && (esperando || reporteOculto);
+  // Terminada, la operación sigue a la vista (también DETRÁS del reporte) hasta pulsar «Salir»:
+  // antes, con el reporte abierto se veía la pantalla de inicio detrás (parecía sesión cerrada) y el
+  // mapa se desmontaba, así que al cerrar el reporte volvía vacío.
+  const vistaFinal = reporteFinal.abierto;
+  const avisoCierre = reporteFinal.abierto && (esperando || reporteOculto);
   const reporteVisible = reporteFinal.abierto && !esperando && !reporteOculto;
   // Operación a la vista: en curso, o terminada mientras se ve su cierre.
   const vistaActiva = hasActiveExecution || vistaFinal;
   const verReporte = () => { setReporteOcultoPara(null); setReporteForzadoPara(idEjecucion ?? null); };
-  const terminar = () => { setEjecucion(null); navigate('/', { replace: true }); };
+  // «Salir» (reporte final y aviso de cierre): se reconfirma una sola vez, aquí. Tono azul: no borra
+  // datos, solo cierra la vista final.
+  const terminar = async () => {
+    if (!(await confirmar({ titulo: '¿Volver al inicio?', detalle: 'Se cierran el mapa final y el reporte.', accion: 'Salir', tono: 'crear' }))) return;
+    setEjecucion(null);
+    navigate('/', { replace: true });
+  };
   const irAPedidoIncumplido = (idPedido: string) => {
     const p = reporteFinal.data?.pedidosFinales.find((x) => x.idPedido === idPedido);
     setSelectedOrderId(idPedido);
@@ -128,7 +138,8 @@ const RootLayout: React.FC = () => {
   return (
     <LiveAnnouncer>
       <ToastProvider historyScope={ejecucion?.idEjecucion ?? 'global'}>
-        <div className="relative flex h-screen w-screen overflow-hidden bg-[#0B111E] text-slate-100 font-sans select-none">
+        {/* Fondo del tema (antes fijo #0B111E: en claro asomaba una franja azul oscura bajo las páginas). */}
+        <div className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-background)] text-[var(--color-text-primary)] font-sans select-none">
 
           {/* CONTENIDO PRINCIPAL: Layout Vertical con Header Delgado + Vistas */}
           <div className="flex-1 flex flex-col h-full overflow-hidden relative">
@@ -136,6 +147,17 @@ const RootLayout: React.FC = () => {
               <OperacionTopbar
                 menuAbierto={navExpandida}
                 onAlternarMenu={alternarNav}
+              />
+            )}
+
+            {/* Cierre de la operación: franja bajo la barra, en el flujo (no tapa el mapa ni las páginas). */}
+            {avisoCierre && (
+              <AvisoCierreOperacion
+                reporte={reporteFinal.data}
+                esperando={esperando}
+                onVerReporte={verReporte}
+                onSalir={esperando ? undefined : () => void terminar()}
+                onIrAPedido={irAPedidoIncumplido}
               />
             )}
 
@@ -176,7 +198,7 @@ const RootLayout: React.FC = () => {
               <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-slate-700/60 bg-[var(--color-surface)] p-8 text-center shadow-xl">
                 <Loader2 className="h-9 w-9 animate-spin text-blue-500" aria-hidden="true" />
                 <p className="text-base font-semibold">{transicion === 'cerrando' ? 'Cerrando escenario…' : transicion === 'preparando' ? 'Preparando el nuevo escenario…' : 'Iniciando escenario…'}</p>
-                <p className="text-sm text-slate-400">{transicion === 'cerrando' ? 'Finalizando la ejecución y limpiando sus datos.' : 'Cargando los datos iniciales de la nueva ejecución.'}</p>
+                <p className="text-sm text-slate-400">{transicion === 'cerrando' ? 'Un momento.' : 'Cargando pedidos, flota y almacenes.'}</p>
               </div>
             </div>
           )}
@@ -187,24 +209,17 @@ const RootLayout: React.FC = () => {
             onClose={() => setIsConfigOpen(false)}
           />
 
-          {vistaFinal && (
-            <AvisoCierreOperacion
-              reporte={reporteFinal.data}
-              esperando={esperando}
-              onVerReporte={verReporte}
-              onSalir={esperando ? undefined : terminar}
-              onIrAPedido={irAPedidoIncumplido}
-            />
-          )}
-
           <SimulationFinishedModal
             isOpen={reporteVisible}
             reporte={reporteFinal.data}
             inicioVisibleMs={inicioVisibleMs}
             isError={reporteFinal.isError}
             onRetry={() => { void reporteFinal.refetch(); }}
-            onAccept={terminar}
-            onClose={() => { setReporteOcultoPara(idEjecucion ?? null); setReporteForzadoPara(null); }}
+            onAccept={() => void terminar()}
+            // «×» (ver el mapa final): el mapa queda quieto en su último estado, también tras «Detener».
+            onClose={visual.vehicles.length > 0
+              ? () => { setReporteOcultoPara(idEjecucion ?? null); setReporteForzadoPara(null); }
+              : undefined}
           />
 
           {mapSlot &&

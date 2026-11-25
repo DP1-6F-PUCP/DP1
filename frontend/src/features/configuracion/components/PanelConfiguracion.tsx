@@ -4,7 +4,7 @@ import { confirmar } from '../../../components/Confirmacion';
 import { CargaMasivaArchivos } from '../../archivos/components/CargaMasivaArchivos';
 import type { BloqueEditable, ParametrosSistema } from '../useParametrosSistema';
 import { BloqueAlmacenes, BloqueApariencia, BloqueFlota, BloqueOperacion, TextoAplicacion } from './Bloques';
-import { Aviso, BORDE, BOTON_PRIMARIO, BOTON_SECUNDARIO, EncabezadoBloque, TEXTO, TEXTO_FUERTE, TEXTO_TENUE } from './ui';
+import { Aviso, BORDE, BOTON_PRIMARIO, BOTON_SECUNDARIO, cuenta, EncabezadoBloque, TEXTO, TEXTO_FUERTE, TEXTO_TENUE } from './ui';
 
 export type SeccionConfig = BloqueEditable | 'datos';
 
@@ -20,7 +20,7 @@ export const esSeccion = (v: string | null): v is SeccionConfig => SECCIONES.som
 
 /**
  * Cuerpo de Configuración: sub-navegación por bloques, el bloque elegido y la barra de acciones
- * fija (Guardar/Aplicar, Descartar, Restaurar valores oficiales). Lo usan la página /configuracion
+ * fija (Restaurar, Descartar, Guardar). Lo usan la página /configuracion
  * (variante "pagina", sección en la URL) y el modal de la pantalla de inicio (variante "modal").
  */
 export const PanelConfiguracion: React.FC<{
@@ -59,9 +59,9 @@ export const PanelConfiguracion: React.FC<{
                       <span className={`hidden truncate text-[11px] md:block ${activo ? 'text-blue-700/80 dark:text-blue-200/70' : TEXTO_TENUE}`}>{detalle}</span>
                     </span>
                     {errores > 0 ? (
-                      <span title={`${errores} campo(s) con error`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white">!</span>
+                      <span title={cuenta(errores, 'campo con error', 'campos con error')} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[11px] font-semibold text-white">!</span>
                     ) : cambios > 0 ? (
-                      <span title={`${cambios} cambio(s) sin guardar`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 font-mono-code text-[11px] font-semibold text-white">{cambios}</span>
+                      <span title={`${cuenta(cambios, 'cambio', 'cambios')} sin guardar`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 font-mono-code text-[11px] font-semibold text-white">{cambios}</span>
                     ) : null}
                   </button>
                 </li>
@@ -74,7 +74,7 @@ export const PanelConfiguracion: React.FC<{
           <div className={`mx-auto w-full max-w-5xl ${variante === 'pagina' ? 'px-4 py-5 sm:px-6' : 'px-4 py-4 sm:px-5'}`}>
             {seccion === 'datos' ? (
               <>
-                <EncabezadoBloque titulo="Datos" descripcion="Carga masiva de los archivos del caso: pedidos, bloqueos y mantenimiento preventivo." />
+                <EncabezadoBloque titulo="Datos" descripcion="Pedidos, calles bloqueadas y mantenimientos desde archivos." />
                 <CargaMasivaArchivos enCaliente={p.enCaliente} />
               </>
             ) : cargando ? (
@@ -89,13 +89,15 @@ export const PanelConfiguracion: React.FC<{
         </div>
       </div>
 
-      <BarraAcciones p={p} />
+      {/* En «Datos» los archivos se aplican al subirlos: la barra de Guardar solo confunde, salvo
+          que haya cambios pendientes de otros bloques. */}
+      {(seccion !== 'datos' || p.hayCambios) && <BarraAcciones p={p} seccion={seccion} />}
     </div>
   );
 };
 
 /** Barra fija inferior: estado de los cambios y acciones explícitas. */
-const BarraAcciones: React.FC<{ p: ParametrosSistema }> = ({ p }) => {
+const BarraAcciones: React.FC<{ p: ParametrosSistema; seccion: SeccionConfig }> = ({ p, seccion }) => {
   const nErrores = Object.keys(p.errores).length;
   const cargando = !p.values;
   return (
@@ -105,41 +107,44 @@ const BarraAcciones: React.FC<{ p: ParametrosSistema }> = ({ p }) => {
         <div className="flex min-w-[13rem] flex-1 flex-col" aria-live="polite">
           {nErrores > 0 ? (
             <span className="flex items-center gap-1.5 text-sm font-medium text-rose-700 dark:text-rose-300">
-              <AlertCircle className="h-4 w-4" aria-hidden />{nErrores} campo(s) con error
+              <AlertCircle className="h-4 w-4" aria-hidden />{cuenta(nErrores, 'campo con error', 'campos con error')}
             </span>
           ) : p.hayCambios ? (
             <span className={`flex items-center gap-1.5 text-sm font-medium ${TEXTO_FUERTE}`}>
-              <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden />{p.totalCambios} cambio(s) sin guardar
+              <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden />{cuenta(p.totalCambios, 'cambio', 'cambios')} sin guardar
             </span>
           ) : (
             <span className={`text-sm ${TEXTO_TENUE}`}>
               Sin cambios pendientes
-              {p.ajustesPendientes.length > 0 && ` · ${p.ajustesPendientes.length} ajuste(s) guardados para el inicio`}
+              {p.ajustesPendientes.length > 0 && ` · ${cuenta(p.ajustesPendientes.length, 'ajuste guardado', 'ajustes guardados')} para el inicio`}
             </span>
           )}
-          <TextoAplicacion enCaliente={p.enCaliente} />
+          {/* Apariencia no toca la simulación: no se dice «próximo lote» ni «al iniciar». */}
+          {seccion === 'apariencia'
+            ? <span className={`inline-flex items-center gap-1 text-xs ${TEXTO_TENUE}`}><Palette className="h-3 w-3" aria-hidden />Solo en este navegador, al instante</span>
+            : <TextoAplicacion enCaliente={p.enCaliente} />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" disabled={cargando || p.esOficial || p.isSaving} className={BOTON_SECUNDARIO}
             onClick={async () => {
-              if (await confirmar({ titulo: '¿Restaurar los valores oficiales?', detalle: 'Reemplaza lo editado en el formulario. No se guarda hasta que pulses Guardar.', accion: 'Restaurar', tono: 'peligro' })) p.restaurarOficiales();
+              if (await confirmar({ titulo: '¿Volver a los valores estándar?', detalle: 'Reemplaza lo editado en el formulario. No se guarda hasta que pulses Guardar.', accion: 'Restaurar', tono: 'peligro' })) p.restaurarOficiales();
             }}
             title={p.enCaliente
-              ? 'Carga los valores oficiales del caso en lo editable ahora (no cambia flota ni posición de almacenes). Revisa y guarda.'
-              : 'Carga los valores oficiales del caso en el formulario. Revisa y guarda.'}>
-            <RotateCcw className="h-4 w-4" aria-hidden />Restaurar valores oficiales
+              ? 'Volver a los valores estándar (lo que se puede cambiar ahora)'
+              : 'Volver a los valores estándar'}>
+            <RotateCcw className="h-4 w-4" aria-hidden />Restaurar
           </button>
           <button type="button" disabled={!p.hayCambios || p.isSaving} className={BOTON_SECUNDARIO}
             onClick={async () => {
-              if (await confirmar({ titulo: `¿Descartar ${p.totalCambios} cambio(s)?`, detalle: 'Vuelve a lo último guardado.', accion: 'Descartar', tono: 'peligro' })) p.descartar();
+              if (await confirmar({ titulo: `¿Descartar ${cuenta(p.totalCambios, 'cambio', 'cambios')}?`, detalle: 'Vuelve a lo último guardado.', accion: 'Descartar', tono: 'peligro' })) p.descartar();
             }}>
             Descartar
           </button>
           <button type="button" onClick={async () => {
             const ok = await confirmar({
-              titulo: `¿Guardar ${p.totalCambios} cambio(s)?`,
+              titulo: `¿Guardar ${cuenta(p.totalCambios, 'cambio', 'cambios')}?`,
               detalle: p.cambiosPorBloque.apariencia === p.totalCambios ? 'Se aplican al instante.'
-                : p.enCaliente ? 'Se aplican en el próximo lote.' : 'Se aplican al iniciar la simulación.',
+                : p.enCaliente ? 'Se aplican en segundos.' : 'Se aplican al iniciar la simulación.',
               accion: 'Guardar', tono: 'crear',
             });
             if (ok) void p.guardar();
@@ -179,20 +184,23 @@ export const DialogoCambiosSinGuardar: React.FC<{
         className={`w-full max-w-md rounded-2xl border ${BORDE} bg-[var(--color-surface)] p-5 shadow-2xl`}>
         <h2 id="titulo-sin-guardar" className={`text-base font-semibold ${TEXTO_FUERTE}`}>¿Salir sin guardar?</h2>
         <p id="detalle-sin-guardar" className={`mt-1.5 text-sm ${TEXTO}`}>
-          Tienes {p.totalCambios} cambio(s) sin guardar en Configuración. Si sales ahora se descartan
+          Tienes {cuenta(p.totalCambios, 'cambio', 'cambios')} sin guardar en Configuración. Si sales ahora se descartan
           {p.cambiosPorBloque.apariencia > 0 ? ' (el tema vuelve al guardado)' : ''}.
         </p>
-        {nErrores > 0 && <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">Hay {nErrores} campo(s) con error: corrígelos para poder guardar.</p>}
+        {nErrores > 0 && <p className="mt-2 text-xs text-rose-700 dark:text-rose-300">Hay {cuenta(nErrores, 'campo con error', 'campos con error')}: corrígelos para poder guardar.</p>}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button ref={seguirRef} type="button" onClick={onSeguir} className={BOTON_SECUNDARIO}>Seguir editando</button>
-          <button type="button" onClick={onDescartar}
-            className="inline-flex items-center justify-center rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40">
-            Descartar y salir
+          {/* Botones de una palabra; que también se sale lo dice el título y el aria-label. */}
+          <button ref={seguirRef} type="button" onClick={onSeguir} className={BOTON_SECUNDARIO}
+            aria-label="Seguir editando">Cancelar</button>
+          <button type="button" onClick={onDescartar} aria-label="Descartar y salir" title="Descartar los cambios y salir"
+            className="inline-flex items-center justify-center rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950/40">
+            Descartar
           </button>
           <button type="button" disabled={nErrores > 0 || p.isSaving} className={BOTON_PRIMARIO}
+            aria-label="Guardar y salir" title="Guardar los cambios y salir"
             onClick={async () => { if (await p.guardar()) onGuardado(); }}>
-            {p.isSaving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Guardar y salir
+            {p.isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+            Guardar
           </button>
         </div>
       </div>

@@ -59,10 +59,22 @@ public class CargaArchivo {
      *         {@code ##d##h##m} (no aplica a mantenimientos, que llevan fecha absoluta)
      */
     public CargaArchivo(String nombreArchivo, TipoArchivo tipoArchivo, YearMonth periodo) {
+        this(nombreArchivo, tipoArchivo, periodo, "PED");
+    }
+
+    /**
+     * @param prefijoId prefijo del id de cada pedido ({@code <prefijo>-<periodo>-NNNN}). Los archivos
+     *         oficiales usan {@code PED}; una carga manual usa uno propio (p. ej. {@code MAN-1a2b3c4d})
+     *         para que sus pedidos no choquen con los oficiales del mismo mes ni con otra carga.
+     */
+    public CargaArchivo(String nombreArchivo, TipoArchivo tipoArchivo, YearMonth periodo, String prefijoId) {
         this.nombreArchivo = nombreArchivo;
         this.tipoArchivo = tipoArchivo;
         this.periodo = periodo;
+        this.prefijoId = prefijoId;
     }
+
+    private final String prefijoId;
 
     public String getNombreArchivo() {
         return nombreArchivo;
@@ -142,7 +154,7 @@ public class CargaArchivo {
         if (idCliente.isEmpty()) {
             throw error(numeroLinea, "el identificador del cliente está vacío");
         }
-        String idPedido = String.format("PED-%s-%04d", periodo, pedidos.size() + 1);
+        String idPedido = String.format("%s-%s-%04d", prefijoId, periodo, pedidos.size() + 1);
         pedidos.add(new Pedido(idPedido, idCliente, new Nodo(posX, posY), cantidad, horasLimite, fecha));
     }
 

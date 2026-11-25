@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import { AlertCircle, Lock, Zap } from 'lucide-react';
+import { AlertCircle, Lock } from 'lucide-react';
 
 /**
  * Piezas visuales de Configuración (claro/oscuro con `dark:` y las variables de superficie, igual
@@ -9,6 +9,9 @@ export const BORDE = 'border-slate-200 dark:border-slate-700/70';
 export const TEXTO_FUERTE = 'text-slate-900 dark:text-slate-100';
 export const TEXTO = 'text-slate-700 dark:text-slate-300';
 export const TEXTO_TENUE = 'text-slate-500 dark:text-slate-400';
+
+/** "1 cambio" / "3 cambios": singular y plural reales, nunca "cambio(s)". */
+export const cuenta = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-PE')} ${n === 1 ? uno : varios}`;
 
 export const BOTON_SECUNDARIO = `inline-flex items-center justify-center gap-1.5 rounded-lg border ${BORDE} bg-[var(--color-surface)] px-3 py-2 text-sm font-medium ${TEXTO} transition hover:border-slate-400 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-slate-500 dark:hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500`;
 export const BOTON_PRIMARIO = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400';
@@ -43,17 +46,16 @@ export const EncabezadoBloque: React.FC<{ titulo: string; descripcion: string; c
 
 export type Aplicacion = 'caliente' | 'inicio';
 
-/** Distintivo de cuándo se aplica un campo: en caliente (próximo lote) o solo al iniciar. */
-export const Insignia: React.FC<{ tipo: Aplicacion; compacta?: boolean }> = ({ tipo, compacta }) =>
-  tipo === 'caliente' ? (
-    <span title="Se puede cambiar con la simulación en curso: se aplica en el próximo lote"
-      className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-      <Zap className="h-3 w-3" aria-hidden />{compacta ? 'En caliente' : 'En caliente · próximo lote'}
-    </span>
-  ) : (
-    <span title="Solo se define al iniciar la simulación"
+/**
+ * Distintivo de cuándo se aplica un campo. Regla del dueño: para el operador la única distinción útil
+ * es si se puede cambiar ahora o no, así que «En caliente» ya no se muestra (null) y lo que solo se
+ * define antes de iniciar lleva candado con «Antes de iniciar».
+ */
+export const Insignia: React.FC<{ tipo: Aplicacion; compacta?: boolean }> = ({ tipo }) =>
+  tipo === 'caliente' ? null : (
+    <span title="Solo antes de iniciar"
       className="inline-flex items-center gap-1 rounded-md bg-slate-500/10 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-      <Lock className="h-3 w-3" aria-hidden />Solo al inicio
+      <Lock className="h-3 w-3" aria-hidden />Antes de iniciar
     </span>
   );
 
@@ -78,7 +80,8 @@ export const CampoNumero: React.FC<{
   const id = useId();
   const idAyuda = `${id}-ayuda`;
   const idError = `${id}-error`;
-  const describedBy = [ayuda || bloqueado ? idAyuda : null, error ? idError : null].filter(Boolean).join(' ') || undefined;
+  const describedBy = [ayuda || bloqueado || oficial !== undefined ? idAyuda : null, error ? idError : null].filter(Boolean).join(' ') || undefined;
+  const difiereOficial = oficial !== undefined && value.trim() !== '' && Number(value) !== Number(oficial);
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -86,7 +89,8 @@ export const CampoNumero: React.FC<{
           {label}
           {modificado && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" title="Modificado, sin guardar" aria-label="modificado" />}
         </label>
-        {aplicacion && !compacto && <Insignia tipo={aplicacion} compacta />}
+        {/* Solo el candado de «Antes de iniciar», y solo cuando el campo está bloqueado. */}
+        {aplicacion === 'inicio' && bloqueado && !compacto && <Insignia tipo={aplicacion} compacta />}
       </div>
       <div className="relative">
         <input
@@ -98,6 +102,7 @@ export const CampoNumero: React.FC<{
           step={paso}
           value={value}
           disabled={bloqueado}
+          title={bloqueado ? motivoBloqueo : undefined}
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy}
           onChange={(e) => onChange(e.target.value)}
@@ -116,15 +121,21 @@ export const CampoNumero: React.FC<{
         <p id={idError} className="flex items-center gap-1 text-xs text-rose-600 dark:text-rose-400">
           <AlertCircle className="h-3 w-3 shrink-0" aria-hidden />{error}
         </p>
-      ) : bloqueado && motivoBloqueo ? (
-        <p id={idAyuda} className={`text-xs ${TEXTO_TENUE}`}>{motivoBloqueo}</p>
-      ) : (ayuda || oficial !== undefined) && !compacto ? (
+      ) : (ayuda || oficial !== undefined || (bloqueado && motivoBloqueo)) && !compacto ? (
         <p id={idAyuda} className={`text-xs leading-snug ${TEXTO_TENUE}`}>
-          {ayuda}
+          {/* Bloqueado: el candado y la insignia ya lo dicen; el motivo queda para lector de pantalla. */}
+          {bloqueado && motivoBloqueo && <span className="sr-only">{motivoBloqueo} </span>}
+          {!bloqueado && ayuda}
           {oficial !== undefined && (
-            <span className="whitespace-nowrap">{ayuda ? ' · ' : ''}Oficial: <span className="font-mono-code">{oficial}</span></span>
+            // Distinto del valor oficial del caso: ámbar con «≠», para verlo sin comparar cifras.
+            <span className={`whitespace-nowrap ${difiereOficial ? 'font-semibold text-amber-700 dark:text-amber-300' : ''}`}
+              title={difiereOficial ? 'Distinto del valor estándar' : undefined}>
+              {ayuda && !bloqueado ? ' · ' : ''}{difiereOficial ? '≠ ' : ''}Estándar: <span className="font-mono-code">{oficial}</span>
+            </span>
           )}
         </p>
+      ) : bloqueado && motivoBloqueo ? (
+        <p id={idAyuda} className="sr-only">{motivoBloqueo}</p>
       ) : null}
     </div>
   );

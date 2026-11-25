@@ -11,7 +11,8 @@ export type EstadoUnidad = 'DISPONIBLE' | 'EN_RUTA' | 'EN_MANTENIMIENTO' | 'AVER
 // dominio) -- distingue, p. ej., EN_RUTA viajando de EN_RUTA detenido entregando o en refrigerio.
 export type ActividadVehiculo = 'INACTIVO' | 'VIAJANDO' | 'ENTREGANDO' | 'EN_REFRIGERIO' | 'TRASVASANDO';
 export type EstadoRuta = 'PLANIFICADA' | 'EN_EJECUCION' | 'FINALIZADA' | 'REEMPLAZADA';
-export type EstadoEjecucion = 'INICIADA' | 'EN_CURSO' | 'PAUSADA' | 'FINALIZADA' | 'DETENIDA_POR_INCUMPLIMIENTO';
+/** INTERRUMPIDA: cortada por un apagado o reinicio del backend (con reporte si el apagado fue ordenado). */
+export type EstadoEjecucion = 'INICIADA' | 'EN_CURSO' | 'PAUSADA' | 'FINALIZADA' | 'DETENIDA_POR_INCUMPLIMIENTO' | 'INTERRUMPIDA';
 export type TipoEscenarioBackend = 'DIA_A_DIA' | 'CINCO_DIAS' | 'COLAPSO_LOGISTICO';
 export type TipoSolicitud =
   | 'AVERIA'
@@ -233,14 +234,35 @@ export interface EjecucionEscenarioDTO {
   k: number;
 }
 
+/** GET /api/files: una carga vigente. */
+export interface ArchivoCargadoDTO {
+  id: string;
+  /** OFFICIAL = precargado; MANUAL = subido por el operador. */
+  origen: 'OFFICIAL' | 'MANUAL';
+  tipoArchivo: 'PEDIDOS' | 'BLOQUEOS' | 'MANTENIMIENTO';
+  nombreArchivo: string;
+  anio: number | null;
+  mes: number | null;
+  filas: number;
+  fecha: string;
+}
+
 export interface ResultadoCargaDTO {
   nombreArchivo: string;
+  /** Con una simulación en curso: qué pasó con los pedidos del archivo (sin simulación, todo en 0). */
+  enSimulacion?: boolean;
+  incorporados?: number;
+  programados?: number;
+  /** Ingresaron antes del inicio de la simulación: no entraron. */
+  anterioresAlInicio?: number;
+  /** Ya vencidos al subirlos: no entraron (habrían detenido la simulación al instante). */
+  vencidos?: number;
 }
 
 export interface ReporteSimulacionDTO {
   idEjecucion: string;
   tipoEscenario: TipoEscenarioBackend;
-  motivoFinalizacion: 'COLAPSO' | 'PARADA_MANUAL' | 'PERIODO_COMPLETADO';
+  motivoFinalizacion: 'COLAPSO' | 'PARADA_MANUAL' | 'PERIODO_COMPLETADO' | 'REINICIO_SERVIDOR';
   inicioReal: string;
   finReal: string;
   duracionRealMs: number;

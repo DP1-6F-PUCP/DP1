@@ -19,7 +19,7 @@ export function useVehicles() {
   const reportBreakdownMutation = useMutation({
     mutationFn: async ({ vehicleId, type }: { vehicleId: string; type: BreakdownType; reason?: string }) => {
       if (!ejecucion) {
-        throw new Error('No hay una ejecución de escenario activa.');
+        throw new Error('No hay una simulación en curso.');
       }
       if (!estadoRaw?.marcaTiempoActual) {
         throw new Error('No se conoce el instante simulado actual.');
@@ -47,7 +47,7 @@ export function useVehicles() {
       addToast({
         type: 'warning',
         title: `Avería tipo ${type} programada`,
-        description: `${vehicleId} se averiará en el próximo lote de planificación.`,
+        description: `${vehicleId} se averiará en unos segundos.`,
       });
       queryClient.invalidateQueries({ queryKey: ['estado-operacion'] });
     },

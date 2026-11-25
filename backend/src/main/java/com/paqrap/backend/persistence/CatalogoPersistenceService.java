@@ -73,7 +73,7 @@ public class CatalogoPersistenceService {
 
     public List<Almacen> cargarAlmacenes() {
         return jdbcTemplate.query(
-                "SELECT name, warehouse_type, pos_x, pos_y, max_capacity "
+                "SELECT name, warehouse_type, pos_x, pos_y, max_capacity, reload_frequency_hours "
                         + "FROM warehouses WHERE deleted_at IS NULL ORDER BY warehouse_type, name",
                 (rs, rowNum) -> {
                     Nodo posicion = new Nodo(rs.getInt("pos_x"), rs.getInt("pos_y"));
@@ -82,8 +82,24 @@ public class CatalogoPersistenceService {
                         return new AlmacenCentral(posicion);
                     }
                     int cap = rs.getInt("max_capacity");
-                    return new AlmacenIntermedio(posicion, rs.getString("name"), cap, cap);
+                    AlmacenIntermedio intermedio = new AlmacenIntermedio(posicion, rs.getString("name"), cap, cap);
+                    // Bug corregido: la frecuencia se guardaba pero no se leía, así que tras un
+                    // reinicio volvía en silencio a 24 h aunque la BD dijera otra cosa.
+                    double frecuencia = rs.getDouble("reload_frequency_hours");
+                    if (frecuencia > 0) {
+                        intermedio.setFrecuenciaRecargaHoras(frecuencia);
+                    }
+                    return intermedio;
                 });
+    }
+
+    /**
+     * Valores oficiales del caso (perfil inmutable de {@code official_master_config}, V6), en el
+     * mismo formato que usa el frontend para "Restaurar valores oficiales". Vacío si no existe.
+     */
+    public java.util.Optional<String> cargarConfiguracionOficialJson() {
+        return jdbcTemplate.query("SELECT payload::text FROM official_master_config WHERE id = 1",
+                (rs, rowNum) -> rs.getString(1)).stream().findFirst();
     }
 
     public List<UnidadTransporte> cargarFlota(List<TipoVehiculo> tiposVehiculo) {

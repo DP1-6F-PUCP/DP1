@@ -38,7 +38,7 @@ import {
 } from '../utils/vehicleStatus';
 import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { useUmbrales } from '../store/umbralesStore';
-import { nivelCargaPct } from '../utils/filtrosMapa';
+import { nivelCargaPct, SEMAFORO_CARGA } from '../utils/filtrosMapa';
 import { getWarehouseStockStatus } from '../utils/warehouseStock';
 import {
   classifyWarehouseShipments,
@@ -124,17 +124,16 @@ const StaticSection: React.FC<{
 );
 
 /**
- * Carga a bordo: barra neutra (la carga NO es un semáforo: ni poca ni mucha carga es mala por sí
- * sola). Mismo color que la barra de la tabla de Flota; el nivel (baja/media/alta, cortes de
- * Configuración) va como texto, igual que el filtro de carga del mapa.
+ * Carga a bordo con el semáforo de capacidad (mismo color que el ícono del vehículo en el mapa:
+ * verde libre, ámbar media, rojo lleno; ver SEMAFORO_CARGA).
  */
 const BarraCargaVehiculo: React.FC<{ load: number; capacity: number }> = ({ load, capacity }) => {
   const pct = capacity > 0 ? Math.min(100, Math.round((load / capacity) * 100)) : 0;
-  const nivel = nivelCargaPct(pct);
+  const semaforo = SEMAFORO_CARGA[nivelCargaPct(pct)];
   return (
-    <div className="flex items-center gap-1.5 w-full" title={`Carga ${nivel}`}>
+    <div className="flex items-center gap-1.5 w-full" title={`Capacidad: ${semaforo.label.toLowerCase()}`}>
       <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-        <div className="h-full rounded-full transition-all bg-cyan-400" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: semaforo.hex }} />
       </div>
       <span className="text-[10px] font-mono-code font-bold shrink-0 text-slate-300">
         {load === 0 ? `Vacío (0/${capacity})` : `${load}/${capacity} (${pct}%)`}
@@ -749,10 +748,10 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                             {!isBroken && averiasProgramadas[v.id] && (
                               <div
                                 className="mb-2 flex items-center gap-1.5 rounded-lg border border-dashed border-rose-500/60 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold text-rose-300"
-                                title="Solicitud enviada: el backend la aplica al cerrar el siguiente lote"
+                                title="Se aplica en unos segundos"
                               >
                                 <Clock className="h-3 w-3 shrink-0" aria-hidden />
-                                Avería tipo {averiasProgramadas[v.id].tipo} programada · próximo lote
+                                Avería tipo {averiasProgramadas[v.id].tipo} programada · en segundos
                               </div>
                             )}
 
@@ -874,7 +873,7 @@ export const SidebarRight: React.FC<SidebarRightProps> = ({
                                   // Averiado: el backend saca sus pedidos de la ruta (se replanifican en
                                   // otros vehículos) pero la carga sigue a bordo hasta el trasvase.
                                   <p className="flex items-start gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-2 text-[10px] text-amber-300"
-                                    title="Sus pedidos ya se replanificaron en otros vehículos; los paquetes pasan a ellos en el trasvase">
+                                    title="Sus pedidos pasaron a otros vehículos; los paquetes se les entregan en el trasvase">
                                     <Package className="mt-px h-3 w-3 shrink-0" aria-hidden />
                                     <span><span className="font-bold">{v.currentLoad} paquetes por trasvasar</span> · sus pedidos pasan a otro vehículo</span>
                                   </p>

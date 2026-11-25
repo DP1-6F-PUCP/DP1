@@ -50,7 +50,8 @@
    casi no se notaba en íconos chicos: el cambio de tamaño se percibe mucho más. */
 @keyframes parpadeo-entrega {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.25; transform: scale(1.35); }
+  /* --pulso por tipo de vehículo (LeafletManhattanMap.pulsoDe): el pico no pasa de 1,6 cuadras. */
+  50% { opacity: 0.25; transform: scale(var(--pulso, 1.35)); }
 }
 
 .vehiculo-entregando .glifo-pulso {

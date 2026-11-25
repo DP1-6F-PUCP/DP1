@@ -37,6 +37,17 @@ public class MotorSimulacion {
 
     private final GestorLogSimulacion gestorLog;
     private final Set<String> pedidosCompletados = new HashSet<>();
+    /** Costo (S/) de lo recorrido en el último lote: cada cuadra por la tarifa del vehículo. */
+    private double costoRecorrido;
+
+    /**
+     * Costo de los kilómetros realmente recorridos en el último {@link #simularRutas}, incluidos los
+     * viajes sin carga (ir a cargar, rescates, regreso al almacén). Los traslados instantáneos al
+     * central por avería no se recorren: no cuestan.
+     */
+    public double getCostoRecorrido() {
+        return costoRecorrido;
+    }
 
     public MotorSimulacion(GestorLogSimulacion gestorLog) {
         this.gestorLog = gestorLog;
@@ -55,6 +66,7 @@ public class MotorSimulacion {
         // para siempre (como estaba antes), cada lote sumaría también lo ya contado en lotes
         // previos, sobre-contando las entregas totales.
         pedidosCompletados.clear();
+        costoRecorrido = 0.0;
         // Trayectoria real del lote (ver UnidadTransporte.trayectoriaLote): punto de partida de
         // TODAS las unidades -- incluidas las que no reciben ruta (averiadas, en mantenimiento),
         // para que el visualizador sepa que se quedaron quietas o que fueron trasladadas.
@@ -810,6 +822,8 @@ public class MotorSimulacion {
             }
             tiempoActual += tiempoPaso;
             distanciaRecorrida += kmPorCuadra;
+            // Todo movimiento pasa por aquí, también la cuadra que se termina fuera del lote.
+            costoRecorrido += kmPorCuadra * costoKm;
             double costoAcum = distanciaRecorrida * costoKm;
 
             if (tiempoActual > tiempoFinMaxHoras) {

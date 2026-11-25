@@ -64,6 +64,7 @@ public class GestorLogSimulacion {
      */
     public synchronized void iniciarArchivo(String nombre) {
         cerrar();
+        comprimirArchivosAntiguos(archivoLogTexto.getParentFile());
         try {
             archivoEventos = new File(archivoLogTexto.getParentFile(), nombre + ".jsonl");
             archivoEjecucion = new java.io.BufferedWriter(new OutputStreamWriter(
@@ -76,6 +77,52 @@ public class GestorLogSimulacion {
         } catch (IOException e) {
             log.error("No se pudo abrir el archivo de eventos {}: {}", nombre, e.getMessage());
             archivoEjecucion = null;
+        }
+    }
+
+    /** Antigüedad a partir de la cual un {@code .jsonl} de una ejecución anterior se comprime a {@code .jsonl.gz}. */
+    private static final long DIAS_ANTES_DE_COMPRIMIR = 7;
+
+    /**
+     * Rotación simple: los {@code .jsonl} de ejecuciones anteriores con más de
+     * {@value #DIAS_ANTES_DE_COMPRIMIR} días sin cambios se comprimen (se conservan, no se borran;
+     * ocupan ~10 veces menos). Los recientes quedan en texto plano para leerlos directamente.
+     */
+    static void comprimirArchivosAntiguos(File dir) {
+        File[] archivos = dir.listFiles((d, nombre) -> nombre.startsWith("ejecucion-") && nombre.endsWith(".jsonl"));
+        if (archivos == null) {
+            return;
+        }
+        long limite = System.currentTimeMillis() - DIAS_ANTES_DE_COMPRIMIR * 24 * 3600 * 1000;
+        for (File archivo : archivos) {
+            if (archivo.lastModified() >= limite) {
+                continue;
+            }
+            File comprimido = new File(dir, archivo.getName() + ".gz");
+            try (var entrada = new java.io.FileInputStream(archivo);
+                    var salida = new java.util.zip.GZIPOutputStream(new FileOutputStream(comprimido))) {
+                entrada.transferTo(salida);
+            } catch (IOException e) {
+                log.warn("No se pudo comprimir {}: {}", archivo.getName(), e.getMessage());
+                comprimido.delete();
+                continue;
+            }
+            if (!archivo.delete()) {
+                log.warn("Se comprimió {} pero no se pudo borrar el original", archivo.getName());
+            }
+        }
+    }
+
+    /** Escribe a disco lo que quede en el buffer del archivo de la ejecución (al cerrar cada lote). */
+    public synchronized void volcar() {
+        if (archivoEjecucion == null) {
+            return;
+        }
+        try {
+            archivoEjecucion.flush();
+            sinVolcar = 0;
+        } catch (IOException e) {
+            log.warn("No se pudo volcar el archivo de eventos: {}", e.getMessage());
         }
     }
 

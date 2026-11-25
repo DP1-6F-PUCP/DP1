@@ -1,7 +1,8 @@
 import { refrescarConfiguracionEnLotes } from '../../services/ingestaLotes';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEstadoOperacion } from '../../hooks/useEstadoOperacion';
+import { configuracionApi } from '../../services/configuracionApi';
 import { useThemeStore } from '../../store/themeStore';
 import { UMBRALES_DEFAULT, useUmbralesStore, validarUmbrales, type Umbrales } from '../../store/umbralesStore';
 import { useConfigInicialStore } from '../../store/configInicialStore';
@@ -67,6 +68,12 @@ export function useParametrosSistema() {
   const setTheme = useThemeStore((s) => s.setTheme);
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  // Valores oficiales del caso: vienen del servidor (perfil inmutable). No cambian, se piden una vez.
+  const { data: oficiales = null } = useQuery({
+    queryKey: ['configuracionOficial'],
+    queryFn: ({ signal }) => configuracionApi.getConfiguracionOficial(signal),
+    staleTime: Infinity,
+  });
 
   const enCaliente = Boolean(ejecucion && ESTADOS_ACTIVOS.has(ejecucion.estado));
   const base = useMemo(() => (configuracion ? desdeConfiguracion(configuracion) : null), [configuracion]);
@@ -136,10 +143,15 @@ export function useParametrosSistema() {
   const totalCambios = cambios.length + (temaCambiado ? 1 : 0) + (umbralesCambiados ? 1 : 0);
   const hayCambios = totalCambios > 0;
   const hayErrores = Object.keys(errores).length > 0 || Object.keys(erroresUmbrales).length > 0;
-  /** El borrador ya tiene los valores oficiales (en lo editable ahora): "Restaurar" no haría nada. */
+  /**
+   * El borrador ya tiene los valores oficiales (en lo editable ahora): "Restaurar" no haría nada.
+   * Mientras no llegan del servidor también cuenta como true (no hay a qué restaurar).
+   */
   const esOficial = useMemo(
-    () => (values ? calcularAjustes(values, valoresOficiales(values, enCaliente), enCaliente).length === 0 : true),
-    [values, enCaliente],
+    () => (values && oficiales
+      ? calcularAjustes(values, valoresOficiales(values, enCaliente, oficiales), enCaliente).length === 0
+      : true),
+    [values, enCaliente, oficiales],
   );
 
   // En caliente, los campos "solo al inicio" (cantidad de flota, posición de almacén) se ignoran
@@ -172,9 +184,10 @@ export function useParametrosSistema() {
    * No toca el tema, que es una preferencia de la interfaz y no un parámetro del caso.
    */
   const restaurarOficiales = useCallback(() => {
-    setValues((prev) => prev && valoresOficiales(prev, enCaliente));
+    if (!oficiales) return;
+    setValues((prev) => prev && valoresOficiales(prev, enCaliente, oficiales));
     setErrorGeneral(null);
-  }, [enCaliente]);
+  }, [enCaliente, oficiales]);
 
   /** Guarda (en frío) o aplica en caliente. Devuelve true si todo quedó guardado. */
   const guardar = useCallback(async (): Promise<boolean> => {
@@ -195,8 +208,8 @@ export function useParametrosSistema() {
         type: 'success',
         title: 'Configuración guardada',
         description: ajustes.length === 0
-          ? 'Sin cambios en los parámetros de operación respecto a la configuración vigente.'
-          : `${ajustes.length} ajuste(s) se aplicarán al iniciar la simulación.`,
+          ? 'Sin cambios en la operación.'
+          : ajustes.length === 1 ? 'Se aplica al iniciar la simulación.' : `${ajustes.length} ajustes se aplicarán al iniciar la simulación.`,
       });
       return true;
     }
@@ -207,7 +220,7 @@ export function useParametrosSistema() {
     }
     const instante = estadoRaw?.marcaTiempoActual;
     if (!ejecucion || !instante) {
-      setErrorGeneral('Aún no hay un instante simulado vigente; reintenta tras el primer lote.');
+      setErrorGeneral('La simulación aún está arrancando; reintenta en unos segundos.');
       return false;
     }
     setIsSaving(true);
@@ -225,10 +238,10 @@ export function useParametrosSistema() {
     if (aceptados.length > 0) refrescarConfiguracionEnLotes(4);
     addToast({
       type: fallidos > 0 ? 'warning' : 'success',
-      title: fallidos > 0 ? 'Algunos cambios no se programaron' : 'Cambios programados',
-      description: `${aceptados.length} de ${cambios.length} cambio(s) se aplicarán en el próximo lote de planificación.`,
+      title: fallidos > 0 ? 'Algunos cambios no se guardaron' : 'Cambios guardados',
+      description: fallidos > 0 ? `${aceptados.length} de ${cambios.length} se aplicarán en segundos.` : 'Se aplican en segundos.',
     });
-    if (fallidos > 0) setErrorGeneral(`${fallidos} cambio(s) no se pudieron programar; siguen marcados como pendientes.`);
+    if (fallidos > 0) setErrorGeneral(fallidos === 1 ? '1 cambio no se pudo guardar; sigue pendiente.' : `${fallidos} cambios no se pudieron guardar; siguen pendientes.`);
     return fallidos === 0;
   }, [values, base, referencia, hayErrores, temaCambiado, setTheme, temaOscuro, enCaliente, cambios, estadoRaw,
     ejecucion, setAjustesPendientes, addToast, agregarProgramados, queryClient, umbralesCambiados, guardarUmbrales, umbrales]);
@@ -242,6 +255,7 @@ export function useParametrosSistema() {
     erroresPorBloque,
     hayErrores,
     esOficial,
+    oficiales,
     cambiosPorBloque,
     totalCambios,
     hayCambios,

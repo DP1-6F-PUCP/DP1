@@ -76,6 +76,14 @@ public class SimulacionController {
      * corriendo, hasta que volvía a hacer clic manualmente. {@code SeleccionarEscenarioGate} llama
      * esto al montar para unirse sola, sin esperar esa acción.
      */
+    /** Ejecuciones pasadas, más reciente primero, con conteos de su reporte (si lo tienen). */
+    @GetMapping("/api/escenarios")
+    public ApiResponseDTO<List<com.paqrap.exposicion.ResumenEjecucionDTO>> listarEscenarios(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int pagina,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "20") int tamano) {
+        return ApiResponseDTO.of(servicioPlanificacion.listarEjecuciones(pagina, tamano));
+    }
+
     @GetMapping("/api/escenarios/activa")
     public ApiResponseDTO<EjecucionEscenarioDTO> consultarEscenarioActiva() {
         EjecucionEscenario ejecucion = servicioPlanificacion.consultarEjecucionActiva();

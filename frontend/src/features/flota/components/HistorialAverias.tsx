@@ -42,12 +42,12 @@ export const HistorialAverias: React.FC<Props> = ({ vehiculos, marcaVisibleMs, o
           <History className="h-4 w-4 text-rose-500" aria-hidden />Historial de averías
           <span className={`font-mono-code text-xs font-normal ${TEXTO_TENUE}`}>{visibles.length}</span>
         </h2>
-        <span className={`text-xs ${TEXTO_TENUE}`}>De esta ejecución</span>
+        <span className={`text-xs ${TEXTO_TENUE}`}>De esta simulación</span>
       </header>
 
       {visibles.length === 0 && pendientes.length === 0 ? (
         <div className={`px-4 py-8 text-center text-sm ${TEXTO_TENUE}`}>
-          <p className={`font-medium ${TEXTO}`}>Sin averías en esta ejecución</p>
+          <p className={`font-medium ${TEXTO}`}>Sin averías en esta simulación</p>
           <p className="mt-1">Provoca una con «Averiar» en la tabla o con clic derecho sobre un vehículo del mapa.</p>
         </div>
       ) : (
@@ -76,8 +76,8 @@ export const HistorialAverias: React.FC<Props> = ({ vehiculos, marcaVisibleMs, o
                     </td>
                     <td colSpan={3} className="px-3 py-2">
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-700 dark:text-rose-300"
-                        title="Solicitud enviada: el backend la aplica al cerrar el siguiente lote">
-                        <Clock className="h-3.5 w-3.5" aria-hidden />Programada · se aplica en el próximo lote
+                        title="Se aplica en unos segundos">
+                        <Clock className="h-3.5 w-3.5" aria-hidden />Programada · en segundos
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -127,7 +127,8 @@ export const HistorialAverias: React.FC<Props> = ({ vehiculos, marcaVisibleMs, o
 
 const BotonVer: React.FC<{ v: Vehicle; onVer: (v: Vehicle) => void }> = ({ v, onVer }) => (
   <button type="button" onClick={() => onVer(v)} title={`Ver ${v.code} en el mapa`} aria-label={`Ver ${v.code} en el mapa`}
-    className={`inline-flex items-center rounded-md p-1 ${ACENTO} hover:bg-cyan-500/10 ${FOCO}`}>
-    <LocateFixed className="h-3.5 w-3.5" aria-hidden />
+    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-xs font-semibold ${ACENTO} hover:bg-cyan-500/10 ${FOCO}`}>
+    {/* Igual que el botón de la tabla de Flota: ícono + «Ver». */}
+    <LocateFixed className="h-3.5 w-3.5" aria-hidden />Ver
   </button>
 );

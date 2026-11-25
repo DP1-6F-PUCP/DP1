@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  AlertOctagon, BarChart3, CheckCircle2, Clock, Coins, FileDown, History, Hourglass, Info, MapPinned, PackageCheck, Truck,
+  AlertOctagon, BarChart3, CheckCircle2, Clock, Coins, FileDown, FileText, History, Hourglass, Info, PackageCheck, Truck,
   Warehouse as WarehouseIcon, Wrench,
 } from 'lucide-react';
 import { useEstadoVisual } from '../engine/useEstadoVisual';
@@ -160,7 +160,7 @@ export const ReportesPage: React.FC = () => {
       return {
         filas: estable ? filasDesdeReporte(estable.rutas, reporte.pedidosPlanificacionEstable, corte) : [],
         corteMs: corte != null && Number.isFinite(corte) ? corte : null,
-        origen: estable ? 'Último lote estable (reporte final)' : 'No hubo una planificación estable completada',
+        origen: estable ? 'Último plan estable' : 'No hubo un plan estable',
       };
     }
     const raw = vivo.estadoRaw;
@@ -168,7 +168,7 @@ export const ReportesPage: React.FC = () => {
     return {
       filas: raw ? filasDesdeOperacion(raw.rutas, vivo.orders) : [],
       corteMs: corte != null && Number.isFinite(corte) ? corte : null,
-      origen: 'Último lote recibido',
+      origen: 'Plan vigente',
     };
   }, [reporteFinal.abierto, reporte, vivo.estadoRaw, vivo.orders]);
 
@@ -186,7 +186,7 @@ export const ReportesPage: React.FC = () => {
         <div className="max-w-sm rounded-xl border border-dashed border-slate-300 bg-[var(--color-surface)] p-8 text-center dark:border-slate-700">
           <BarChart3 className="mx-auto mb-2 h-8 w-8 text-slate-400 dark:text-slate-600" aria-hidden />
           <p className="font-medium">Aún no hay datos para reportar</p>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Los reportes aparecen cuando llega el primer lote de la ejecución.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Aparecen en cuanto arranca la simulación.</p>
         </div>
       </div>
     );
@@ -202,6 +202,8 @@ export const ReportesPage: React.FC = () => {
   const tonoAlm: TonoKpi = almacenes.total === 0 ? 'neutro' : almacenes.level === 'high' ? 'bien' : almacenes.level === 'medium' ? 'atencion' : 'critico';
   const porEntrega = actual.entregados > 0 ? actual.costo / actual.entregados : null;
   const fuera = actual.flota.fueraServicio;
+  const averiadosAhora = visual.vehicles.filter((v) => v.status === 'broken').length;
+  const enMantenimiento = visual.vehicles.filter((v) => v.status === 'maintenance').length;
 
   const finalizada = reporteFinal.abierto;
   const finSimulado = reporte ? parseBackendSimulatedTime(reporte.finSimulado) : NaN;
@@ -236,20 +238,22 @@ export const ReportesPage: React.FC = () => {
             <p className="flex items-center gap-2">
               {reporte?.motivoFinalizacion === 'COLAPSO' ? <AlertOctagon className="h-4 w-4 shrink-0" aria-hidden /> : <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />}
               <span>
-                <span className="font-semibold">Ejecución terminada</span>
-                {reporte ? <> · {motivosReporte[reporte.motivoFinalizacion]} · fin simulado <span className="font-mono-code font-semibold">{Number.isFinite(finSimulado) ? formatBackendSimulatedTime24(finSimulado) : '—'}</span></> : ' · cargando el reporte final…'}
+                <span className="font-semibold">Simulación terminada</span>
+                {reporte ? <> · {motivosReporte[reporte.motivoFinalizacion]} · fin simulado <span className="font-mono-code font-semibold">{Number.isFinite(finSimulado) ? formatBackendSimulatedTime24(finSimulado) : '—'}</span></> : ' · cargando el reporte…'}
               </span>
             </p>
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={!reporte}
                 onClick={() => { if (reporte) crearReportePdf(reporte, inicioVisibleMs).save(`reporte-simulacion-${reporte.idEjecucion}.pdf`); }}
+                title="Descargar el reporte final en PDF"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-current/30 px-2.5 py-1 text-xs font-semibold hover:bg-white/40 disabled:opacity-50 dark:hover:bg-white/10">
-                <FileDown className="h-3.5 w-3.5" aria-hidden />Reporte final (PDF)
+                <FileDown className="h-3.5 w-3.5" aria-hidden />PDF
               </button>
+              {/* Mismo texto que el botón del aviso de cierre en Operación, al que lleva. */}
               <button type="button" onClick={() => navigate('/')}
-                title="En Operación, el aviso de cierre tiene el botón «Reporte» con el detalle completo"
+                title="Ir a Operación: el aviso de cierre abre el reporte completo"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-current/30 px-2.5 py-1 text-xs font-semibold hover:bg-white/40 dark:hover:bg-white/10">
-                <MapPinned className="h-3.5 w-3.5" aria-hidden />Ver reporte en Operación
+                <FileText className="h-3.5 w-3.5" aria-hidden />Reporte
               </button>
             </div>
           </div>
@@ -258,10 +262,9 @@ export const ReportesPage: React.FC = () => {
         {historialTardio && (
           <p className="flex items-start gap-2 rounded-lg border border-slate-200 bg-[var(--color-surface)] px-3 py-2 text-xs text-slate-600 dark:border-slate-700/70 dark:text-slate-400">
             <History className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span>
-              Historial registrado <span className="font-semibold text-slate-800 dark:text-slate-200">desde {formatFechaHoraCorta(historialDesde)}</span>:
-              se toma mientras la aplicación está abierta (una muestra cada {PASO_MUESTRA_MS / 60_000} min simulados) y se pierde al recargar.
-              El flujo de pedidos sí está completo: sale de las fechas de cada pedido.
+            {/* Una línea; el porqué va en el tooltip. */}
+            <span title={`Se registra con la aplicación abierta (una muestra cada ${PASO_MUESTRA_MS / 60_000} min simulados) y se pierde al recargar. El flujo de pedidos sí está completo: sale de las fechas de cada pedido.`}>
+              Historial <span className="font-semibold text-slate-800 dark:text-slate-200">desde {formatFechaHoraCorta(historialDesde)}</span> · se pierde al recargar
             </span>
           </p>
         )}
@@ -271,9 +274,9 @@ export const ReportesPage: React.FC = () => {
           <TarjetaKpi icono={CheckCircle2} titulo="Entregas a tiempo (OTD)" tono={tonoOtd}
             estado={tonoOtd === 'bien' ? 'Meta' : tonoOtd === 'critico' ? 'Bajo meta' : undefined}
             valor={actual.otd == null ? '—' : `${actual.otd.toLocaleString('es-PE', { maximumFractionDigits: 1 })} %`}
-            detalle={actual.otd == null ? 'Aún no hay pedidos resueltos' : 'Entregados / (entregados + incumplidos)'}
+            detalle={actual.otd == null ? 'Aún no hay pedidos resueltos' : 'Entregados ÷ resueltos'}
             serie={serie((m) => m.otd)} delta={variacion(serie((m) => m.otd), (n) => n.toFixed(1), true, ' pp')}
-            ayuda="Porcentaje de entregas a tiempo según el servidor. Meta 100 %: un incumplido detiene la operación." />
+            ayuda="Entregados / (entregados + incumplidos). Meta 100 %: un incumplido detiene la operación." />
           <TarjetaKpi icono={PackageCheck} titulo="Entregados"
             valor={entero(actual.entregados)}
             detalle={`de ${entero(actual.recibidos)} recibidos${actual.recibidos ? ` · ${pct((actual.entregados / actual.recibidos) * 100)} %` : ''}`}
@@ -282,41 +285,43 @@ export const ReportesPage: React.FC = () => {
           <TarjetaKpi icono={Hourglass} titulo="Pendientes" tono={tonoPend}
             estado={actual.retrasados > 0 ? `${actual.retrasados} retrasados` : tonoPend === 'atencion' ? 'Sin asignar sube' : undefined}
             valor={entero(actual.pendientes)}
-            detalle={`${entero(actual.sinAsignar)} sin asignar · ${entero(actual.pendientes - actual.sinAsignar)} con vehículo`}
+            detalle={`${entero(actual.sinAsignar)} sin asignar · ${entero(actual.pendientes - actual.sinAsignar)} asignados`}
             serie={serie((m) => m.pendientes)} delta={variacion(serie((m) => m.pendientes), entero, false)}
             ayuda="Pedidos recibidos aún no entregados; sin asignar = sin vehículo en ninguna ruta." />
           <TarjetaKpi icono={AlertOctagon} titulo="Incumplidos" tono={actual.incumplidos > 0 ? 'critico' : 'bien'}
             estado={actual.incumplidos > 0 ? 'Colapso' : 'Ninguno'}
             valor={entero(actual.incumplidos)}
             detalle={actual.incumplidos > 0 ? 'La operación se detiene' : 'Ningún pedido fuera de plazo'}
-            ayuda="Pedidos que el servidor marcó INCUMPLIDA (fuera de plazo). Uno basta para el colapso." />
+            ayuda="Pedidos entregados fuera de plazo. Uno basta para el colapso." />
           <TarjetaKpi icono={Coins} titulo="Costo acumulado"
             valor={soles(actual.costo)}
             detalle={porEntrega == null ? 'Sin entregas aún' : `${soles(porEntrega)} por entrega`}
             serie={serie((m) => m.costo)} delta={variacion(serie((m) => m.costo), soles, null)}
-            ayuda="Costo total acumulado de las rutas (servidor) y su promedio por pedido entregado." />
-          <TarjetaKpi icono={Truck} titulo="Llenado de flota (G01/G02)" tono={tonoFlota} estado={flota.label}
+            ayuda="Km recorridos por la tarifa de cada vehículo, con los regresos al almacén, y su promedio por pedido entregado." />
+          {/* Títulos cortos: con el código (G01/G02, G04) se truncaban; el código va en la ayuda. */}
+          <TarjetaKpi icono={Truck} titulo="Llenado de flota" tono={tonoFlota} estado={flota.label}
             valor={`${flota.pct} %`}
             detalle={`${entero(flota.load)} de ${entero(flota.capacity)} paquetes a bordo`}
             serie={serie((m) => m.flotaPct)} delta={variacion(serie((m) => m.flotaPct), pct, null, ' pp')}
             ayuda={`Carga a bordo sobre capacidad total de la flota. Verde < ${u.flotaAlta} %, ámbar ${u.flotaAlta}-${u.flotaSaturada - 1} %, rojo ≥ ${u.flotaSaturada} % (saturada).`} />
-          <TarjetaKpi icono={WarehouseIcon} titulo="Llenado de almacenes (G04)" tono={tonoAlm} estado={almacenes.total ? almacenes.label : undefined}
+          <TarjetaKpi icono={WarehouseIcon} titulo="Llenado de almacenes" tono={tonoAlm} estado={almacenes.total ? almacenes.label : undefined}
             valor={almacenes.total ? `${almacenes.pct} %` : '∞'}
-            detalle={almacenes.total ? `${entero(almacenes.stock)} de ${entero(almacenes.capacity)} · ${almacenes.total} intermedios` : 'Solo el central (ilimitado)'}
+            detalle={almacenes.total ? `${entero(almacenes.stock)} / ${entero(almacenes.capacity)} paq.` : 'Solo el central (ilimitado)'}
             serie={serie((m) => m.almacenesPct)} delta={variacion(serie((m) => m.almacenesPct), pct, true, ' pp')}
             ayuda={`Stock de los almacenes intermedios sobre su capacidad. Verde ≥ ${u.almacenAlto} %, ámbar ≥ ${u.almacenBajo} %, rojo < ${u.almacenBajo} %.`} />
-          <TarjetaKpi icono={Wrench} titulo="Averías" tono={fuera > 0 ? 'atencion' : 'neutro'}
-            estado={fuera > 0 ? `${fuera} fuera de servicio` : undefined}
-            valor={entero(actual.averias)}
-            detalle={`${actual.flota.disponible} disponibles de ${visual.vehicles.length} vehículos`}
-            serie={serie((m) => m.averias)} delta={variacion(serie((m) => m.averias), entero, false)}
-            ayuda="Averías registradas en la ejecución (servidor) y vehículos fuera de servicio ahora." />
+          {/* Antes el valor era el total de averías (0) con un chip «1 fuera de servicio» que era un
+              mantenimiento: contradictorio. Ahora el valor es lo que está fuera de servicio y el detalle lo desglosa. */}
+          <TarjetaKpi icono={Wrench} titulo="Fuera de servicio" tono={fuera > 0 ? 'atencion' : 'neutro'}
+            valor={entero(fuera)}
+            detalle={`${averiadosAhora} averiados · ${enMantenimiento} en mant.`}
+            serie={serie((m) => m.flota.fueraServicio)} delta={variacion(serie((m) => m.flota.fueraServicio), entero, false)}
+            ayuda={`Vehículos averiados o en mantenimiento ahora. Averías en total: ${entero(actual.averias)}.`} />
         </div>
 
         {/* 2. Evolución */}
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <GraficoTiempo titulo="Pedidos recibidos vs. entregados"
-            subtitulo={<>Por {textoIntervalo(flujo.intervalo)} · si las barras aqua superan a las azules, el backlog crece{(visual.ordersOmitted ?? 0) > 0 ? ' · sin los entregados más antiguos (no retenidos)' : ''}</>}
+            subtitulo={<>Por {textoIntervalo(flujo.intervalo)} · si Recibidos supera a Entregados, el backlog crece{(visual.ordersOmitted ?? 0) > 0 ? ' · sin los entregados más antiguos (no retenidos)' : ''}</>}
             tipo="barras" anchoMs={flujo.intervalo} series={SERIES_FLUJO} puntos={flujo.puntos}
             vacio="Aún no llegan pedidos en este rango." />
           <GraficoTiempo titulo="Backlog: pedidos pendientes"
@@ -328,7 +333,7 @@ export const ReportesPage: React.FC = () => {
             tipo="apilado" series={SERIES_FLOTA} puntos={puntosFlota}
             vacio="Se necesitan al menos dos muestras: deja la operación correr unos minutos." />
           <GraficoTiempo titulo="Stock de almacenes intermedios"
-            subtitulo={`% de la capacidad de cada almacén · líneas punteadas: cortes del semáforo (${u.almacenBajo} % y ${u.almacenAlto} %)`}
+            subtitulo={`% de la capacidad de cada almacén · líneas punteadas: cambios de color (${u.almacenBajo} % y ${u.almacenAlto} %)`}
             tipo="lineas" series={seriesAlmacenes} puntos={puntosAlmacenes} yMax={100} unidad=" %" formato={pct}
             umbrales={[{ valor: u.almacenAlto, etiqueta: `Abastecido ≥ ${u.almacenAlto} %`, color: SEMAFORO.bien }, { valor: u.almacenBajo, etiqueta: `Por agotarse < ${u.almacenBajo} %`, color: SEMAFORO.critico }]}
             vacio={seriesAlmacenes.length ? 'Se necesitan al menos dos muestras.' : 'No hay almacenes con capacidad limitada (el central es ilimitado).'} />
@@ -338,11 +343,8 @@ export const ReportesPage: React.FC = () => {
         <TablaPlanificacion filas={plan.filas} corteMs={plan.corteMs} origen={plan.origen}
           onVerVehiculo={finalizada ? undefined : verVehiculo} />
 
-        <p className="flex items-start gap-1.5 pb-2 text-xs text-slate-500 dark:text-slate-400">
-          <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-          Contadores de pedidos y flota: al instante del mapa. OTD, costo, averías e incumplidos: los del servidor para el lote que se reproduce.
-          La planificación estable es el último plan recibido (va por delante del mapa).
-        </p>
+        {/* Se quitó la nota técnica sobre de dónde sale cada contador: no cambia ninguna decisión del operador. */}
+        <div className="pb-2" />
       </div>
     </div>
   );

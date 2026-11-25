@@ -184,7 +184,7 @@ export function averiable(
 ): Averiable {
   if (v.status === 'broken') return { ok: false, motivo: 'Ya está averiado' };
   if (v.status === 'maintenance') return { ok: false, motivo: 'Está en mantenimiento' };
-  if (programada) return { ok: false, motivo: 'Ya tiene una avería programada para el próximo lote' };
+  if (programada) return { ok: false, motivo: 'Ya tiene una avería programada' };
   if (v.status === 'idle') return { ok: false, motivo: 'Está en el almacén: solo se averían vehículos que salieron hace menos de 4 h' };
   if (v.warehouseDepartures !== undefined) salidaMs = salidaAlmacenVisible(v, ahoraMs);
   if (salidaMs === undefined || ahoraMs == null) {

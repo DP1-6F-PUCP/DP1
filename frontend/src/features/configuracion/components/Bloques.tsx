@@ -4,7 +4,6 @@ import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import { EditorSemaforos } from './EditorSemaforos';
 import {
   CAMPOS_OPERACION,
-  VALORES_OFICIALES,
   claveAlmacen,
   claveOperacion,
   claveTipo,
@@ -14,7 +13,7 @@ import {
 import type { ParametrosSistema } from '../useParametrosSistema';
 import { Aviso, BORDE, CampoNumero, EncabezadoBloque, Insignia, TEXTO, TEXTO_FUERTE, TEXTO_TENUE, Tarjeta } from './ui';
 
-const MOTIVO_SOLO_INICIO = 'Bloqueado: solo se define al iniciar la simulación.';
+const MOTIVO_SOLO_INICIO = 'Solo antes de iniciar';
 
 const CODIGO_TIPO: Record<string, string> = { AUTO: 'TA', MOTO: 'TM', BICI: 'TB' };
 
@@ -25,14 +24,11 @@ const IconoTipo: React.FC<{ id: string }> = ({ id }) => {
   return <Car className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden />;
 };
 
-const Leyenda: React.FC<{ enCaliente: boolean; conInicio?: boolean }> = ({ enCaliente, conInicio = true }) => (
-  <>
-    <Insignia tipo="caliente" />
-    {conInicio && <Insignia tipo="inicio" />}
-    {enCaliente && conInicio && (
-      <span className={`text-xs ${TEXTO_TENUE}`}>Con la simulación en curso, los campos «Solo al inicio» quedan bloqueados.</span>
-    )}
-  </>
+// Antes de iniciar todo se aplica al inicio: las insignias «En caliente» / «Solo al inicio» solo
+// distinguen algo con la simulación en curso, así que se ocultan en el modal de la pantalla de inicio.
+// Texto para el operador (regla del dueño): sin «en caliente»; solo se avisa qué no se puede cambiar.
+const Leyenda: React.FC<{ enCaliente: boolean; conInicio?: boolean }> = ({ enCaliente, conInicio = true }) => !enCaliente || !conInicio ? null : (
+  <span className={`inline-flex items-center gap-1 text-xs ${TEXTO_TENUE}`}><Lock className="h-3 w-3" aria-hidden />Los campos con candado solo se cambian antes de iniciar.</span>
 );
 
 interface BloqueProps {
@@ -40,7 +36,7 @@ interface BloqueProps {
 }
 
 export const BloqueFlota: React.FC<BloqueProps> = ({ p }) => {
-  const { configuracion, values, referencia, errores, enCaliente, updateTipo } = p;
+  const { configuracion, values, referencia, errores, enCaliente, updateTipo, oficiales } = p;
   if (!configuracion || !values || !referencia) return null;
   const tipos = configuracion.tiposVehiculo;
   const totalUnidades = tipos.reduce((s, t) => s + (Number(values.tipos[t.id]?.cantidad) || 0), 0);
@@ -64,25 +60,25 @@ export const BloqueFlota: React.FC<BloqueProps> = ({ p }) => {
         {tipos.map((t) => {
           const f = values.tipos[t.id];
           const r = referencia.tipos[t.id];
-          const oficial = VALORES_OFICIALES.tipos[t.id];
+          const oficial = oficiales?.tipos[t.id];
           if (!f || !r) return null;
           return (
             <Tarjeta
               key={t.id}
               titulo={<><IconoTipo id={t.id} />{t.nombre}</>}
-              descripcion={CODIGO_TIPO[t.id] ? `Código ${CODIGO_TIPO[t.id]} en los archivos del caso` : undefined}
+              descripcion={CODIGO_TIPO[t.id] ? `Código ${CODIGO_TIPO[t.id]}` : undefined}
             >
               <div className="space-y-3">
                 <CampoNumero label="Unidades" unidad="unid." min={0} paso={1} value={f.cantidad}
                   onChange={(v) => updateTipo(t.id, 'cantidad', v)} error={errores[claveTipo(t.id, 'cantidad')]}
                   modificado={distinto(f.cantidad, r.cantidad)} oficial={oficial?.cantidad}
-                  aplicacion="inicio" bloqueado={enCaliente} motivoBloqueo={MOTIVO_SOLO_INICIO} />
+                  aplicacion={enCaliente ? 'inicio' : undefined} bloqueado={enCaliente} motivoBloqueo={MOTIVO_SOLO_INICIO} />
                 <CampoNumero label="Velocidad media" unidad="km/h" min={1} paso={1} value={f.velocidad}
                   onChange={(v) => updateTipo(t.id, 'velocidad', v)} error={errores[claveTipo(t.id, 'velocidad')]}
-                  modificado={distinto(f.velocidad, r.velocidad)} oficial={oficial?.velocidad} aplicacion="caliente" />
+                  modificado={distinto(f.velocidad, r.velocidad)} oficial={oficial?.velocidad} aplicacion={enCaliente ? 'caliente' : undefined} />
                 <CampoNumero label="Capacidad de carga" unidad="paq." min={1} paso={1} value={f.capacidad}
                   onChange={(v) => updateTipo(t.id, 'capacidad', v)} error={errores[claveTipo(t.id, 'capacidad')]}
-                  modificado={distinto(f.capacidad, r.capacidad)} oficial={oficial?.capacidad} aplicacion="caliente" />
+                  modificado={distinto(f.capacidad, r.capacidad)} oficial={oficial?.capacidad} aplicacion={enCaliente ? 'caliente' : undefined} />
               </div>
             </Tarjeta>
           );
@@ -93,7 +89,7 @@ export const BloqueFlota: React.FC<BloqueProps> = ({ p }) => {
 };
 
 export const BloqueAlmacenes: React.FC<BloqueProps> = ({ p }) => {
-  const { configuracion, values, referencia, errores, enCaliente, updateAlmacen } = p;
+  const { configuracion, values, referencia, errores, enCaliente, updateAlmacen, oficiales } = p;
   if (!configuracion || !values || !referencia) return null;
   const { ancho, alto } = configuracion.ciudad;
   return (
@@ -106,7 +102,7 @@ export const BloqueAlmacenes: React.FC<BloqueProps> = ({ p }) => {
         {configuracion.almacenes.map((a) => {
           const f = values.almacenes[a.nombre];
           const r = referencia.almacenes[a.nombre];
-          const oficial = VALORES_OFICIALES.almacenes[a.nombre];
+          const oficial = oficiales?.almacenes[a.nombre];
           if (!f || !r) return null;
           return (
             <Tarjeta key={a.nombre}
@@ -122,8 +118,8 @@ export const BloqueAlmacenes: React.FC<BloqueProps> = ({ p }) => {
                     modificado={distinto(f.y, r.y)} oficial={oficial?.y} bloqueado={enCaliente} compacto />
                 </div>
                 <p className={`-mt-1 flex flex-wrap items-center gap-1.5 text-xs ${TEXTO_TENUE}`}>
-                  <Insignia tipo="inicio" />
-                  {enCaliente ? 'Bloqueada durante la simulación.' : oficial ? <>Oficial: <span className="font-mono-code">({oficial.x}, {oficial.y})</span></> : null}
+                  {enCaliente && <Insignia tipo="inicio" />}
+                  {enCaliente ? null : oficial ? <>Estándar: <span className="font-mono-code">({oficial.x}, {oficial.y})</span></> : null}
                 </p>
                 {f.esCentral ? (
                   <p className={`rounded-lg border border-dashed ${BORDE} px-3 py-2 text-xs ${TEXTO_TENUE}`}>
@@ -133,11 +129,11 @@ export const BloqueAlmacenes: React.FC<BloqueProps> = ({ p }) => {
                   <>
                     <CampoNumero label="Capacidad" unidad="paq." min={1} paso={1} value={f.capacidad}
                       onChange={(v) => updateAlmacen(a.nombre, 'capacidad', v)} error={errores[claveAlmacen(a.nombre, 'capacidad')]}
-                      modificado={distinto(f.capacidad, r.capacidad)} oficial={oficial?.capacidad} aplicacion="caliente" />
+                      modificado={distinto(f.capacidad, r.capacidad)} oficial={oficial?.capacidad} aplicacion={enCaliente ? 'caliente' : undefined} />
                     <CampoNumero label="Recarga cada" unidad="h" min={1} paso={1} value={f.frecuencia}
                       ayuda="Cada cuánto se repone el stock."
                       onChange={(v) => updateAlmacen(a.nombre, 'frecuencia', v)} error={errores[claveAlmacen(a.nombre, 'frecuencia')]}
-                      modificado={distinto(f.frecuencia, r.frecuencia)} oficial={oficial?.frecuencia} aplicacion="caliente" />
+                      modificado={distinto(f.frecuencia, r.frecuencia)} oficial={oficial?.frecuencia} aplicacion={enCaliente ? 'caliente' : undefined} />
                   </>
                 )}
               </div>
@@ -151,18 +147,17 @@ export const BloqueAlmacenes: React.FC<BloqueProps> = ({ p }) => {
 
 const GRUPOS_OPERACION: { grupo: DefCampoOperacion['grupo']; titulo: string; descripcion: string; Icono: typeof Clock }[] = [
   { grupo: 'turno', titulo: 'Turnos y refrigerio', descripcion: 'Jornada de los conductores.', Icono: Clock },
-  { grupo: 'tiempos', titulo: 'Tiempos de servicio', descripcion: 'Duraciones que el planificador suma a cada ruta.', Icono: Timer },
-  { grupo: 'rutas', titulo: 'Rutas', descripcion: 'Límites del planificador.', Icono: Route },
+  { grupo: 'tiempos', titulo: 'Tiempos de servicio', descripcion: 'Tiempo que se suma en cada parada de la ruta.', Icono: Timer },
+  { grupo: 'rutas', titulo: 'Rutas', descripcion: 'Límites para armar las rutas.', Icono: Route },
 ];
 
 export const BloqueOperacion: React.FC<BloqueProps> = ({ p }) => {
-  const { values, referencia, errores, enCaliente, updateOperacion } = p;
+  const { values, referencia, errores, enCaliente, updateOperacion, oficiales } = p;
   if (!values || !referencia) return null;
   return (
     <div>
-      <EncabezadoBloque titulo="Operación y turnos" descripcion="Parámetros que usa el planificador para armar rutas y turnos.">
+      <EncabezadoBloque titulo="Operación y turnos" descripcion="Turnos, tiempos de servicio y límites de las rutas.">
         <Leyenda enCaliente={enCaliente} conInicio={false} />
-        <span className={`text-xs ${TEXTO_TENUE}`}>Todos se pueden cambiar con la simulación en curso.</span>
       </EncabezadoBloque>
       <div className="space-y-3">
         {GRUPOS_OPERACION.map(({ grupo, titulo, descripcion, Icono }) => (
@@ -172,7 +167,7 @@ export const BloqueOperacion: React.FC<BloqueProps> = ({ p }) => {
                 <CampoNumero key={campo} label={label} unidad={unidad} ayuda={ayuda} min={min} max={max} paso={paso}
                   value={values.operacion[campo]} onChange={(v) => updateOperacion(campo, v)}
                   error={errores[claveOperacion(campo)]} modificado={distinto(values.operacion[campo], referencia.operacion[campo])}
-                  oficial={VALORES_OFICIALES.operacion[campo]} />
+                  oficial={oficiales?.operacion[campo]} />
               ))}
             </div>
           </Tarjeta>
@@ -211,10 +206,10 @@ export const BloqueApariencia: React.FC<BloqueProps> = ({ p }) => {
   ];
   return (
     <div>
-      <EncabezadoBloque titulo="Apariencia" descripcion="Preferencia de esta interfaz (se guarda en este navegador; no afecta a la simulación)." />
+      <EncabezadoBloque titulo="Apariencia" descripcion="Solo cambia cómo se ve, en este navegador." />
       <div className="space-y-3">
         <Tarjeta titulo="Tema de la interfaz"
-          descripcion="Al elegir uno se previsualiza en toda la aplicación. Se conserva al guardar; «Descartar» o salir sin guardar lo revierten.">
+          descripcion="Se ve al instante; se conserva al guardar.">
           <div role="radiogroup" aria-label="Tema de la interfaz" className="grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
             {opciones.map(({ oscuro, label, detalle, Icono }) => {
               const activo = temaOscuro === oscuro;
@@ -239,8 +234,8 @@ export const BloqueApariencia: React.FC<BloqueProps> = ({ p }) => {
           )}
         </Tarjeta>
 
-        <Tarjeta titulo={<><Info className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden />Semáforos y niveles</>}
-          descripcion="Cortes de color y de nivel en el mapa, los paneles y Reportes. Solo cambian cómo se ve: el planificador no los usa. Se guardan en este navegador.">
+        <Tarjeta titulo={<><Info className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden />Semáforos</>}
+          descripcion="Desde qué valor cambia de color cada indicador. Solo cambian cómo se ve; se guardan en este navegador.">
           <EditorSemaforos p={p} />
         </Tarjeta>
       </div>
@@ -251,6 +246,6 @@ export const BloqueApariencia: React.FC<BloqueProps> = ({ p }) => {
 /** Resumen corto de cuándo se aplica lo guardado, para la barra de acciones. */
 export const TextoAplicacion: React.FC<{ enCaliente: boolean }> = ({ enCaliente }) => (
   <span className={`inline-flex items-center gap-1 text-xs ${TEXTO_TENUE}`}>
-    {enCaliente ? <><Zap className="h-3 w-3" aria-hidden />Se aplica en el próximo lote</> : <><Lock className="h-3 w-3" aria-hidden />Se aplica al iniciar la simulación</>}
+    {enCaliente ? <><Zap className="h-3 w-3" aria-hidden />Se aplica en segundos</> : <><Lock className="h-3 w-3" aria-hidden />Se aplica al iniciar la simulación</>}
   </span>
 );

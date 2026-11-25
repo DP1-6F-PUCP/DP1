@@ -33,9 +33,44 @@ public interface ServicioPlanificacion {
     }
 
     /**
+     * Igual que {@link #recibirArchivo(ArchivoEntrada, com.paqrap.dominio.TipoArchivo)}, y además
+     * informa qué pasó con los pedidos en la simulación en curso.
+     *
+     * @return el resumen, o {@code null} si no hay una simulación en curso (todo queda para la próxima)
+     */
+    default ResumenIncorporacion recibirArchivoConResumen(ArchivoEntrada archivo,
+            com.paqrap.dominio.TipoArchivo tipoExplicito) {
+        recibirArchivo(archivo, tipoExplicito);
+        return null;
+    }
+
+    /**
      * Limpia de memoria los pedidos, bloqueos y mantenimientos cargados previamente.
      */
     void limpiarArchivosCargados();
+
+    /**
+     * Borra todos los datos de entrada, también los estándar precargados (prueba de "sistema sin
+     * datos"). Una simulación en curso conserva lo que ya incorporó; los meses que cargue después
+     * llegan vacíos.
+     */
+    default void limpiarTodosLosDatos() {
+        limpiarArchivosCargados();
+    }
+
+    /** Archivos cargados vigentes (estándar y manuales), para listarlos y borrarlos uno a uno. */
+    default List<RepositorioOperacion.ImportacionVigente> listarArchivosCargados() {
+        return List.of();
+    }
+
+    /**
+     * Borra un archivo cargado y sus datos. Una simulación en curso conserva lo que ya incorporó.
+     *
+     * @throws IllegalArgumentException si no existe una carga vigente con ese id
+     */
+    default void borrarArchivoCargado(String idImportacion) {
+        throw new UnsupportedOperationException("Sin base de datos no se pueden borrar archivos sueltos.");
+    }
 
     /**
      * @return las rutas actualmente vigentes de la ejecución en curso
@@ -202,4 +237,16 @@ public interface ServicioPlanificacion {
      *         ninguna en curso
      */
     EjecucionEscenario consultarEjecucionActiva();
+
+    /**
+     * Apagado ordenado del backend: detiene la ejecución activa (si hay) como {@code INTERRUMPIDA},
+     * con motivo {@code REINICIO_SERVIDOR}, y deja guardado su reporte con lo simulado hasta ahí.
+     */
+    default void detenerPorApagado() {
+    }
+
+    /** Ejecuciones pasadas (más reciente primero), para consultar sus reportes. */
+    default List<ResumenEjecucionDTO> listarEjecuciones(int pagina, int tamano) {
+        return List.of();
+    }
 }

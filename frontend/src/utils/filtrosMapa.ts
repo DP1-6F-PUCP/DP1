@@ -23,6 +23,20 @@ export function nivelCargaPct(pct: number): 'alta' | 'media' | 'baja' {
   return pct >= u.cargaAlta ? 'alta' : pct >= u.cargaMedia ? 'media' : 'baja';
 }
 
+/**
+ * Semáforo de capacidad de cada vehículo (requisito del curso), leído como el de la flota: lo que
+ * importa es la capacidad que le QUEDA. Verde = con capacidad libre (carga baja), ámbar = media,
+ * rojo = lleno (carga alta). Mismos tonos que el semáforo de llenado de flota (FLEET_FILL_COLORS),
+ * para que "rojo = lleno" signifique lo mismo en el mapa, los indicadores y Reportes.
+ */
+export const SEMAFORO_CARGA: Record<'alta' | 'media' | 'baja', { hex: string; label: string }> = {
+  baja: { hex: '#16A34A', label: 'Libre' },
+  media: { hex: '#EAB308', label: 'Media' },
+  alta: { hex: '#DC2626', label: 'Lleno' },
+};
+
+export const colorCarga = (v: Vehicle): string => SEMAFORO_CARGA[nivelCarga(v)].hex;
+
 export type EstadoVehiculoFiltro =
   | 'en_ruta' | 'entregando' | 'refrigerio' | 'almacen' | 'disponible' | 'mantenimiento'
   | 'averia1' | 'averia2' | 'averia3';

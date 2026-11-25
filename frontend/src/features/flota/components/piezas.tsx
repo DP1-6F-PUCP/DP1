@@ -3,6 +3,7 @@ import { Car, CircleParking, Coffee, Navigation, PackageCheck, Warehouse, Wrench
 import { FaBicycle, FaMotorcycle } from 'react-icons/fa';
 import type { BreakdownType, Vehicle } from '../../../types';
 import { ESTADO_FLOTA, HEX_AVERIA, estadoFlota, type EstadoFlota } from '../flotaUtils';
+import { nivelCargaPct, SEMAFORO_CARGA } from '../../../utils/filtrosMapa';
 
 // Colores compartidos (claro / oscuro), los mismos de la página Pedidos.
 export const BORDE = 'border-slate-200 dark:border-slate-700/70';
@@ -60,14 +61,15 @@ export const ChipEstado: React.FC<{ vehiculo: Vehicle }> = ({ vehiculo }) => {
   );
 };
 
-/** Carga a bordo: barra (mismos cortes que la leyenda: alta ≥ 66 %, media ≥ 33 %) y "X/Y". */
+/** Carga a bordo: barra con el semáforo de capacidad (mismo color que el vehículo en el mapa) y "X/Y". */
 export const BarraCarga: React.FC<{ carga: number; capacidad: number }> = ({ carga, capacidad }) => {
   const pct = capacidad > 0 ? Math.min(100, Math.round((carga / capacidad) * 100)) : 0;
+  const semaforo = SEMAFORO_CARGA[nivelCargaPct(pct)];
   return (
-    <div className="flex min-w-[110px] items-center gap-2" title={`${carga} de ${capacidad} paquetes (${pct} %)`}>
+    <div className="flex min-w-[110px] items-center gap-2" title={`${carga} de ${capacidad} paquetes (${pct} %) · ${semaforo.label}`}>
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" role="progressbar"
         aria-valuemin={0} aria-valuemax={capacidad} aria-valuenow={carga} aria-label="Carga a bordo">
-        <div className="h-full rounded-full bg-cyan-600 dark:bg-cyan-400" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: semaforo.hex }} />
       </div>
       <span className={`shrink-0 font-mono-code text-xs ${TEXTO_FUERTE}`}>{carga}<span className={TEXTO_TENUE}>/{capacidad}</span></span>
     </div>

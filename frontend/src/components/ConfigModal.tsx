@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Lock, Settings, X } from 'lucide-react';
+import { Settings, X } from 'lucide-react';
 import { useParametrosSistema } from '../features/configuracion/useParametrosSistema';
 import {
   DialogoCambiosSinGuardar,
   PanelConfiguracion,
   type SeccionConfig,
 } from '../features/configuracion/components/PanelConfiguracion';
-import { BORDE, TEXTO_FUERTE, TEXTO_TENUE } from '../features/configuracion/components/ui';
+import { BORDE, TEXTO_FUERTE } from '../features/configuracion/components/ui';
 
 interface ConfigModalProps {
   isOpen: boolean;
@@ -56,12 +56,10 @@ const ContenidoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <h2 id="titulo-config-modal" className="flex items-center gap-2 text-base font-semibold">
               <Settings className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden />Configuración
             </h2>
-            <p className={`flex items-center gap-1 text-xs ${TEXTO_TENUE}`}>
-              <Lock className="h-3 w-3" aria-hidden />Lo que guardes se aplica al iniciar la próxima simulación.
-            </p>
+            {/* Cuándo se aplica lo guardado ya lo dice la barra inferior, junto a «Guardar». */}
           </div>
           <button ref={cerrarRef} type="button" onClick={pedirCierre} aria-label="Cerrar configuración"
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
+            className="rounded-lg p-2 text-slate-500 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </header>

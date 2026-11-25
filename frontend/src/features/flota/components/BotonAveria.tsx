@@ -30,8 +30,9 @@ export const BotonAveria: React.FC<Props> = ({ vehiculo, estado, ocupado, onAver
   const idMotivo = `motivo-averia-${vehiculo.id}`;
   const deshabilitado = !estado.ok || ocupado;
 
-  // Si deja de cumplir la regla con el menú abierto (pasa el reloj), se cierra.
-  useEffect(() => { if (deshabilitado) setAbierto(false); }, [deshabilitado]);
+  // Si cambia si se puede averiar con el menú abierto (pasa el reloj), se cierra. Deshabilitado, el
+  // clic abre igual el globo con el motivo (antes el clic no daba ninguna respuesta).
+  useEffect(() => { setAbierto(false); }, [estado.ok]);
 
   useLayoutEffect(() => {
     if (!abierto) return;
@@ -96,8 +97,8 @@ export const BotonAveria: React.FC<Props> = ({ vehiculo, estado, ocupado, onAver
         aria-expanded={abierto}
         aria-disabled={deshabilitado}
         aria-describedby={idMotivo}
-        title={ocupado ? 'Enviando la solicitud…' : estado.motivo}
-        onClick={() => { if (!deshabilitado) setAbierto((v) => !v); }}
+        title={ocupado ? 'Enviando…' : estado.motivo}
+        onClick={() => setAbierto((v) => !v)}
         onKeyDown={(e) => { if (e.key === 'ArrowDown' && !deshabilitado) { e.preventDefault(); setAbierto(true); } }}
         className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-cyan-500 ${
           deshabilitado
@@ -111,19 +112,19 @@ export const BotonAveria: React.FC<Props> = ({ vehiculo, estado, ocupado, onAver
       {abierto && createPortal(
         <div
           ref={menuRef}
-          role="menu"
-          aria-label={`Inducir avería en ${vehiculo.code}`}
+          role={deshabilitado ? 'dialog' : 'menu'}
+          aria-label={deshabilitado ? `No se puede averiar ${vehiculo.code}` : `Averiar ${vehiculo.code}`}
           onKeyDown={alTeclaMenu}
           style={{ top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: ANCHO }}
           className="fixed z-[2100] overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         >
           <div className="border-b border-slate-200 px-3 py-2 dark:border-slate-700">
             <p className="flex items-center gap-1.5 text-xs font-semibold">
-              <Wrench className="h-3.5 w-3.5 text-rose-500" aria-hidden />Inducir avería · <span className="font-mono-code">{vehiculo.code}</span>
+              <Wrench className="h-3.5 w-3.5 text-rose-500" aria-hidden />{deshabilitado ? 'No se puede averiar' : 'Averiar'} · <span className="font-mono-code">{vehiculo.code}</span>
             </p>
             <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{estado.motivo}</p>
           </div>
-          <div className="p-1">
+          {!deshabilitado && <div className="p-1">
             {OPCIONES_AVERIA.map((o) => (
               <button
                 key={o.tipo}
@@ -140,10 +141,10 @@ export const BotonAveria: React.FC<Props> = ({ vehiculo, estado, ocupado, onAver
                 </span>
               </button>
             ))}
-          </div>
-          <p className="border-t border-slate-200 px-3 py-1.5 text-[10px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-            Se aplica al cerrar el siguiente lote de planificación.
-          </p>
+          </div>}
+          {!deshabilitado && <p className="border-t border-slate-200 px-3 py-1.5 text-[10px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+            Se aplica en unos segundos.
+          </p>}
         </div>,
         document.body,
       )}

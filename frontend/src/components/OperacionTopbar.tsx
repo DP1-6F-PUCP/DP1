@@ -94,8 +94,8 @@ export const OperacionTopbar: React.FC<Props> = ({ menuAbierto, onAlternarMenu }
           )}
           <button
             type="button"
-            title="Detener la ejecución"
-            aria-label="Detener la ejecución"
+            title="Detener la simulación"
+            aria-label="Detener la simulación"
             disabled={isDeteniendo}
             onClick={() => void stop()}
             className="flex h-8 w-9 items-center justify-center rounded-lg border border-rose-500/70 text-rose-400 transition hover:bg-rose-500/10 disabled:opacity-50"

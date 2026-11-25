@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react';
 import { useBlocker, useSearchParams } from 'react-router-dom';
-import { Lock, Settings, Zap } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { useParametrosSistema } from '../features/configuracion/useParametrosSistema';
 import {
   DialogoCambiosSinGuardar,
@@ -53,16 +53,8 @@ export const ConfiguracionPage: React.FC = () => {
           </h1>
           <p className={`text-sm ${TEXTO_TENUE}`}>Parámetros del sistema, apariencia y carga de datos.</p>
         </div>
-        {p.enCaliente ? (
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-sm text-emerald-800 dark:text-emerald-200"
-            title="Velocidad, capacidades, recarga y operación se aplican en el próximo lote; flota y posición de almacenes, solo al inicio">
-            <Zap className="h-3.5 w-3.5" aria-hidden />Simulación en curso: los cambios se aplican en el próximo lote
-          </span>
-        ) : (
-          <span className={`inline-flex items-center gap-1.5 rounded-lg bg-slate-500/10 px-2.5 py-1 text-sm ${TEXTO_TENUE}`}>
-            <Lock className="h-3.5 w-3.5" aria-hidden />Sin simulación activa: se aplican al iniciar
-          </span>
-        )}
+        {/* Se quitó la etiqueta «En curso · próximo lote»: cuándo se aplica ya lo dice la barra de
+            Guardar, y los campos que no se pueden cambiar llevan candado. */}
       </header>
 
       <PanelConfiguracion p={p} seccion={seccion} onSeccion={onSeccion} variante="pagina" />

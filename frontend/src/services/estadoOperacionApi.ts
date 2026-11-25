@@ -6,8 +6,8 @@ export const estadoOperacionApi = {
     const estado = await httpClient.get<EstadoOperacionDTO>('/estado-operacion', { signal });
     if (idEsperado && estado.idEjecucion !== idEsperado) {
       throw new Error(estado.idEjecucion
-        ? 'Se recibieron datos de otra ejecución. Vuelve a iniciar el escenario.'
-        : 'El backend debe actualizarse y reiniciarse para identificar la nueva ejecución.');
+        ? 'Llegaron datos de otra simulación. Vuelve a iniciarla.'
+        : 'El sistema necesita reiniciarse. Avisa a soporte.');
     }
     return estado;
   },

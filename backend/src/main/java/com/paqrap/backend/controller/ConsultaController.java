@@ -1,6 +1,10 @@
 package com.paqrap.backend.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paqrap.backend.dto.ApiResponseDTO;
+import com.paqrap.backend.persistence.CatalogoPersistenceService;
+import org.springframework.beans.factory.ObjectProvider;
 import com.paqrap.exposicion.AveriaRegistroDTO;
 import com.paqrap.exposicion.ConfiguracionActualDTO;
 import com.paqrap.exposicion.MantenimientoDTO;
@@ -26,6 +30,8 @@ import java.util.List;
 public class ConsultaController {
 
     private final ServicioPlanificacion servicioPlanificacion;
+    private final ObjectProvider<CatalogoPersistenceService> catalogoProvider;
+    private final ObjectMapper objectMapper;
 
     @GetMapping("/api/pedidos")
     public ApiResponseDTO<List<PedidoDTO>> consultarPedidos(@RequestParam(required = false) String estado) {
@@ -36,6 +42,25 @@ public class ConsultaController {
     @GetMapping("/api/configuracion")
     public ApiResponseDTO<ConfiguracionActualDTO> consultarConfiguracion() {
         return ApiResponseDTO.of(servicioPlanificacion.consultarConfiguracionActual());
+    }
+
+    /**
+     * Valores oficiales del caso (perfil inmutable en BD, V6): única fuente para "Restaurar valores
+     * oficiales". La configuración vigente ({@code /api/configuracion}) conserva los ajustes de
+     * ejecuciones anteriores, así que no sirve como "por defecto".
+     */
+    @GetMapping("/api/configuracion/oficial")
+    public ApiResponseDTO<JsonNode> consultarConfiguracionOficial() {
+        CatalogoPersistenceService catalogo = catalogoProvider.getIfAvailable();
+        String json = catalogo != null ? catalogo.cargarConfiguracionOficialJson().orElse(null) : null;
+        if (json == null) {
+            throw new IllegalStateException("No hay valores oficiales registrados en la base de datos.");
+        }
+        try {
+            return ApiResponseDTO.of(objectMapper.readTree(json));
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException("Los valores oficiales guardados no son JSON válido.", ex);
+        }
     }
 
     @GetMapping("/api/estado-operacion")
